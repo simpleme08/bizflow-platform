@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="stylesheet" href="/static/adminlte/plugins/fontawesome-free/css/all.min.css"><link rel="stylesheet" href="/static/adminlte/dist/css/adminlte.min.css"><link rel="stylesheet" href="/static/css/custom.css">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>BizFlow HRIS | People Operations</title>
+    <style>
+        :root { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif; color: #1a1a1a; background: #ffffff; }
+        * { box-sizing: border-box; }
+        body { margin: 0; display: flex; flex-direction: column; min-height: 100vh; }
+        header { padding: 2rem 5vw; border-bottom: 1px solid #e5e5e5; background: white; }
+        .header-content { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
+        .brand { font-size: 1.4rem; font-weight: 700; color: #0066cc; letter-spacing: -0.5px; }
+        .header-link { color: #0066cc; font-size: 0.95rem; font-weight: 600; text-decoration: none; }
+        .header-link:hover { text-decoration: underline; }
+        main { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 4rem 5vw; }
+        .hero { text-align: center; max-width: 700px; }
+        .tagline { font-size: 0.9rem; color: #666; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 1rem; }
+        h1 { font-size: clamp(2.5rem, 5vw, 4rem); font-weight: 700; margin: 0 0 1.5rem; line-height: 1.1; color: #1a1a1a; }
+        .description { font-size: 1.1rem; color: #555; margin-bottom: 3rem; line-height: 1.6; }
+        .cta-buttons { display: flex; flex-direction: column; gap: 1rem; max-width: 400px; margin: 0 auto; }
+        .btn { padding: 1rem 2rem; border: none; border-radius: 6px; font-size: 1rem; font-weight: 600; text-decoration: none; cursor: pointer; transition: all 0.2s; display: inline-block; text-align: center; }
+        .btn-primary { background: #0066cc; color: white; }
+        .btn-primary:hover { background: #0052a3; }
+        .btn-secondary { background: #f0f0f0; color: #0066cc; border: 2px solid #0066cc; }
+        .btn-secondary:hover { background: #e6f0ff; }
+        footer { padding: 2rem 5vw; border-top: 1px solid #e5e5e5; background: #f9f9f9; text-align: center; color: #666; font-size: 0.9rem; }
+        @media (max-width: 600px) { 
+            header { padding: 1.5rem 5vw; }
+            main { padding: 2rem 5vw; }
+            h1 { font-size: 1.8rem; }
+            .description { font-size: 1rem; }
+            .cta-buttons { max-width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <div class="brand">BizFlow</div>
+            <a href="/login/" class="header-link">Sign in</a>
+        </div>
+    </header>
+    
+    <main>
+        <div class="hero">
+            <div class="tagline">Human Resources Information System</div>
+            <h1>People Operations, Made Clear</h1>
+            <p class="description">Manage employees, attendance, leave, payroll, and schedules in one connected workspace. Built for teams that value accuracy and efficiency.</p>
+            
+            <div class="cta-buttons">
+                <a href="/login/" class="btn btn-primary">HRIS Workspace</a>
+                <a href="/clock/" class="btn btn-secondary">Employee Time Clock</a>
+            </div>
+        </div>
+    </main>
+    
+    <footer>
+        BizFlow Platform · Human Resources Information System
+    </footer>
+</body>
+</html>

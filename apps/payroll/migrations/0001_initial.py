@@ -1,0 +1,14 @@
+import uuid
+from decimal import Decimal
+import django.db.models.deletion
+from django.db import migrations, models
+
+class Migration(migrations.Migration):
+	initial = True
+	dependencies = [('employees', '0002_employee_organization')]
+	operations = [
+		migrations.CreateModel(name='EmployeeSalary', fields=[('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)), ('created_at', models.DateTimeField(auto_now_add=True)), ('updated_at', models.DateTimeField(auto_now=True)), ('basic_salary', models.DecimalField(decimal_places=2, max_digits=12)), ('effective_date', models.DateField()), ('employee', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='salary', to='employees.employee'))]),
+		migrations.CreateModel(name='PayrollPeriod', fields=[('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)), ('created_at', models.DateTimeField(auto_now_add=True)), ('updated_at', models.DateTimeField(auto_now=True)), ('name', models.CharField(max_length=100)), ('start_date', models.DateField()), ('end_date', models.DateField()), ('status', models.CharField(choices=[('OPEN', 'Open'), ('CALCULATED', 'Calculated'), ('APPROVED', 'Approved'), ('PAID', 'Paid')], default='OPEN', max_length=20))]),
+		migrations.CreateModel(name='PayrollRecord', fields=[('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)), ('created_at', models.DateTimeField(auto_now_add=True)), ('updated_at', models.DateTimeField(auto_now=True)), ('basic_pay', models.DecimalField(decimal_places=2, default=Decimal('0.00'), max_digits=12)), ('overtime_pay', models.DecimalField(decimal_places=2, default=Decimal('0.00'), max_digits=12)), ('late_deduction', models.DecimalField(decimal_places=2, default=Decimal('0.00'), max_digits=12)), ('undertime_deduction', models.DecimalField(decimal_places=2, default=Decimal('0.00'), max_digits=12)), ('other_deductions', models.DecimalField(decimal_places=2, default=Decimal('0.00'), max_digits=12)), ('gross_pay', models.DecimalField(decimal_places=2, default=Decimal('0.00'), max_digits=12)), ('net_pay', models.DecimalField(decimal_places=2, default=Decimal('0.00'), max_digits=12)), ('status', models.CharField(choices=[('DRAFT', 'Draft'), ('APPROVED', 'Approved'), ('PAID', 'Paid')], default='DRAFT', max_length=20)), ('employee', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='payroll_records', to='employees.employee')), ('payroll_period', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='records', to='payroll.payrollperiod'))]),
+		migrations.AddConstraint(model_name='payrollrecord', constraint=models.UniqueConstraint(fields=('employee', 'payroll_period'), name='unique_employee_payroll_period')),
+	]

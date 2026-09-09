@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: bizflow-hris
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput
+    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
+    healthCheckPath: /
+    envVars:
+      - key: DJANGO_DEBUG
+        value: "False"
+      - key: DB_ENGINE
+        value: postgresql
+      - key: POSTGRES_SSLMODE
+        value: require
+      - key: DJANGO_SECRET_KEY
+        generateValue: true

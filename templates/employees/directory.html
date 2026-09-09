@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="stylesheet" href="/static/adminlte/plugins/fontawesome-free/css/all.min.css"><link rel="stylesheet" href="/static/adminlte/dist/css/adminlte.min.css"><link rel="stylesheet" href="/static/css/custom.css">
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Employee Directory | BizFlow HRIS</title>
+    <style>
+        :root { font-family: Arial, sans-serif; color: #17221d; background: #f1eee8; }
+        * { box-sizing: border-box; } body { margin: 0; } header { padding: 24px 5vw; border-bottom: 1px solid #d8d2c5; background: #fffdf8; }
+        .brand { color: #1e4f35; font: 700 13px Georgia, serif; letter-spacing: 2px; text-transform: uppercase; }
+        main { width: min(1180px, 90vw); margin: 52px auto; } a { color: #1e4f35; text-decoration: none; font-size: 13px; font-weight: 700; }
+        .back { display: inline-block; margin-bottom: 28px; } h1 { margin: 0 0 9px; font: 500 48px Georgia, serif; } .intro { color: #637067; margin-bottom: 32px; }
+        .table-wrap { overflow-x: auto; border: 1px solid #d8d2c5; background: #fffdf8; } table { width: 100%; border-collapse: collapse; text-align: left; }
+        th, td { padding: 18px 20px; border-bottom: 1px solid #e5e0d7; } th { color: #637067; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; } td { font-size: 14px; }
+        .empty { padding: 58px 30px; text-align: center; color: #637067; } .empty strong { display: block; color: #17221d; font: 500 24px Georgia, serif; margin-bottom: 8px; }
+    </style>
+</head>
+<body><header><div class="brand">BizFlow HRIS</div></header><main>
+    <a class="back" href="{{ workspace_url }}">← Back to workspace</a><h1>Employee Directory</h1><p class="intro">People and active assignments in your organization.</p>
+    <div class="table-wrap"><table><thead><tr><th>Name</th><th>Employee #</th><th>Department</th><th>Position</th><th>Status</th><th>Shift / Client</th></tr></thead><tbody id="employees"><tr><td colspan="6" class="empty">Loading employees...</td></tr></tbody></table></div>
+</main><script>
+async function loadEmployees() {
+    const response = await fetch('/api/employees/');
+    if (!response.ok) { window.location.href = '/login/'; return; }
+    const data = await response.json();
+    const target = document.getElementById('employees');
+    if (!data.employees.length) { target.innerHTML = '<tr><td colspan="6" class="empty"><strong>No employees yet</strong>Add your first employee in the admin panel to populate this directory.</td></tr>'; return; }
+    target.innerHTML = data.employees.map(employee => `<tr><td><strong>${employee.name}</strong></td><td>${employee.employee_number}</td><td>${employee.department || '—'}</td><td>${employee.position || '—'}</td><td>${employee.employment_type || '—'}</td><td>${employee.assignments.length ? employee.assignments.map(a => `${a.shift}${a.client ? ' / ' + a.client : ''}`).join('; ') : '—'}</td></tr>`).join('');
+}
+loadEmployees();
+</script></body></html>

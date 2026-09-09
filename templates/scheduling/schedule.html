@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="stylesheet" href="/static/adminlte/plugins/fontawesome-free/css/all.min.css"><link rel="stylesheet" href="/static/adminlte/dist/css/adminlte.min.css"><link rel="stylesheet" href="/static/css/custom.css">
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Shift Scheduling | BizFlow HRIS</title>
+	<style>
+		* { margin: 0; padding: 0; box-sizing: border-box; }
+		body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif; background: #f5f5f5; color: #333; line-height: 1.6; }
+		main { display: flex; flex-direction: column; min-height: 100vh; background: #f5f5f5; }
+		banner { background: white; border-bottom: 1px solid #e0e0e0; padding: 1.5rem; display: flex; justify-content: space-between; align-items: center; }
+		banner > * { display: flex; align-items: center; }
+		banner strong { font-size: 1.2rem; }
+		banner small { color: #666; margin-left: 0.5rem; }
+		main > * { padding: 2rem; max-width: 1400px; margin: 0 auto; width: 100%; }
+		main > a { align-self: flex-start; color: #007bff; text-decoration: none; margin-top: -1rem; font-size: 0.9rem; }
+		main > a:hover { text-decoration: underline; }
+		h1 { font-size: 2rem; margin-bottom: 0.5rem; }
+		h2 { font-size: 1.3rem; margin-top: 2rem; margin-bottom: 1rem; border-bottom: 2px solid #007bff; padding-bottom: 0.5rem; }
+		p { color: #666; margin-bottom: 1.5rem; }
+		.form-group { margin-bottom: 1.5rem; }
+		label { display: block; font-weight: 600; margin-bottom: 0.5rem; }
+		input, select, textarea { width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.95rem; }
+		input:focus, select:focus, textarea:focus { outline: none; border-color: #007bff; box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1); }
+		button { padding: 0.75rem 1.5rem; border: none; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 0.95rem; }
+		.btn-primary { background: #007bff; color: white; }
+		.btn-primary:hover { background: #0056b3; }
+		.btn-danger { background: #dc3545; color: white; }
+		.btn-danger:hover { background: #c82333; }
+		.btn-secondary { background: #6c757d; color: white; }
+		.btn-secondary:hover { background: #5a6268; }
+		.btn-success { background: #28a745; color: white; }
+		.btn-success:hover { background: #218838; }
+		.schedule-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
+		@media (max-width: 1200px) { .schedule-grid { grid-template-columns: 1fr; } }
+		.assignment-card { background: white; border: 1px solid #ddd; border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; }
+		.assignment-card h3 { margin-bottom: 0.5rem; }
+		.assignment-card p { margin: 0.25rem 0; font-size: 0.9rem; }
+		.assignment-card .badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.8rem; font-weight: 600; margin-right: 0.5rem; }
+		.badge-primary { background: #007bff; color: white; }
+		.badge-success { background: #28a745; color: white; }
+		.badge-info { background: #17a2b8; color: white; }
+		.assignment-actions { margin-top: 1rem; display: flex; gap: 0.5rem; }
+		.assignment-actions button { padding: 0.5rem 1rem; font-size: 0.85rem; }
+		table { width: 100%; border-collapse: collapse; background: white; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; }
+		thead { background: #f8f9fa; font-weight: 600; }
+		th, td { padding: 1rem; text-align: left; border-bottom: 1px solid #ddd; }
+		th { background: #f8f9fa; font-weight: 600; }
+		tr:hover { background: #f9f9f9; }
+		.empty { text-align: center; color: #999; padding: 2rem; }
+		.alert { padding: 1rem; border-radius: 4px; margin-bottom: 1rem; }
+		.alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+		.alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+		.alert-info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+		.loader { display: none; text-align: center; padding: 2rem; }
+		.loader.active { display: block; }
+		.spinner { border: 4px solid #f3f3f3; border-top: 4px solid #007bff; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto; }
+		@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+	</style>
+</head>
+<body>
+<main>
+	<banner>
+		<strong>BizFlow HRIS</strong>
+		<div><span id="userRole">Manager</span> · <small id="orgName">Organization</small></div>
+	</banner>
+	
+	<a href="{{ workspace_url }}">← Back to workspace</a>
+	
+	<h1>Shift Scheduling</h1>
+	<p>Create and manage shift assignments for your team. Select an employee, choose dates and shifts, then assign them to projects.</p>
+	
+	<div id="alert" class="alert" style="display:none;"></div>
+	
+	<div class="schedule-grid">
+		<div>
+			<h2>Assign a Shift</h2>
+			<form id="assignForm">
+				<div class="form-group">
+					<label for="employeeSelect">Select Employee</label>
+					<select id="employeeSelect" required>
+						<option value="">-- Choose an employee --</option>
+					</select>
+				</div>
+				
+				<div class="form-group">
+					<label for="shiftSelect">Select Shift</label>
+					<select id="shiftSelect" required>
+						<option value="">-- Choose a shift --</option>
+					</select>
+				</div>
+				
+				<div class="form-group">
+					<label for="clientSelect">Client (Optional)</label>
+					<select id="clientSelect">
+						<option value="">-- No specific client --</option>
+					</select>
+				</div>
+				
+				<div class="form-group">
+					<label for="siteSelect">Site (Optional)</label>
+					<select id="siteSelect">
+						<option value="">-- No specific site --</option>
+					</select>
+				</div>
+				
+				<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+					<div class="form-group">
+						<label for="startDate">Start Date</label>
+						<input type="date" id="startDate" required>
+					</div>
+					
+					<div class="form-group">
+						<label for="endDate">End Date (Optional)</label>
+						<input type="date" id="endDate">
+					</div>
+				</div>
+				
+				<div class="form-group" style="display: flex; align-items: center;">
+					<input type="checkbox" id="isPrimary" style="width: auto; margin-right: 0.5rem;">
+					<label for="isPrimary" style="margin: 0;">Set as primary assignment</label>
+				</div>
+				
+				<button type="submit" class="btn-primary" style="width: 100%;">Assign Shift</button>
+			</form>
+		</div>
+		
+		<div>
+			<h2>Current Assignments</h2>
+			<div class="loader" id="loader">
+				<div class="spinner"></div>
+				<p>Loading assignments...</p>
+			</div>
+			<div id="assignmentsList" style="max-height: 600px; overflow-y: auto;"></div>
+		</div>
+	</div>
+</main>
+
+<script>
+const API_BASE = '/api/scheduling';
+let allEmployees = [];
+let allShifts = [];
+let allClients = [];
+let currentAssignments = [];
+
+async function showAlert(message, type = 'info') {
+	const alert = document.getElementById('alert');
+	alert.textContent = message;
+	alert.className = `alert alert-${type}`;
+	alert.style.display = 'block';
+	setTimeout(() => alert.style.display = 'none', 5000);
+}
+
+async function loadShifts() {
+	try {
+		const res = await fetch(`${API_BASE}/shifts/`);
+		if (!res.ok) throw new Error('Failed to load shifts');
+		const data = await res.json();
+		allShifts = data.shifts;
+		
+		const select = document.getElementById('shiftSelect');
+		select.innerHTML = '<option value="">-- Choose a shift --</option>';
+		data.shifts.forEach(shift => {
+			const option = document.createElement('option');
+			option.value = shift.id;
+			option.textContent = `${shift.name} (${shift.start_time} - ${shift.end_time})`;
+			select.appendChild(option);
+		});
+	} catch (error) {
+		showAlert(`Error loading shifts: ${error.message}`, 'error');
+	}
+}
+
+async function loadEmployees() {
+	try {
+		const res = await fetch(`${API_BASE}/employees/`);
+		if (!res.ok) throw new Error('Failed to load employees');
+		const data = await res.json();
+		allEmployees = data.employees;
+		
+		const select = document.getElementById('employeeSelect');
+		select.innerHTML = '<option value="">-- Choose an employee --</option>';
+		data.employees.forEach(emp => {
+			const option = document.createElement('option');
+			option.value = emp.id;
+			option.textContent = `${emp.name} (${emp.employee_number}) - ${emp.department || 'No Dept'}`;
+			select.appendChild(option);
+		});
+	} catch (error) {
+		showAlert(`Error loading employees: ${error.message}`, 'error');
+	}
+}
+
+async function loadClients() {
+	try {
+		const res = await fetch(`${API_BASE}/clients/`);
+		if (!res.ok) throw new Error('Failed to load clients');
+		const data = await res.json();
+		allClients = data.clients;
+		
+		const select = document.getElementById('clientSelect');
+		select.innerHTML = '<option value="">-- No specific client --</option>';
+		data.clients.forEach(client => {
+			const option = document.createElement('option');
+			option.value = client.id;
+			option.textContent = client.name;
+			select.appendChild(option);
+		});
+	} catch (error) {
+		showAlert(`Error loading clients: ${error.message}`, 'error');
+	}
+}
+
+function updateSites() {
+	const clientId = document.getElementById('clientSelect').value;
+	const siteSelect = document.getElementById('siteSelect');
+	siteSelect.innerHTML = '<option value="">-- No specific site --</option>';
+	
+	if (clientId) {
+		const client = allClients.find(c => c.id === clientId);
+		if (client && client.sites.length > 0) {
+			client.sites.forEach(site => {
+				const option = document.createElement('option');
+				option.value = site.id;
+				option.textContent = site.name;
+				siteSelect.appendChild(option);
+			});
+		}
+	}
+}
+
+async function loadAssignments() {
+	const employeeId = document.getElementById('employeeSelect').value;
+	if (!employeeId) {
+		document.getElementById('assignmentsList').innerHTML = '<div class="empty">Select an employee to view their current shifts</div>';
+		return;
+	}
+	
+	const today = new Date();
+	const startDate = new Date(today);
+	startDate.setDate(today.getDate() - 30);
+	const endDate = new Date(today);
+	endDate.setDate(today.getDate() + 90);
+	
+	const loader = document.getElementById('loader');
+	loader.classList.add('active');
+	
+	try {
+		const res = await fetch(`${API_BASE}/employee-schedule/?employee_id=${employeeId}&start_date=${startDate.toISOString().split('T')[0]}&end_date=${endDate.toISOString().split('T')[0]}`);
+		if (!res.ok) throw new Error('Failed to load assignments');
+		const data = await res.json();
+		currentAssignments = data.assignments;
+		renderAssignments(data.assignments);
+	} catch (error) {
+		showAlert(`Error loading assignments: ${error.message}`, 'error');
+	} finally {
+		loader.classList.remove('active');
+	}
+}
+
+function renderAssignments(assignments) {
+	const container = document.getElementById('assignmentsList');
+	if (!assignments || assignments.length === 0) {
+		container.innerHTML = '<div class="empty">No shift assignments for this employee in the selected period.</div>';
+		return;
+	}
+	
+	container.innerHTML = assignments.map(assignment => `
+		<div class="assignment-card">
+			<h3>${assignment.shift} <span class="badge badge-primary">${new Date(assignment.start_date).toLocaleDateString()}</span></h3>
+			<p><strong>Duration:</strong> ${assignment.start_date} ${assignment.end_date ? `to ${assignment.end_date}` : '(ongoing)'}</p>
+			${assignment.client ? `<p><strong>Client:</strong> ${assignment.client}</p>` : ''}
+			${assignment.site ? `<p><strong>Site:</strong> ${assignment.site}</p>` : ''}
+			${assignment.is_primary ? '<span class="badge badge-success">Primary</span>' : ''}
+			<div class="assignment-actions">
+				<button class="btn-secondary" onclick="editAssignment('${assignment.id}')">Edit</button>
+				<button class="btn-danger" onclick="deleteAssignment('${assignment.id}')">Delete</button>
+			</div>
+		</div>
+	`).join('');
+}
+
+async function deleteAssignment(assignmentId) {
+	if (!confirm('Are you sure you want to delete this shift assignment?')) return;
+	
+	try {
+		const res = await fetch(`${API_BASE}/delete/`, {
+			method: 'DELETE',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ assignment_id: assignmentId })
+		});
+		if (!res.ok) throw new Error('Failed to delete assignment');
+		showAlert('Shift assignment deleted successfully.', 'success');
+		loadAssignments();
+	} catch (error) {
+		showAlert(`Error deleting assignment: ${error.message}`, 'error');
+	}
+}
+
+function editAssignment(assignmentId) {
+	const assignment = currentAssignments.find(a => a.id === assignmentId);
+	if (!assignment) return;
+	
+	document.getElementById('shiftSelect').value = assignment.shift_id;
+	document.getElementById('clientSelect').value = assignment.client_id || '';
+	updateSites();
+	if (assignment.site_id) {
+		document.getElementById('siteSelect').value = assignment.site_id;
+	}
+	document.getElementById('startDate').value = assignment.start_date;
+	document.getElementById('endDate').value = assignment.end_date || '';
+	document.getElementById('isPrimary').checked = assignment.is_primary;
+	
+	// Add hidden field for update
+	let input = document.getElementById('assignmentId');
+	if (!input) {
+		input = document.createElement('input');
+		input.type = 'hidden';
+		input.id = 'assignmentId';
+		document.getElementById('assignForm').appendChild(input);
+	}
+	input.value = assignmentId;
+	
+	document.querySelector('#assignForm button').textContent = 'Update Shift';
+	document.querySelector('#assignForm button').scrollIntoView({ behavior: 'smooth' });
+}
+
+document.getElementById('clientSelect').addEventListener('change', updateSites);
+
+document.getElementById('employeeSelect').addEventListener('change', () => {
+	loadAssignments();
+	// Reset form when employee changes
+	document.getElementById('assignForm').reset();
+	const input = document.getElementById('assignmentId');
+	if (input) input.value = '';
+	document.querySelector('#assignForm button').textContent = 'Assign Shift';
+});
+
+document.getElementById('assignForm').addEventListener('submit', async (e) => {
+	e.preventDefault();
+	
+	const employeeId = document.getElementById('employeeSelect').value;
+	const shiftId = document.getElementById('shiftSelect').value;
+	const clientId = document.getElementById('clientSelect').value || null;
+	const siteId = document.getElementById('siteSelect').value || null;
+	const startDate = document.getElementById('startDate').value;
+	const endDate = document.getElementById('endDate').value || null;
+	const isPrimary = document.getElementById('isPrimary').checked;
+	const assignmentId = document.getElementById('assignmentId')?.value || null;
+	
+	if (!employeeId || !shiftId || !startDate) {
+		showAlert('Please fill in all required fields.', 'error');
+		return;
+	}
+	
+	try {
+		const res = await fetch(`${API_BASE}/assign/`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				employee_id: employeeId,
+				shift_id: shiftId,
+				client_id: clientId,
+				site_id: siteId,
+				start_date: startDate,
+				end_date: endDate,
+				is_primary: isPrimary,
+				assignment_id: assignmentId,
+			})
+		});
+		if (!res.ok) {
+			const error = await res.json();
+			throw new Error(error.detail || 'Failed to save assignment');
+		}
+		const data = await res.json();
+		showAlert(`Shift ${data.status === 'created' ? 'assigned' : 'updated'} successfully!`, 'success');
+		document.getElementById('assignForm').reset();
+		const input = document.getElementById('assignmentId');
+		if (input) input.value = '';
+		document.querySelector('#assignForm button').textContent = 'Assign Shift';
+		loadAssignments();
+	} catch (error) {
+		showAlert(`Error saving assignment: ${error.message}`, 'error');
+	}
+});
+
+// Initialize
+async function init() {
+	// Set today's date as default
+	const today = new Date().toISOString().split('T')[0];
+	document.getElementById('startDate').value = today;
+	
+	await loadShifts();
+	await loadEmployees();
+	await loadClients();
+	
+	showAlert('Shift scheduling interface loaded. Select an employee to begin.', 'info');
+}
+
+init();
+</script>
+</body>
+</html>

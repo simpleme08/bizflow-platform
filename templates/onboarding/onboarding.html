@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="stylesheet" href="/static/adminlte/plugins/fontawesome-free/css/all.min.css"><link rel="stylesheet" href="/static/adminlte/dist/css/adminlte.min.css"><link rel="stylesheet" href="/static/css/custom.css">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Onboarding | BizFlow HRIS</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: Arial, sans-serif; background: #f6f6f3; color: #1a1a1a; }
+        header { display: flex; justify-content: space-between; align-items: center; padding: 24px 5vw; border-bottom: 1px solid #ddd; background: #fffdf8; }
+        .brand { color: #1e4f35; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
+        main { width: min(1200px, 90vw); margin: 42px auto; }
+        a { color: #1e4f35; text-decoration: none; font-weight: 700; }
+        h1 { margin: 0 0 8px; font: 500 48px Georgia, serif; }
+        .intro { color: #637067; margin-bottom: 32px; }
+        .panel { background: #fffdf8; border: 1px solid #ddd; padding: 24px; margin-bottom: 24px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+        form { display: grid; gap: 16px; }
+        label { display: block; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #637067; margin-bottom: 6px; }
+        input, select { width: 100%; padding: 12px; border: 1px solid #ced4da; font-size: 15px; }
+        button { border: 0; background: #1e4f35; color: white; font-weight: 700; padding: 12px 16px; cursor: pointer; }
+        .task-list { display: grid; gap: 12px; }
+        .task-item { border: 1px solid #ddd; background: white; padding: 16px; }
+        .task-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+        .badge { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; background: #eaf4ee; color: #1e4f35; }
+        .empty { color: #637067; }
+        @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="brand">BizFlow HRIS</div>
+        <a href="/workspace/">← Back to workspace</a>
+    </header>
+    <main>
+        <h1>Onboarding</h1>
+        <p class="intro">Track new-hire tasks, status, and completion milestones.</p>
+
+        <div class="panel">
+            <div class="grid">
+                <div>
+                    <form id="onboardingForm">
+                        <div>
+                            <label for="employeeSelect">Employee</label>
+                            <select id="employeeSelect" required>
+                                <option value="">Select employee</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="workflowSelect">Workflow</label>
+                            <select id="workflowSelect" required>
+                                <option value="">Select onboarding workflow</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="startDate">Start date</label>
+                            <input id="startDate" type="date" required>
+                        </div>
+                        <div>
+                            <label for="expectedDate">Expected completion date</label>
+                            <input id="expectedDate" type="date" required>
+                        </div>
+                        <button type="submit">Create onboarding record</button>
+                    </form>
+                </div>
+                <div>
+                    <h2>Current records</h2>
+                    <div id="records" class="task-list"><p class="empty">Loading onboarding records...</p></div>
+                </div>
+            </div>
+        </div>
+    </main>
+    <script>
+        const employeeSelect = document.getElementById('employeeSelect');
+        const workflowSelect = document.getElementById('workflowSelect');
+        const recordsContainer = document.getElementById('records');
+
+        async function fetchJson(url, options = {}) {
+            const response = await fetch(url, options);
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({}));
+                alert(error.detail || 'Request failed.');
+                return null;
+            }
+            return response.json();
+        }
+
+        function renderRecords(records) {
+            if (!records.length) {
+                recordsContainer.innerHTML = '<p class="empty">No onboarding records yet.</p>';
+                return;
+            }
+            recordsContainer.innerHTML = records.map(record => `
+                <div class="task-item">
+                    <div class="task-header">
+                        <strong>${record.employee} (${record.employee_number})</strong>
+                        <span class="badge">${record.status}</span>
+                    </div>
+                    <p><strong>Workflow:</strong> ${record.workflow}</p>
+                    <p><strong>Start:</strong> ${record.start_date || '—'} · <strong>Expected:</strong> ${record.expected_completion_date || '—'}</p>
+                    <div>
+                        ${(record.tasks || []).map(task => `
+                            <div class="task-item" style="margin-top:12px; background:#f8f9f8;">
+                                <div class="task-header">
+                                    <strong>${task.title}</strong>
+                                    <span class="badge">${task.status}</span>
+                                </div>
+                                <p>${task.description || ''}</p>
+                                <p><small>Due: ${task.due_date || '—'}</small></p>
+                                <button type="button" data-task-id="${task.id}" data-onboarding-id="${record.id}" style="margin-top:8px;">Mark complete</button>
+                            </div>
+                        `).join('') || '<p class="empty">No tasks yet.</p>'}
+                    </div>
+                </div>
+            `).join('');
+
+            recordsContainer.querySelectorAll('button[data-task-id]').forEach(button => {
+                button.addEventListener('click', async () => {
+                    const taskId = button.dataset.taskId;
+                    const onboardingId = button.dataset.onboardingId;
+                    await fetchJson(`/api/onboarding/${onboardingId}/tasks/${taskId}/`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'COMPLETED' }) });
+                    await loadRecords();
+                });
+            });
+        }
+
+        async function loadEmployees() {
+            const data = await fetchJson('/api/employees/');
+            if (!data) return;
+            employeeSelect.innerHTML = '<option value="">Select employee</option>' + data.employees.map(employee => `<option value="${employee.id}">${employee.name} (${employee.employee_number})</option>`).join('');
+        }
+
+        async function loadWorkflows() {
+            const data = await fetchJson('/api/onboarding/');
+            if (!data) return;
+            workflowSelect.innerHTML = '<option value="">Select onboarding workflow</option>' + (data.workflows || []).map(workflow => `<option value="${workflow.id}">${workflow.name}</option>`).join('');
+        }
+
+        async function loadRecords() {
+            const data = await fetchJson('/api/onboarding/');
+            if (!data) return;
+            renderRecords(data.records || []);
+        }
+
+        document.getElementById('onboardingForm').addEventListener('submit', async event => {
+            event.preventDefault();
+            const payload = {
+                employee_id: employeeSelect.value,
+                workflow_id: workflowSelect.value,
+                start_date: document.getElementById('startDate').value,
+                expected_completion_date: document.getElementById('expectedDate').value,
+            };
+            await fetchJson('/api/onboarding/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            await loadRecords();
+            event.target.reset();
+        });
+
+        document.getElementById('startDate').valueAsDate = new Date();
+        loadEmployees();
+        loadWorkflows();
+        loadRecords();
+    </script>
+</body>
+</html>
