@@ -57,8 +57,8 @@ class PayrollRecordAdmin(admin.ModelAdmin):
 
 @admin.register(PayrollAdjustment)
 class PayrollAdjustmentAdmin(admin.ModelAdmin):
-    list_display = ('payroll_record', 'kind', 'description', 'amount', 'taxable', 'approved')
-    list_filter = ('kind', 'taxable', 'approved')
+    list_display = ('payroll_record', 'kind', 'description', 'amount', 'taxable', 'approved', 'applied')
+    list_filter = ('kind', 'taxable', 'approved', 'applied')
 
 
 @admin.register(EmployeeLoan)
