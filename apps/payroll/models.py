@@ -223,6 +223,7 @@ class PayrollAdjustment(BaseModel):
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     taxable = models.BooleanField(default=True)
     approved = models.BooleanField(default=False)
+    applied = models.BooleanField(default=False)
 
     def clean(self):
         super().clean()
@@ -230,7 +231,12 @@ class PayrollAdjustment(BaseModel):
             raise ValidationError('Adjustment amount must be greater than zero.')
         if self.payroll_record_id and self.payroll_record.status in (PayrollRecord.Status.APPROVED, PayrollRecord.Status.PAID):
             raise ValidationError('Adjustments cannot be changed after payroll approval.')
+        if self.pk and type(self).objects.filter(pk=self.pk, applied=True).exists():
+            raise ValidationError('Applied payroll adjustments are immutable.')
 
     def save(self, *args, **kwargs):
         self.full_clean()
         return super().save(*args, **kwargs)
+
+
+from .loan_models import EmployeeLoan

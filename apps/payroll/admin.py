@@ -1,5 +1,6 @@
 from django.contrib import admin
 
+from .loan_models import EmployeeLoan
 from .models import EmployeeSalary, EmployeeSalaryHistory, PayrollAdjustment, PayrollHoliday, PayrollPeriod, PayrollProfile, PayrollRecord, PayrollWageRate
 
 
@@ -56,5 +57,13 @@ class PayrollRecordAdmin(admin.ModelAdmin):
 
 @admin.register(PayrollAdjustment)
 class PayrollAdjustmentAdmin(admin.ModelAdmin):
-    list_display = ('payroll_record', 'kind', 'description', 'amount', 'taxable', 'approved')
-    list_filter = ('kind', 'taxable', 'approved')
+    list_display = ('payroll_record', 'kind', 'description', 'amount', 'taxable', 'approved', 'applied')
+    list_filter = ('kind', 'taxable', 'approved', 'applied')
+
+
+@admin.register(EmployeeLoan)
+class EmployeeLoanAdmin(admin.ModelAdmin):
+    list_display = ('employee', 'lender', 'loan_type', 'principal', 'installment_amount', 'balance', 'status', 'start_date', 'end_date')
+    list_filter = ('status', 'lender', 'loan_type')
+    search_fields = ('employee__employee_number', 'employee__first_name', 'employee__last_name', 'reference_number')
+    date_hierarchy = 'start_date'
