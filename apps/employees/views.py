@@ -8,6 +8,7 @@ from django.shortcuts import redirect, render
 from django.utils import timezone
 
 from apps.core.models import AuditEvent
+from apps.organization.billing_service import activation_allowed
 from apps.organization.models import OrganizationMembership
 
 from .models import Employee, EmployeeDocument, EmploymentHistory
@@ -91,11 +92,15 @@ def employee_lifecycle_api(request, employee_id):
             if employee is None:
                 return JsonResponse({'detail': 'Employee not found.'}, status=404)
             previous_status = employee.status
+            activating = status in {EmploymentHistory.Status.ONBOARDING, EmploymentHistory.Status.PROBATIONARY, EmploymentHistory.Status.REGULAR}
+            if activating and not employee.is_active and not activation_allowed(membership.organization, excluding_employee_id=employee.id):
+                plan = membership.organization.plan_code
+                raise ValidationError(f'Employee activation limit reached for {plan} plan.')
             employee.status = status
             if status in {EmploymentHistory.Status.RESIGNED, EmploymentHistory.Status.TERMINATED, EmploymentHistory.Status.SEPARATED}:
                 employee.is_active = False
                 employee.separation_date = effective_date
-            elif status in {EmploymentHistory.Status.ONBOARDING, EmploymentHistory.Status.PROBATIONARY, EmploymentHistory.Status.REGULAR}:
+            elif activating:
                 employee.is_active = True
                 if status == EmploymentHistory.Status.REGULAR:
                     employee.regularization_date = effective_date
