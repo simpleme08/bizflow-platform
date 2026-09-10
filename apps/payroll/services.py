@@ -1,10 +1,13 @@
+from datetime import datetime, time, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 
 from django.db import transaction
+from django.utils import timezone
 
 from apps.attendance.models import AttendanceRecord
+from apps.leave.models import LeaveApplication
 
-from .models import PayrollRecord
+from .models import PayrollHoliday, PayrollRecord
 
 ZERO = Decimal('0.00')
 
@@ -26,6 +29,9 @@ class PhilippinePayrollRules:
     PAGIBIG_EMPLOYER_RATE = Decimal('0.02')
     PAGIBIG_MAX_BASE = Decimal('5000.00')
     THIRTEENTH_MONTH_EXEMPTION = Decimal('90000.00')
+    NIGHT_SHIFT_START = time(22, 0)
+    NIGHT_SHIFT_END = time(6, 0)
+    NIGHT_DIFFERENTIAL_RATE = Decimal('0.10')
 
     @staticmethod
     def money(value):
@@ -112,8 +118,63 @@ class PayrollCalculator:
     def periods_per_month(cls, period):
         return 1 if period.frequency == period.Frequency.MONTHLY else 2
 
+    @staticmethod
+    def _night_hours(time_in, time_out):
+        if not time_in or not time_out or time_out <= time_in:
+            return Decimal('0')
+        start = timezone.localtime(time_in)
+        end = timezone.localtime(time_out)
+        total_seconds = Decimal('0')
+        day = start.date() - timedelta(days=1)
+        last_day = end.date()
+        while day <= last_day:
+            window_start = timezone.make_aware(datetime.combine(day, PhilippinePayrollRules.NIGHT_SHIFT_START), timezone.get_current_timezone())
+            window_end = timezone.make_aware(datetime.combine(day + timedelta(days=1), PhilippinePayrollRules.NIGHT_SHIFT_END), timezone.get_current_timezone())
+            overlap_start = max(start, window_start)
+            overlap_end = min(end, window_end)
+            if overlap_end > overlap_start:
+                total_seconds += Decimal((overlap_end - overlap_start).total_seconds())
+            day += timedelta(days=1)
+        return total_seconds / Decimal('3600')
+
     @classmethod
-    def calculate(cls, employee, period, other_deductions=ZERO, leave_without_pay=ZERO, loan_deductions=ZERO, allowances=ZERO, commissions=ZERO, bonuses=ZERO, holiday_pay=ZERO, night_differential=ZERO, thirteenth_month=ZERO):
+    def _holiday_premium(cls, attendance, daily_rate):
+        holiday = PayrollHoliday.objects.filter(
+            holiday_date=attendance.attendance_date,
+            is_active=True,
+        ).filter(
+            organization=attendance.employee.organization,
+        ).first()
+        if holiday is None:
+            holiday = PayrollHoliday.objects.filter(
+                holiday_date=attendance.attendance_date,
+                organization__isnull=True,
+                is_active=True,
+            ).first()
+        if holiday is None or holiday.kind == PayrollHoliday.Kind.SPECIAL_WORKING:
+            return ZERO
+        if not attendance.time_in or not attendance.time_out:
+            return ZERO
+        if holiday.kind == PayrollHoliday.Kind.REGULAR:
+            premium_multiplier = Decimal('2.00') if holiday.is_double else Decimal('1.00')
+        else:
+            premium_multiplier = Decimal('0.50') if holiday.is_double else Decimal('0.30')
+        return cls_money(daily_rate * premium_multiplier)
+
+    @classmethod
+    def _unpaid_leave(cls, employee, period, daily_rate):
+        applications = LeaveApplication.objects.filter(
+            employee=employee,
+            status=LeaveApplication.Status.APPROVED,
+            leave_type__is_paid=False,
+            start_date__lte=period.end_date,
+            end_date__gte=period.start_date,
+        )
+        total_days = sum((application.total_days for application in applications), ZERO)
+        return cls_money(total_days * daily_rate)
+
+    @classmethod
+    def calculate(cls, employee, period, other_deductions=ZERO, leave_without_pay=None, loan_deductions=ZERO, allowances=ZERO, commissions=ZERO, bonuses=ZERO, holiday_pay=None, night_differential=None, thirteenth_month=ZERO):
         if employee.organization_id != period.organization_id:
             raise ValueError('Employee and payroll period must belong to the same organization.')
         salary = getattr(employee, 'salary', None)
@@ -132,11 +193,18 @@ class PayrollCalculator:
         overtime_pay = money(Decimal(overtime_minutes) / Decimal('60') * hourly_rate * cls.OVERTIME_MULTIPLIER)
         late_deduction = money(Decimal(late_minutes) * minute_rate)
         undertime_deduction = money(Decimal(undertime_minutes) * minute_rate)
-        leave_without_pay = money(leave_without_pay)
+        if leave_without_pay is None:
+            leave_without_pay = cls._unpaid_leave(employee, period, daily_rate)
+        else:
+            leave_without_pay = money(leave_without_pay)
         loan_deductions = money(loan_deductions)
         other_deductions = money(other_deductions)
         allowances, commissions, bonuses = map(money, (allowances, commissions, bonuses))
-        holiday_pay, night_differential, thirteenth_month = map(money, (holiday_pay, night_differential, thirteenth_month))
+        calculated_holiday = sum((cls._holiday_premium(record, daily_rate) for record in attendance), ZERO)
+        holiday_pay = calculated_holiday if holiday_pay is None else money(holiday_pay)
+        calculated_night = sum((money(cls._night_hours(record.time_in, record.time_out) * hourly_rate * PhilippinePayrollRules.NIGHT_DIFFERENTIAL_RATE) for record in attendance), ZERO)
+        night_differential = calculated_night if night_differential is None else money(night_differential)
+        thirteenth_month = money(thirteenth_month)
         gross_pay = money(basic_pay + overtime_pay + holiday_pay + night_differential + allowances + commissions + bonuses + thirteenth_month)
         statutory = PhilippinePayrollRules.statutory(salary.basic_salary, periods_per_month=periods)
         taxable_regular = money(basic_pay + allowances - statutory['sss_employee'] - statutory['philhealth_employee'] - statutory['pagibig_employee'])
@@ -201,3 +269,7 @@ class PayrollCalculator:
         period.status = period.Status.CALCULATED
         period.save(update_fields=('status', 'updated_at'))
         return processed
+
+
+def cls_money(value):
+    return PhilippinePayrollRules.money(value)
