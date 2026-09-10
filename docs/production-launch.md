@@ -1,83 +1,107 @@
 # Production launch runbook
 
-This is the final operational checklist for running the HRIS with real customer data.
+This is the operational gate for using BizFlow with real customer HR/payroll data. Source control can provide the application and deployment configuration; the items requiring live infrastructure or third-party accounts must be completed by the operator.
 
-## 1. Application
+## 1. Application configuration
 
-- Set `DJANGO_DEBUG=False`.
-- Set a unique, long random `DJANGO_SECRET_KEY` in the deployment secret store.
-- Set `DJANGO_ALLOWED_HOSTS` to the production hostname(s).
-- Set `DJANGO_CSRF_TRUSTED_ORIGINS` to the HTTPS origin(s), for example `https://hris.example.com`.
-- Use PostgreSQL with `DB_ENGINE=postgresql` and `POSTGRES_SSLMODE=require`.
-- Run migrations and `collectstatic` during deployment.
-- Configure the platform health check to `/health/` and readiness check to `/ready/`.
+Set:
 
-## 2. PayMongo
+- `DJANGO_DEBUG=False`
+- unique long `DJANGO_SECRET_KEY`
+- exact production `DJANGO_ALLOWED_HOSTS`
+- exact HTTPS `DJANGO_CSRF_TRUSTED_ORIGINS`
+- `DB_ENGINE=postgresql`
+- `POSTGRES_SSLMODE=require` or stronger supported mode
+- PayMongo variables appropriate to test/live mode
 
-Configure production credentials in the deployment secret store:
+Do not store secret values in GitHub files.
 
-- `PAYMONGO_SECRET_KEY`
-- `PAYMONGO_PUBLIC_KEY`
-- `PAYMONGO_WEBHOOK_SECRET`
-- `PAYMONGO_LIVEMODE=True`
-- `PAYMONGO_PLAN_STARTER`
-- `PAYMONGO_PLAN_GROWTH`
-- `PAYMONGO_PLAN_BUSINESS`
+## 2. Database
 
-Create/verify the corresponding recurring-billing plans in the PayMongo account before enabling paid checkout. Register the production webhook endpoint:
+- Provision production PostgreSQL.
+- Restrict database access.
+- Configure automated backups and retention.
+- Perform a real restore test into a separate recovery target.
+- Record the recovery procedure and owner.
+
+## 3. Domain and HTTPS
+
+- Configure DNS for the production host.
+- Provision valid TLS/HTTPS.
+- Set allowed hosts and CSRF origins to the exact production origin.
+- Verify redirects/cookies/security headers in production mode.
+
+## 4. PayMongo
+
+Configure:
+
+```dotenv
+PAYMONGO_SECRET_KEY=
+PAYMONGO_PUBLIC_KEY=
+PAYMONGO_WEBHOOK_SECRET=
+PAYMONGO_LIVEMODE=True
+PAYMONGO_PLAN_STARTER=
+PAYMONGO_PLAN_GROWTH=
+PAYMONGO_PLAN_BUSINESS=
+```
+
+Create/verify matching recurring plans in PayMongo. Register:
 
 `https://<production-host>/api/billing/webhook/paymongo/`
 
-Use the webhook signing secret supplied by PayMongo. Never put provider secrets in source control. Perform a test subscription and verify that duplicate webhook delivery is harmless before accepting customers.
+Use the production webhook signing secret supplied by PayMongo. Test checkout, activation, plan change, cancellation, invoice synchronization, failed payment handling, invalid signature rejection and duplicate delivery.
 
-## 3. Database and recovery
+## 5. Email and communications
 
-- Enable automated PostgreSQL backups with a documented retention period.
-- Test a restore before accepting production customer data.
-- Restrict database access to the application and approved operators.
-- Keep migrations in source control and deploy them before application code that depends on them.
+Configure a real transactional email provider if production workflows require email. Store credentials in managed secrets and test delivery, sender identity and failure handling.
 
-## 4. Monitoring
+## 6. Monitoring
 
-Monitor:
+Monitor `/health/` for process availability and `/ready/` for database readiness. Also monitor HTTP errors/latency, database health, payroll failures, billing/webhook failures and backup status.
 
-- `/health/` for process availability.
-- `/ready/` for database readiness.
-- HTTP 5xx rate and latency.
-- Failed payroll processing and approval operations.
-- Billing webhook failures and repeated provider events.
-- Database storage and connection saturation.
-- Backup success/failure.
+## 7. First-customer acceptance test
 
-Alert an operator when readiness fails, backups fail, or billing webhooks repeatedly fail.
+Use a staging or controlled customer account first:
 
-## 5. Security baseline
+1. Create organization and owner.
+2. Configure company structure.
+3. Create employees and verify employee limits.
+4. Configure assignments, schedules, attendance and leave.
+5. Configure payroll inputs.
+6. Run payroll preflight/review.
+7. Process and approve a test payroll.
+8. Generate a payslip and reporting/remittance exports.
+9. Verify employee self-service isolation.
+10. Start a PayMongo test/live subscription as appropriate.
+11. Verify provider webhook synchronization.
+12. Verify duplicate/invalid webhooks are handled safely.
+13. Verify cross-organization access is denied.
+14. Verify `/health/` and `/ready/` from monitoring.
+15. Execute a backup and restore test.
 
-- HTTPS only in production.
-- Production secret values stored outside Git.
-- Least-privilege organization roles.
-- Server-authoritative plan/subscription state.
-- Tenant-scoped employee, workforce, payroll, and billing queries.
-- Do not expose whether resources exist in another organization.
-- Review audit events for billing and sensitive HR/payroll actions.
-- Establish a customer data-retention/deletion policy before onboarding production customers.
+## 8. Go-live gate
 
-## 6. First-customer acceptance test
+Do not accept real customer data until all of these are complete:
 
-1. Create an organization and owner account.
-2. Configure company information, departments, positions, employment types, and payroll settings.
-3. Import/create employees and verify employee-limit enforcement.
-4. Configure schedules, attendance, and leave rules.
-5. Configure salary/payroll profiles and applicable PH compliance references.
-6. Run payroll preflight.
-7. Process, review, approve, and mark a test payroll paid.
-8. Generate a payslip and remittance/reporting exports.
-9. Start a test paid subscription and verify the organization subscription state.
-10. Deliver duplicate and invalid billing webhook payloads and verify they are rejected/idempotent.
-11. Verify an authorized user can view billing history while another organization cannot.
-12. Verify `/health/` and `/ready/` are monitored.
-13. Verify backup restore procedure.
+- [ ] production PostgreSQL
+- [ ] domain/DNS/HTTPS
+- [ ] secure production Django configuration
+- [ ] PayMongo live account/plans/webhook
+- [ ] transactional email
+- [ ] automated backups and tested restore
+- [ ] monitoring and alerting
+- [ ] first-customer acceptance test
+- [ ] privacy/retention process
+- [ ] qualified Philippine payroll/tax/employment review
 
-## 7. Go-live gate
+## 9. Rollback and incident response
 
-Do not accept real customer data until the production database, domain/DNS, PayMongo live account, email delivery, backups, monitoring, and restore procedure are configured and the first-customer acceptance test passes.
+If a deployment causes material errors:
+
+1. Stop additional production changes.
+2. Preserve logs and audit events.
+3. Assess whether application rollback or database recovery is safer.
+4. Protect payroll/billing state from duplicate processing.
+5. Restore from a known-good backup only after validating the target.
+6. Rotate compromised secrets if applicable.
+7. Document the incident and customer/regulatory response.
