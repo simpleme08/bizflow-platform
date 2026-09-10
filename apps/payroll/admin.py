@@ -1,20 +1,36 @@
 from django.contrib import admin
 
-from .models import EmployeeSalary, PayrollPeriod, PayrollRecord
+from .models import EmployeeSalary, PayrollAdjustment, PayrollPeriod, PayrollProfile, PayrollRecord
+
 
 @admin.register(EmployeeSalary)
 class EmployeeSalaryAdmin(admin.ModelAdmin):
-	list_display = ('employee', 'basic_salary', 'effective_date')
+    list_display = ('employee', 'basic_salary', 'effective_date')
+
+
+@admin.register(PayrollProfile)
+class PayrollProfileAdmin(admin.ModelAdmin):
+    list_display = ('employee', 'sss_number', 'philhealth_number', 'pagibig_number', 'tin', 'minimum_wage_earner')
+    list_filter = ('minimum_wage_earner',)
+    search_fields = ('employee__employee_number', 'employee__first_name', 'employee__last_name', 'tin')
 
 
 @admin.register(PayrollPeriod)
 class PayrollPeriodAdmin(admin.ModelAdmin):
-	list_display = ('name', 'start_date', 'end_date', 'status')
-	list_filter = ('status',)
+    list_display = ('name', 'organization', 'start_date', 'end_date', 'frequency', 'status')
+    list_filter = ('status', 'frequency')
+    search_fields = ('name', 'organization__name')
 
 
 @admin.register(PayrollRecord)
 class PayrollRecordAdmin(admin.ModelAdmin):
-	list_display = ('employee', 'payroll_period', 'gross_pay', 'net_pay', 'status')
-	list_filter = ('status', 'payroll_period')
-	readonly_fields = ('gross_pay', 'net_pay')
+    list_display = ('employee', 'payroll_period', 'gross_pay', 'total_deductions', 'net_pay', 'status')
+    list_filter = ('status', 'payroll_period__frequency')
+    search_fields = ('employee__employee_number', 'employee__first_name', 'employee__last_name')
+    readonly_fields = ('gross_pay', 'net_pay')
+
+
+@admin.register(PayrollAdjustment)
+class PayrollAdjustmentAdmin(admin.ModelAdmin):
+    list_display = ('payroll_record', 'kind', 'description', 'amount', 'taxable', 'approved')
+    list_filter = ('kind', 'taxable', 'approved')
