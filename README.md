@@ -1,115 +1,111 @@
 # BizFlow HRIS
 
-BizFlow is a Django HRIS covering employee records, attendance, timekeeping, leave, payroll, scheduling, onboarding, talent, HR operations, employee self-service, and Philippine SaaS billing.
+BizFlow is a Django-based, Philippine-focused HRIS for small and mid-sized organizations. It combines employee records, lifecycle management, scheduling, timekeeping, attendance, leave, payroll, employee self-service, HR operations, talent workflows, reporting, and SaaS billing.
+
+## What is included
+
+- Multi-tenant organizations and organization memberships
+- Role-based access control and audit events
+- Employee master data, lifecycle history, assignments and documents
+- Scheduling, clients/sites, shifts and lifecycle-aware workforce operations
+- Employee time clock and HR attendance correction/import workflows
+- Atomic Excel `.xlsx` timekeeping import
+- Leave balances, requests and approvals
+- Payroll periods, salary/wage data, adjustments, loans and final pay
+- PDF payslips and statutory/remittance reporting exports
+- Employee self-service and HR Hub
+- Recruiting, onboarding, performance, benefits and offboarding
+- HR Operations: policies, acknowledgements, announcements, approvals, profile changes, compensation, projects/timesheets and connector metadata
+- SaaS plans, employee limits and PayMongo recurring billing integration
+- Production health/readiness endpoints and Render deployment configuration
 
 ## Documentation
 
-- [Setup, PostgreSQL, Supabase, demo data, and deployment](docs/SETUP.md)
-- [Roles and access](docs/ROLES_AND_ACCESS.md)
-- [Module workflows](docs/WORKFLOWS.md)
-- [Operations, security, backup, and release](docs/OPERATIONS.md)
-- [Production launch runbook](docs/production-launch.md)
-- [Master project checklist](docs/master-checklist.md)
-- [Architecture, route map, data setup order, and troubleshooting](docs/ARCHITECTURE_AND_API.md)
+Start here:
 
-## Modules
+1. [Product guide](docs/PRODUCT.md)
+2. [Setup and configuration](docs/SETUP.md)
+3. [Architecture and API map](docs/ARCHITECTURE_AND_API.md)
+4. [API reference](docs/API.md)
+5. [Roles and access](docs/ROLES_AND_ACCESS.md)
+6. [Operating workflows](docs/WORKFLOWS.md)
+7. [Payroll and Philippine compliance](docs/PAYROLL_AND_COMPLIANCE.md)
+8. [SaaS billing and PayMongo](docs/BILLING.md)
+9. [Security model](docs/SECURITY.md)
+10. [Testing strategy](docs/TESTING.md)
+11. [Operations and release procedure](docs/OPERATIONS.md)
+12. [Production launch runbook](docs/production-launch.md)
+13. [Master project checklist](docs/master-checklist.md)
+14. [Contributing](docs/CONTRIBUTING.md)
 
-- AdminLTE HR and ESS dashboards
-- Separate employee time clock at `/clock/`
-- Employee directory, schedules, attendance, Excel timekeeping import, and reports
-- Leave balances/requests/approvals, payroll records, and printable payslips
-- Recruiting, onboarding, performance, benefits, compensation, and offboarding
-- HR Operations: announcements, policies/documents, acknowledgements, approvals, profile changes, projects/timesheets, and optional external connectors
-- SaaS subscriptions, PayMongo billing checkout, invoices, and verified webhooks
+## Technology
 
-## Production health
-
-- `/health/` — process availability check
-- `/ready/` — database readiness check; returns HTTP 503 when the database is unavailable
+- Python 3.11+
+- Django 5.x
+- Django sessions/authentication and CSRF protection
+- PostgreSQL for hosted/shared environments; SQLite for local evaluation
+- AdminLTE static assets
+- ReportLab for PDF payslips
+- OpenPyXL for Excel timekeeping import
+- WhiteNoise for static files
+- Gunicorn for production application serving
+- PayMongo for recurring SaaS subscriptions
 
 ## Local setup
 
-Install Python 3.11+ and PostgreSQL for production (SQLite is fine for local evaluation):
-
 ```powershell
-cd C:\Users\pcruz\Documents\HRIS
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 Copy-Item .env.example .env
 python manage.py migrate
+python manage.py check
+python manage.py test
 python manage.py runserver
 ```
 
 Open `http://127.0.0.1:8000/`.
 
-## Full demo data
+SQLite is convenient for evaluation. Use PostgreSQL for any shared, staging or production environment.
 
-After migrations, run the idempotent seed command:
+## Demo data
+
+For a disposable local/demo database:
 
 ```powershell
 python manage.py seed_demo
 ```
 
-It creates employees, departments, shifts, attendance, leave balances, payroll, role accounts, onboarding, talent records, benefits, offboarding, policies, announcements, approvals, timesheets, and disabled connector placeholders.
+The seed is intended for demonstrations and creates representative organizations, users, employees and module data. **Do not run it against a real production HR database.** Change/remove all demo accounts before real use.
 
-| Account | Password | Use |
-| --- | --- | --- |
-| `demo_superuser` | `DemoRole2026!` | Django/HRIS Super User |
-| `demo_hr` | `DemoRole2026!` | HR workspace and Excel import |
-| `demo_manager` | `DemoRole2026!` | Manager workspace |
-| `demo_employee` | `DemoRole2026!` | Employee Self-Service |
-| `demo.juan` to `demo.sofia` | `DemoEmployee2026!` | Employee and time-clock demos |
+## Timekeeping import
 
-These accounts are demonstration-only; change/remove them before real deployment.
-
-## Excel timekeeping import
-
-HR, Super User, and Django superuser accounts can import timekeeping from the Attendance page. Download the template there and use these headers in exact order:
+HR, Super User, and Django superuser accounts can use the Attendance import. Download the in-app template and preserve this exact header order:
 
 ```text
 Employee Number | Attendance Date | Time In | Time Out | Status | Remarks
 ```
 
-Upload `.xlsx` only. Supported statuses are `PRESENT`, `ABSENT`, `LEAVE`, and `HOLIDAY`. Every row is validated before a single transaction saves the workbook, so invalid files do not partially change attendance.
+Upload `.xlsx` only. Supported statuses are `PRESENT`, `ABSENT`, `LEAVE`, and `HOLIDAY`. Validation occurs before the workbook is committed so an invalid workbook does not partially update attendance.
 
-## PostgreSQL
+## Health endpoints
 
-Set the following in `.env` for a local PostgreSQL server:
+- `GET /health/` — process availability
+- `GET /ready/` — database readiness; returns HTTP 503 when the database is unavailable
 
-```dotenv
-DB_ENGINE=postgresql
-POSTGRES_DB=bizflow
-POSTGRES_USER=bizflow_app
-POSTGRES_PASSWORD=use-a-long-unique-password
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-POSTGRES_SSLMODE=prefer
-```
+## Production
 
-Then run `python manage.py migrate` and `python manage.py seed_demo`.
+Production requires PostgreSQL, HTTPS, a real `DJANGO_SECRET_KEY`, exact allowed hosts/CSRF origins, managed secrets, backups, monitoring, email delivery, PayMongo live configuration, and a tested restore procedure.
 
-## Supabase PostgreSQL
+The included `render.yaml` runs migrations and static collection during deployment and uses `/ready/` as its health check. A free Render service is suitable for demonstration only; production should use infrastructure appropriate for availability, persistent storage, backups and monitoring.
 
-1. Create a Supabase project, select **Connect**, and copy its connection details.
-2. A persistent Django server should use a Direct connection when IPv6 is available, or the **Supavisor Session Pooler** on IPv4-only hosting. Use the exact host, username, and port provided in the dashboard.
-3. Set the PostgreSQL environment variables from the Supabase dashboard and `POSTGRES_SSLMODE=require`.
-4. Run migrations and seed data for a demo environment. Never commit database credentials or expose them in browser code.
+See [docs/production-launch.md](docs/production-launch.md) for the complete go-live gate.
 
-## Deployment
+## Compliance and responsibility
 
-The included `render.yaml` runs migrations and static collection during deployment, uses PostgreSQL, and checks `/ready/` for database readiness. Production configuration must set a real `DJANGO_SECRET_KEY`, allowed hosts, and CSRF trusted origins.
+The payroll module provides Philippine payroll/compliance foundations and reporting workflows. It is not a substitute for current government rules, professional payroll/tax advice, legal review, or government filing systems. Verify effective-date and region-specific rules before every production payroll cycle.
 
-For the complete deployment, PayMongo, backup, monitoring, recovery, and first-customer procedure, follow [docs/production-launch.md](docs/production-launch.md).
+## Security
 
-## Production checklist
-
-- Set `DJANGO_DEBUG=False`, a unique secret key, exact allowed hosts, and CSRF trusted origins.
-- Use PostgreSQL and enable automated backups with a tested restore procedure.
-- Remove demo users/data before processing real employee data.
-- Configure PayMongo live credentials, recurring plans, and the production webhook signing secret.
-- Configure email delivery and monitoring/alerts.
-- Keep payroll, billing, benefits, messaging, and other provider secrets in host-managed environment variables—not in this repository.
-- Complete the first-customer acceptance test before accepting real production data.
-- Obtain appropriate legal, privacy, and payroll review before production use.
+Never commit secrets, credentials, customer data, production database dumps or provider keys. All sensitive features must enforce permissions and tenant scope on the server. See [docs/SECURITY.md](docs/SECURITY.md).
