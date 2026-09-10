@@ -10,8 +10,13 @@ class ClientWebsiteTests(TestCase):
         self.assertContains(response, 'High Speed Internet Support')
         self.assertContains(response, 'Parañaque')
         self.assertContains(response, 'Davao')
-        self.assertContains(response, 'Sign in to HRIS')
-        self.assertContains(response, 'Open Time Clock')
+        self.assertContains(response, 'Virtual Front Desk Agents')
+        self.assertContains(response, 'Kiosk Technology')
+        self.assertContains(response, 'Technical Support Agents')
+        self.assertContains(response, 'connectivity')
+        self.assertContains(response, 'Our Mission')
+        self.assertContains(response, 'HRIS Sign In')
+        self.assertContains(response, 'Time Clock')
 
     def test_unknown_client_is_not_exposed(self):
         response = self.client.get('/client/does-not-exist/')
