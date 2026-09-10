@@ -72,8 +72,9 @@ def employee_profile_api(request, employee_id):
         if not employee.organization.is_active:
             return JsonResponse({'detail': 'Employee organization is inactive.'}, status=403)
     else:
+        # Do not reveal whether an employee ID exists in another organization.
         if membership is None or membership.organization_id != employee.organization_id:
-            return JsonResponse({'detail': 'Permission denied.'}, status=403)
+            return JsonResponse({'detail': 'Employee not found.'}, status=404)
         if not membership.has_permission('view_employees'):
             return JsonResponse({'detail': 'Permission denied.'}, status=403)
 
