@@ -59,16 +59,25 @@ def employee_directory(request):
 def employee_profile_api(request, employee_id):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
-    membership = _membership_for(request.user)
-    if membership is None:
-        return JsonResponse({'detail': 'Permission denied.'}, status=403)
-    employee = Employee.objects.filter(id=employee_id, organization=membership.organization).select_related('department', 'position', 'employment_type', 'manager').prefetch_related('assignments__shift_template', 'assignments__client', 'assignments__client_site', 'employment_history__department', 'employment_history__position', 'employment_history__employment_type', 'employment_history__manager', 'documents').first()
+
+    employee = Employee.objects.filter(id=employee_id).select_related('department', 'position', 'employment_type', 'manager').prefetch_related('assignments__shift_template', 'assignments__client', 'assignments__client_site', 'employment_history__department', 'employment_history__position', 'employment_history__employment_type', 'employment_history__manager', 'documents').first()
     if employee is None:
         return JsonResponse({'detail': 'Employee not found.'}, status=404)
+
     is_self = employee.user_id == request.user.id
-    if not is_self and not membership.has_permission('view_employees'):
-        return JsonResponse({'detail': 'Permission denied.'}, status=403)
-    private = is_self or membership.has_permission('manage_employees')
+    membership = _membership_for(request.user)
+    if is_self:
+        # Self-service access is allowed without an OrganizationMembership, but
+        # the employee must belong to an active organization.
+        if not employee.organization.is_active:
+            return JsonResponse({'detail': 'Employee organization is inactive.'}, status=403)
+    else:
+        if membership is None or membership.organization_id != employee.organization_id:
+            return JsonResponse({'detail': 'Permission denied.'}, status=403)
+        if not membership.has_permission('view_employees'):
+            return JsonResponse({'detail': 'Permission denied.'}, status=403)
+
+    private = is_self or (membership is not None and membership.organization_id == employee.organization_id and membership.has_permission('manage_employees'))
     return JsonResponse({'employee': _employee_payload(employee, private), 'history': [{'id': str(h.id), 'status': h.status, 'effective_date': h.effective_date.isoformat(), 'end_date': h.end_date.isoformat() if h.end_date else None, 'department': h.department.name if h.department else None, 'position': h.position.title if h.position else None, 'employment_type': h.employment_type.name if h.employment_type else None, 'manager': str(h.manager_id) if h.manager_id else None, 'reason': h.reason} for h in employee.employment_history.all()], 'documents': [{'id': str(d.id), 'type': d.document_type, 'name': d.name, 'issued_date': d.issued_date.isoformat() if d.issued_date else None, 'expiry_date': d.expiry_date.isoformat() if d.expiry_date else None, 'required': d.is_required, 'status': d.status} for d in employee.documents.all()]})
 
 
