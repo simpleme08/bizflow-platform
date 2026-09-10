@@ -1,3 +1,4 @@
+from datetime import date
 from decimal import Decimal
 
 from django.http import JsonResponse
@@ -19,7 +20,7 @@ def final_pay_api(request):
     try:
         employee = Employee.objects.get(id=request.POST.get('employee_id'), organization=membership.organization)
         salary = employee.salary.basic_salary
-        separation_date = request.POST.get('separation_date')
+        separation_date = date.fromisoformat(request.POST.get('separation_date', ''))
         loan_balance = sum((loan.balance for loan in EmployeeLoan.objects.filter(employee=employee, status=EmployeeLoan.Status.ACTIVE)), Decimal('0.00'))
         result = final_pay_preview(
             employee,
