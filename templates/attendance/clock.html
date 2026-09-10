@@ -2,93 +2,29 @@
 <html lang="en">
 <head>
     <link rel="stylesheet" href="/static/adminlte/plugins/fontawesome-free/css/all.min.css"><link rel="stylesheet" href="/static/adminlte/dist/css/adminlte.min.css"><link rel="stylesheet" href="/static/css/custom.css">
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Time Clock | BizFlow HRIS</title>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Time Clock | HSIS HRIS</title>
     <style>
-        :root { font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #0f172a; background: #082f49; }
-        * { box-sizing: border-box; }
-        body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: radial-gradient(circle at 75% 15%, rgba(34,211,238,.28), transparent 30%), linear-gradient(135deg,#082f49,#0ea5e9); }
-        main { width: min(510px, calc(100% - 32px)); padding: 36px; background: #fff; border: 1px solid rgba(255,255,255,.6); border-radius: 24px; box-shadow: 0 30px 80px rgba(2,20,35,.28); text-align: center; }
-        .brand { color: #082f49; font: 800 13px Inter, sans-serif; letter-spacing: 1.4px; text-transform: uppercase; }
-        .kicker { margin-top: 30px; color: #64748b; font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; }
-        .clock { margin: 8px 0 28px; color: #0ea5e9; font: 750 48px Inter, sans-serif; letter-spacing: -.04em; }
-        .field { display: block; width: 100%; margin: 12px 0; padding: 14px; border: 1px solid #cbd5e1; border-radius: 10px; background: #f8fafc; font-size: 16px; text-align: center; }
-        .field:focus { outline: none; border-color: #0ea5e9; box-shadow: 0 0 0 4px rgba(14,165,233,.12); }
-        .button { width: 100%; padding: 15px; margin-top: 12px; border: 0; border-radius: 10px; background: #0ea5e9; color: #fff; font-size: 16px; font-weight: 800; cursor: pointer; }
-        .button.out { background: #082f49; }
-        .button:disabled { cursor: not-allowed; opacity: .45; }
-        .status { margin: 18px 0 4px; color: #64748b; font-size: 14px; }
-        .last { color: #082f49; font-size: 13px; font-weight: 700; }
-        .error { min-height: 20px; margin-top: 16px; color: #be123c; font-size: 14px; }
-        .back { display: inline-block; margin-top: 24px; color: #0284c7; font-size: 13px; font-weight: 800; text-decoration: none; }
-        .hidden { display: none; }
+        :root{font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#102a5c;background:#062a63}*{box-sizing:border-box}
+        body{margin:0;min-height:100vh;display:grid;place-items:center;background:radial-gradient(circle at 76% 10%,rgba(24,201,239,.28),transparent 26%),radial-gradient(circle at 15% 85%,rgba(255,189,18,.2),transparent 20%),linear-gradient(135deg,#031b48,#0663bd 62%,#08a0df)}
+        main{width:min(530px,calc(100% - 30px));padding:34px;background:#fff;border:1px solid rgba(255,255,255,.7);border-radius:26px;box-shadow:0 30px 85px rgba(0,12,45,.3);text-align:center}.logo{width:64px;height:52px;position:relative;margin:0 auto 8px}.dot{position:absolute;border-radius:50%;box-shadow:0 2px 8px rgba(15,23,42,.15)}.d1{width:22px;height:22px;background:#ef1724;left:23px;top:0}.d2{width:19px;height:19px;background:#ffbd12;left:0;top:13px}.d3{width:19px;height:19px;background:#0876e8;left:25px;top:18px}.d4{width:16px;height:16px;background:#18b9bc;left:5px;top:31px}.d5{width:21px;height:21px;background:#55c51b;left:43px;top:24px}.d6{width:10px;height:10px;background:#e50083;left:27px;top:42px}.brand{font-size:1.55rem;font-weight:950;letter-spacing:-.06em;color:#062a63}.tagline{font-size:.58rem;letter-spacing:.02em;color:#6a7b94;font-weight:800}.kicker{margin-top:27px;color:#0876e8;font-size:.72rem;letter-spacing:.13em;text-transform:uppercase;font-weight:900}.clock{margin:7px 0 25px;color:#062a63;font-size:3rem;line-height:1;font-weight:900;letter-spacing:-.06em}.field{display:block;width:100%;margin:11px 0;padding:14px;border:1px solid #cbd8e8;border-radius:11px;background:#f8fbff;font-size:16px;text-align:center}.field:focus{outline:none;border-color:#0876e8;box-shadow:0 0 0 4px rgba(8,118,232,.12)}.button{width:100%;padding:14px;margin-top:11px;border:0;border-radius:999px;background:#0876e8;color:#fff;font-size:15px;font-weight:900;cursor:pointer;box-shadow:0 10px 22px rgba(8,118,232,.18)}.button.out{background:#062a63}.button:disabled{cursor:not-allowed;opacity:.45}.status{margin:17px 0 4px;color:#607391;font-size:14px}.last{color:#062a63;font-size:13px;font-weight:800}.error{min-height:20px;margin-top:15px;color:#be123c;font-size:14px}.back{display:inline-block;margin-top:22px;color:#0876e8;font-size:13px;font-weight:850;text-decoration:none}.hidden{display:none}.trust{display:flex;justify-content:center;gap:22px;margin-top:22px;padding-top:17px;border-top:1px solid #e4edf7;color:#6a7b94;font-size:.7rem}.trust strong{display:block;color:#163b72;font-size:.75rem;margin-bottom:2px}@media(max-width:600px){main{padding:24px}.clock{font-size:2.5rem}}
     </style>
 </head>
 <body>
     <main>
-        <div class="brand">BizFlow HRIS · Time Clock</div>
-        <div id="login-box">
-            <div class="kicker">Sign in to record your attendance</div>
-            <div class="clock" id="clock">--:--:-- --</div>
-            <form id="login-form">
-                {% csrf_token %}
-                <input class="field" name="username" placeholder="username" autocomplete="username" required>
-                <input class="field" name="password" placeholder="password" type="password" autocomplete="current-password" required>
-                <button class="button" type="submit">Sign in</button>
-            </form>
-        </div>
-        <div id="clock-box" class="hidden">
-            <div class="kicker">Philippine Standard Time</div>
-            <div class="clock" id="clock-auth">--:--:-- --</div>
-            <div class="status" id="employee"></div>
-            <div class="last" id="last-action"></div>
-            <button class="button" id="clock-in">CLOCK IN</button>
-            <button class="button out" id="clock-out">CLOCK OUT</button>
-        </div>
-        <div class="error" id="error"></div>
-        <a class="back" href="{{ workspace_url }}">Back to workspace</a>
+        <div class="logo"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="dot d4"></i><i class="dot d5"></i><i class="dot d6"></i></div><div class="brand">HSIS</div><div class="tagline">HIGH SPEED INTERNET SUPPORT</div>
+        <div id="login-box"><div class="kicker">Employee time clock</div><div class="clock" id="clock">--:--:-- --</div><form id="login-form">{% csrf_token %}<input class="field" name="username" placeholder="Username" autocomplete="username" required><input class="field" name="password" placeholder="Password" type="password" autocomplete="current-password" required><button class="button" type="submit">Sign in &amp; continue</button></form></div>
+        <div id="clock-box" class="hidden"><div class="kicker">Philippine Standard Time</div><div class="clock" id="clock-auth">--:--:-- --</div><div class="status" id="employee"></div><div class="last" id="last-action"></div><button class="button" id="clock-in">CLOCK IN</button><button class="button out" id="clock-out">CLOCK OUT</button></div>
+        <div class="error" id="error"></div><div class="trust"><div><strong>Secure</strong>Attendance record</div><div><strong>Accurate</strong>PH time</div><div><strong>Simple</strong>Daily clocking</div></div><a class="back" href="{{ workspace_url }}">← Back to HRIS workspace</a>
     </main>
     <script>
-        const clock = document.getElementById('clock');
-        const authClock = document.getElementById('clock-auth');
-        const error = document.getElementById('error');
-        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-        function tick() {
-            const value = new Intl.DateTimeFormat('en-PH', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit', second: '2-digit' }).format(new Date());
-            clock.textContent = value;
-            authClock.textContent = value;
-        }
-        tick();
-        setInterval(tick, 1000);
-        function showState(data) {
-            document.getElementById('login-box').classList.add('hidden');
-            document.getElementById('clock-box').classList.remove('hidden');
-            document.getElementById('employee').textContent = data.employee_name;
-            const action = data.last_action === 'CLOCKED_IN' ? 'Clocked in' : data.last_action === 'CLOCKED_OUT' ? 'Clocked out' : 'No attendance action recorded yet';
-            document.getElementById('last-action').textContent = data.last_action_at ? `Last action: ${action} at ${new Date(data.last_action_at).toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit' })}` : action;
-            document.getElementById('clock-in').disabled = !data.can_clock_in;
-            document.getElementById('clock-out').disabled = !data.can_clock_out;
-        }
-        async function send(url, options) {
-            const response = await fetch(url, options);
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.detail || 'Unable to complete the request.');
-            return data;
-        }
-        document.getElementById('login-form').addEventListener('submit', async event => {
-            event.preventDefault(); error.textContent = '';
-            try { showState(await send('/clock/login/', { method: 'POST', body: new FormData(event.target) })); }
-            catch (exception) { error.textContent = exception.message; }
-        });
-        async function action(value) {
-            error.textContent = '';
-            try { showState(await send('/clock/action/', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken }, body: `action=${value}` })); }
-            catch (exception) { error.textContent = exception.message; }
-        }
-        document.getElementById('clock-in').onclick = () => action('CLOCK_IN');
-        document.getElementById('clock-out').onclick = () => action('CLOCK_OUT');
-        fetch('/clock/action/').then(response => response.ok ? response.json() : null).then(data => { if (data) showState(data); });
+        const clock=document.getElementById('clock');const authClock=document.getElementById('clock-auth');const error=document.getElementById('error');const csrfToken=document.querySelector('[name=csrfmiddlewaretoken]').value;
+        function tick(){const value=new Intl.DateTimeFormat('en-PH',{timeZone:'Asia/Manila',hour:'numeric',minute:'2-digit',second:'2-digit'}).format(new Date());clock.textContent=value;authClock.textContent=value}tick();setInterval(tick,1000);
+        function showState(data){document.getElementById('login-box').classList.add('hidden');document.getElementById('clock-box').classList.remove('hidden');document.getElementById('employee').textContent=data.employee_name;const action=data.last_action==='CLOCKED_IN'?'Clocked in':data.last_action==='CLOCKED_OUT'?'Clocked out':'No attendance action recorded yet';document.getElementById('last-action').textContent=data.last_action_at?`Last action: ${action} at ${new Date(data.last_action_at).toLocaleTimeString('en-PH',{timeZone:'Asia/Manila',hour:'numeric',minute:'2-digit'})}`:action;document.getElementById('clock-in').disabled=!data.can_clock_in;document.getElementById('clock-out').disabled=!data.can_clock_out}
+        async function send(url,options){const response=await fetch(url,options);const data=await response.json();if(!response.ok)throw new Error(data.detail||'Unable to complete the request.');return data}
+        document.getElementById('login-form').addEventListener('submit',async event=>{event.preventDefault();error.textContent='';try{showState(await send('/clock/login/',{method:'POST',body:new FormData(event.target)}))}catch(exception){error.textContent=exception.message}});
+        async function action(value){error.textContent='';try{showState(await send('/clock/action/',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','X-CSRFToken':csrfToken},body:`action=${value}`}))}catch(exception){error.textContent=exception.message}}
+        document.getElementById('clock-in').onclick=()=>action('CLOCK_IN');document.getElementById('clock-out').onclick=()=>action('CLOCK_OUT');fetch('/clock/action/').then(response=>response.ok?response.json():null).then(data=>{if(data)showState(data)});
     </script>
 </body>
 </html>
