@@ -35,7 +35,7 @@ class PayrollCalculatorTests(TestCase):
     def test_withholding_tax_uses_bir_tables(self):
         self.assertEqual(PhilippineWithholdingTax.calculate(Decimal('10417.00')), Decimal('0.00'))
         self.assertEqual(PhilippineWithholdingTax.calculate(Decimal('12000.00')), Decimal('237.45'))
-        self.assertEqual(PhilippineWithholdingTax.calculate(Decimal('40000.00')), Decimal('5604.10'))
+        self.assertEqual(PhilippineWithholdingTax.calculate(Decimal('40000.00')), Decimal('5937.45'))
         self.assertEqual(PhilippineWithholdingTax.calculate(Decimal('20833.00'), frequency='MONTHLY'), Decimal('0.00'))
         self.assertEqual(PhilippineWithholdingTax.calculate(Decimal('25000.00'), frequency='MONTHLY'), Decimal('625.05'))
 
@@ -77,10 +77,12 @@ class PayrollCalculatorTests(TestCase):
         record = PayrollRecord.objects.get(employee=self.employee, payroll_period=self.period)
         self.assertEqual(record.status, PayrollRecord.Status.DRAFT)
         self.assertEqual(record.net_pay, Decimal('9242.61'))
+        self.period.refresh_from_db()
         self.assertEqual(self.period.status, PayrollPeriod.Status.CALCULATED)
 
     def test_approved_period_cannot_be_recalculated(self):
         PayrollCalculator.process_period(self.period, self.employee.organization)
+        self.period.refresh_from_db()
         self.period.status = PayrollPeriod.Status.APPROVED
         self.period.save(update_fields=('status', 'updated_at'))
         with self.assertRaises(ValueError):
