@@ -1,20 +1,23 @@
-/* Shared AdminLTE presentation layer for every BizFlow screen. */
-body { font-size: 14px; background: #f4f6f9 !important; color: #343a40; }
-header { background: #343a40 !important; border: 0 !important; box-shadow: 0 2px 4px rgba(0,0,0,.08); }
-header .brand, header .header-link { color: #fff !important; }
+/* BizFlow workspace theme — aligned with the first client experience: High Speed Internet Support. */
+:root { --hsis-blue: #0ea5e9; --hsis-cyan: #22d3ee; --hsis-navy: #082f49; --hsis-surface: #f0f9ff; }
+body { font-size: 14px; background: #f1f5f9 !important; color: #0f172a; }
+.main-header, .main-sidebar, header { background: var(--hsis-navy) !important; border: 0 !important; box-shadow: 0 2px 8px rgba(8,47,73,.18); }
+header .brand, header .header-link, .brand-link { color: #fff !important; }
 header .header-content { max-width: 1140px; }
 main { max-width: 1140px !important; }
-h1, h2, h3 { color: #343a40; font-family: inherit !important; font-weight: 400 !important; }
-.intro, .subtitle { color: #6c757d !important; }
-.card, .panel, .table-wrap, .box { border: 0 !important; border-radius: .25rem; box-shadow: 0 1px 3px rgba(0,0,0,.12),0 1px 2px rgba(0,0,0,.24); }
-button, .btn-primary { background: #007bff !important; border-radius: .25rem !important; }
-input, select, textarea { border-radius: .25rem !important; border-color: #ced4da !important; }
+h1, h2, h3 { color: #0f172a; font-family: inherit !important; font-weight: 650 !important; }
+.intro, .subtitle { color: #64748b !important; }
+.card, .panel, .table-wrap, .box { border: 1px solid #e2e8f0 !important; border-radius: .65rem; box-shadow: 0 4px 18px rgba(15,23,42,.07); }
+button, .btn-primary { background: var(--hsis-blue) !important; border-color: var(--hsis-blue) !important; border-radius: .55rem !important; }
+button:hover, .btn-primary:hover { background: #0284c7 !important; border-color: #0284c7 !important; }
+input, select, textarea { border-radius: .55rem !important; border-color: #cbd5e1 !important; }
+input:focus, select:focus, textarea:focus { border-color: var(--hsis-blue) !important; box-shadow: 0 0 0 .2rem rgba(14,165,233,.12) !important; }
 table { background: #fff; }
-th { background: #f8f9fa; color: #6c757d !important; }
-.brand-link { font-weight: bold; }
+th { background: var(--hsis-surface); color: #475569 !important; }
 .content-header { padding: 15px; }
+.small-box, .info-box { border-radius: .7rem !important; box-shadow: 0 4px 18px rgba(15,23,42,.07) !important; }
 
-/* The public time clock is deliberately not part of the HRIS workspace. */
+/* The public time clock is deliberately not part of the HRIS workspace navigation. */
 main .clock-link,
 main .footer-links,
 main > .clock,
