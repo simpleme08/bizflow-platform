@@ -37,7 +37,7 @@ def payroll_api(request):
     return JsonResponse({'records': [{
         'id': str(record.id), 'employee': f'{record.employee.first_name} {record.employee.last_name}', 'employee_number': record.employee.employee_number,
         'period': record.payroll_period.name, 'basic_pay': str(record.basic_pay), 'overtime_pay': str(record.overtime_pay),
-        'gross_pay': str(record.gross_pay), 'total_deductions': str(record.total_deductions), 'net_pay': str(record.net_pay), 'status': record.status,
+        'gross_pay': str(record.gross_pay), 'total_deductions': str(record.total_deductions), 'employer_contributions': str(record.employer_contributions), 'net_pay': str(record.net_pay), 'status': record.status,
     } for record in records]})
 
 
@@ -48,16 +48,25 @@ def my_payroll_api(request):
         employee = request.user.employee_profile
     except AttributeError:
         return JsonResponse({'detail': 'No employee profile is linked to this account.'}, status=404)
-    records = employee.payroll_records.select_related('payroll_period').filter(
-        status__in=(PayrollRecord.Status.APPROVED, PayrollRecord.Status.PAID),
-        payroll_period__organization=employee.organization,
-    ).order_by('-payroll_period__end_date', '-created_at')
+    records = employee.payroll_records.select_related('payroll_period').filter(status__in=(PayrollRecord.Status.APPROVED, PayrollRecord.Status.PAID), payroll_period__organization=employee.organization).order_by('-payroll_period__end_date', '-created_at')
     return JsonResponse({'records': [{
-        'id': str(record.id), 'period': record.payroll_period.name,
-        'period_start': record.payroll_period.start_date.isoformat(), 'period_end': record.payroll_period.end_date.isoformat(),
-        'basic_pay': str(record.basic_pay), 'overtime_pay': str(record.overtime_pay), 'gross_pay': str(record.gross_pay),
-        'total_deductions': str(record.total_deductions), 'net_pay': str(record.net_pay), 'status': record.status,
+        'id': str(record.id), 'period': record.payroll_period.name, 'period_start': record.payroll_period.start_date.isoformat(), 'period_end': record.payroll_period.end_date.isoformat(),
+        'basic_pay': str(record.basic_pay), 'overtime_pay': str(record.overtime_pay), 'gross_pay': str(record.gross_pay), 'total_deductions': str(record.total_deductions), 'net_pay': str(record.net_pay), 'status': record.status,
     } for record in records]})
+
+
+@require_http_methods(['POST'])
+def payroll_preflight(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
+    membership = _membership(request, 'manage_payroll')
+    if membership is None:
+        return JsonResponse({'detail': 'Payroll management permission is required.'}, status=403)
+    try:
+        period = PayrollPeriod.objects.get(id=request.POST.get('period_id'), organization=membership.organization)
+    except PayrollPeriod.DoesNotExist:
+        return JsonResponse({'detail': 'Payroll period was not found.'}, status=404)
+    return JsonResponse(PayrollCalculator.preflight(period, membership.organization))
 
 
 @require_http_methods(['POST'])
@@ -88,11 +97,7 @@ def approve_payroll(request, record_id):
         return JsonResponse({'detail': 'Payroll management permission is required.'}, status=403)
     with transaction.atomic():
         try:
-            record = PayrollRecord.objects.select_for_update().select_related('payroll_period').get(
-                id=record_id,
-                employee__organization=membership.organization,
-                payroll_period__organization=membership.organization,
-            )
+            record = PayrollRecord.objects.select_for_update().select_related('payroll_period').get(id=record_id, employee__organization=membership.organization, payroll_period__organization=membership.organization)
         except PayrollRecord.DoesNotExist:
             return JsonResponse({'detail': 'Payroll record was not found.'}, status=404)
         if record.payroll_period.status != PayrollPeriod.Status.CALCULATED:
@@ -105,17 +110,32 @@ def approve_payroll(request, record_id):
     return JsonResponse({'id': str(record.id), 'status': record.status})
 
 
+@require_http_methods(['POST'])
+def mark_payroll_paid(request, record_id):
+    if not request.user.is_authenticated:
+        return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
+    membership = _membership(request, 'manage_payroll')
+    if membership is None:
+        return JsonResponse({'detail': 'Payroll management permission is required.'}, status=403)
+    with transaction.atomic():
+        try:
+            record = PayrollRecord.objects.select_for_update().select_related('payroll_period').get(id=record_id, employee__organization=membership.organization, payroll_period__organization=membership.organization)
+        except PayrollRecord.DoesNotExist:
+            return JsonResponse({'detail': 'Payroll record was not found.'}, status=404)
+        if record.status != PayrollRecord.Status.APPROVED:
+            return JsonResponse({'detail': 'Only approved payroll records can be marked paid.'}, status=409)
+        record.status = PayrollRecord.Status.PAID
+        record.save(update_fields=('status', 'updated_at'))
+    record_audit(organization=membership.organization, actor=request.user, action='payroll.paid', entity=record)
+    return JsonResponse({'id': str(record.id), 'status': record.status})
+
+
 def payslip(request, record_id):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
     try:
         employee = request.user.employee_profile
-        record = PayrollRecord.objects.select_related('employee', 'payroll_period').get(
-            id=record_id,
-            employee=employee,
-            payroll_period__organization=employee.organization,
-            status__in=(PayrollRecord.Status.APPROVED, PayrollRecord.Status.PAID),
-        )
+        record = PayrollRecord.objects.select_related('employee', 'payroll_period').get(id=record_id, employee=employee, payroll_period__organization=employee.organization, status__in=(PayrollRecord.Status.APPROVED, PayrollRecord.Status.PAID))
     except (AttributeError, PayrollRecord.DoesNotExist):
         return JsonResponse({'detail': 'Approved payslip was not found.'}, status=404)
     response = HttpResponse(content_type='application/pdf')
@@ -125,11 +145,17 @@ def payslip(request, record_id):
     pdf.drawString(72, 740, 'BizFlow HRIS Payslip')
     pdf.drawString(72, 720, f'Employee: {record.employee.first_name} {record.employee.last_name} ({record.employee.employee_number})')
     pdf.drawString(72, 700, f'Payroll period: {record.payroll_period.name}')
-    lines = [('Basic Pay', record.basic_pay), ('Overtime Pay', record.overtime_pay), ('Gross Pay', record.gross_pay), ('Late Deduction', record.late_deduction), ('Undertime Deduction', record.undertime_deduction), ('Other Deductions', record.other_deductions), ('Total Deductions', record.total_deductions), ('Net Pay', record.net_pay)]
+    lines = [
+        ('Basic Pay', record.basic_pay), ('Overtime Pay', record.overtime_pay), ('Holiday Pay', record.holiday_pay), ('Night Differential', record.night_differential),
+        ('Allowances', record.allowances), ('Commissions', record.commissions), ('Bonuses', record.bonuses), ('Gross Pay', record.gross_pay),
+        ('SSS', record.sss_employee), ('PhilHealth', record.philhealth_employee), ('Pag-IBIG', record.pagibig_employee), ('Withholding Tax', record.withholding_tax),
+        ('Late/Undertime', record.late_deduction + record.undertime_deduction), ('Leave Without Pay', record.leave_without_pay), ('Loans', record.loan_deductions), ('Other Deductions', record.other_deductions),
+        ('Total Deductions', record.total_deductions), ('Net Pay', record.net_pay),
+    ]
     for index, (label, amount) in enumerate(lines):
         pdf.drawString(90, 660 - index * 22, label)
         pdf.drawRightString(420, 660 - index * 22, f'PHP {amount:,.2f}')
-    pdf.drawString(72, 440, f'Generated: {timezone.localtime().strftime("%B %d, %Y %I:%M %p")} PHT')
+    pdf.drawString(72, 230, f'Generated: {timezone.localtime().strftime("%B %d, %Y %I:%M %p")} PHT')
     pdf.save()
     record_audit(organization=employee.organization, actor=request.user, action='payslip.generated', entity=record)
     return response
