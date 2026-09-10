@@ -1,0 +1,1 @@
+Delivered SaaS foundation for HRIS: explicit plan/subscription state, plan limits, active employee usage, configurable overage, activation eligibility helpers, usage endpoint, admin visibility, and automated coverage.
