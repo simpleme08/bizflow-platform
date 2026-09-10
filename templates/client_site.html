@@ -96,7 +96,7 @@
 <section class="locations" id="locations">
   <div class="shell">
     <div class="section-head"><span>Where we operate</span><h2>Local teams. One connected operation.</h2><p>High Speed Internet Support maintains a presence in two key Philippine locations.</p></div>
-    <div class="location-grid">{% for location in profile.locations %}<div class="location"><strong>{{ location }}</strong><p style="color:#64748b;line-height:1.6;margin-bottom:0">HSIS operations and support location.</p></div>{% endfor %}</div>
+    <div class="location-grid">{% for name, detail in profile.locations %}<div class="location"><strong>{{ name }}</strong><p style="color:#64748b;line-height:1.6;margin-bottom:0">{{ detail }}</p></div>{% endfor %}</div>
   </div>
 </section>
 
