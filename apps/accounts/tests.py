@@ -42,11 +42,10 @@ class EmployeeLoginTests(TestCase):
 		employee_response = self.client.get('/ess/')
 		self.assertNotContains(employee_response, 'Back to workspace')
 
-	def test_dashboard_has_logout_button(self):
+	def test_dashboard_redirects_employees_to_ess(self):
 		self.client.force_login(self.user)
 		response = self.client.get('/workspace/')
-		self.assertContains(response, 'action="/logout/"')
-		self.assertContains(response, 'Sign out')
+		self.assertRedirects(response, '/ess/')
 
 	def test_ess_page_hides_back_to_workspace_link(self):
 		self.client.force_login(self.user)
@@ -59,5 +58,3 @@ class EmployeeLoginTests(TestCase):
 		response = self.client.post('/login/', {'username': 'admin-only', 'password': 'password'})
 
 		self.assertEqual(response.status_code, 401)
-
-# Create your tests here.
