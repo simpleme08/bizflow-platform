@@ -7,7 +7,7 @@ from django.utils import timezone
 from apps.attendance.models import AttendanceRecord
 from apps.leave.models import LeaveApplication
 
-from .models import PayrollHoliday, PayrollRecord
+from .models import PayrollHoliday, PayrollRecord, PayrollWageRate
 
 ZERO = Decimal('0.00')
 
@@ -115,9 +115,10 @@ class PhilippineWithholdingTax:
 
     @classmethod
     def calculate(cls, taxable_compensation, frequency='SEMI_MONTHLY', minimum_wage_earner=False):
-        if minimum_wage_earner:
-            return ZERO
         table = cls.MONTHLY if frequency == 'MONTHLY' else cls.SEMI_MONTHLY
+        if minimum_wage_earner:
+            # Callers should pass only the taxable non-exempt portion for MWEs.
+            taxable_compensation = max(Decimal(taxable_compensation), ZERO)
         return cls._calculate_table(taxable_compensation, table)
 
     @classmethod
@@ -159,6 +160,19 @@ class PayrollCalculator:
         return history or getattr(employee, 'salary', None)
 
     @classmethod
+    def _wage_rate_for_employee(cls, employee, period):
+        profile = getattr(employee, 'payroll_profile', None)
+        if profile is None or not profile.wage_region or not profile.wage_category:
+            return None
+        rates = PayrollWageRate.objects.filter(
+            is_active=True,
+            region_code__iexact=profile.wage_region,
+            category=profile.wage_category,
+            effective_from__lte=period.end_date,
+        ).filter(models_q_effective_to(period.end_date)).order_by('-effective_from', '-created_at')
+        return rates.filter(organization=employee.organization).first() or rates.filter(organization__isnull=True).first()
+
+    @classmethod
     def _holiday_premium(cls, attendance, daily_rate):
         holiday = PayrollHoliday.objects.filter(holiday_date=attendance.attendance_date, is_active=True, organization=attendance.employee.organization).first()
         if holiday is None:
@@ -181,11 +195,7 @@ class PayrollCalculator:
     def _taxable_thirteenth_for_period(cls, employee, period, thirteenth_month):
         if not thirteenth_month:
             return ZERO
-        prior_records = PayrollRecord.objects.filter(
-            employee=employee,
-            payroll_period__end_date__year=period.end_date.year,
-            payroll_period__end_date__lt=period.end_date,
-        )
+        prior_records = PayrollRecord.objects.filter(employee=employee, payroll_period__end_date__year=period.end_date.year, payroll_period__end_date__lt=period.end_date)
         prior_thirteenth = sum((record.thirteenth_month for record in prior_records), ZERO)
         cumulative = prior_thirteenth + thirteenth_month
         prior_taxable = max(ZERO, prior_thirteenth - PhilippinePayrollRules.THIRTEENTH_MONTH_EXEMPTION)
@@ -225,7 +235,16 @@ class PayrollCalculator:
         statutory = PhilippinePayrollRules.statutory(salary.basic_salary, periods_per_month=periods)
         taxable_regular = money(basic_pay + allowances - statutory['sss_employee'] - statutory['philhealth_employee'] - statutory['pagibig_employee'])
         taxable_supplementary = money(commissions + bonuses + overtime_pay + holiday_pay + night_differential + cls._taxable_thirteenth_for_period(employee, period, thirteenth_month))
-        withholding_tax = PhilippineWithholdingTax.calculate(taxable_regular + taxable_supplementary, period.frequency, bool(getattr(getattr(employee, 'payroll_profile', None), 'minimum_wage_earner', False)))
+        taxable_before_mwe = money(taxable_regular + taxable_supplementary)
+        mwe_exempt = ZERO
+        profile = getattr(employee, 'payroll_profile', None)
+        if profile and profile.minimum_wage_earner:
+            wage_rate = cls._wage_rate_for_employee(employee, period)
+            if wage_rate and daily_rate <= wage_rate.daily_rate:
+                standard_period_days = cls.WORKING_DAYS / Decimal(periods)
+                qualifying_regular = min(basic_pay, money(wage_rate.daily_rate * standard_period_days))
+                mwe_exempt = money(qualifying_regular + overtime_pay + holiday_pay + night_differential)
+        withholding_tax = PhilippineWithholdingTax.calculate(max(ZERO, taxable_before_mwe - mwe_exempt), period.frequency)
         net_pay = money(gross_pay - late_deduction - undertime_deduction - leave_without_pay - loan_deductions - statutory['sss_employee'] - statutory['philhealth_employee'] - statutory['pagibig_employee'] - withholding_tax - other_deductions)
         if net_pay < ZERO:
             raise ValueError('Payroll would result in negative net pay; review deductions.')
@@ -249,31 +268,15 @@ class PayrollCalculator:
     @classmethod
     def annual_tax_reconciliation(cls, employee, year):
         records = PayrollRecord.objects.filter(employee=employee, payroll_period__end_date__year=year).order_by('payroll_period__end_date')
-        rows = list(records.values(
-            'basic_pay', 'allowances', 'commissions', 'bonuses', 'overtime_pay',
-            'holiday_pay', 'night_differential', 'thirteenth_month',
-            'sss_employee', 'philhealth_employee', 'pagibig_employee',
-        ))
-        regular_and_supplementary = sum((
-            row['basic_pay'] + row['allowances'] + row['commissions'] + row['bonuses'] +
-            row['overtime_pay'] + row['holiday_pay'] + row['night_differential'] -
-            row['sss_employee'] - row['philhealth_employee'] - row['pagibig_employee']
-            for row in rows
-        ), ZERO)
+        rows = list(records.values('basic_pay', 'allowances', 'commissions', 'bonuses', 'overtime_pay', 'holiday_pay', 'night_differential', 'thirteenth_month', 'sss_employee', 'philhealth_employee', 'pagibig_employee'))
+        regular_and_supplementary = sum((row['basic_pay'] + row['allowances'] + row['commissions'] + row['bonuses'] + row['overtime_pay'] + row['holiday_pay'] + row['night_differential'] - row['sss_employee'] - row['philhealth_employee'] - row['pagibig_employee'] for row in rows), ZERO)
         total_thirteenth_month = sum((row['thirteenth_month'] for row in rows), ZERO)
         taxable_thirteenth_month = max(ZERO, total_thirteenth_month - PhilippinePayrollRules.THIRTEENTH_MONTH_EXEMPTION)
         taxable_income = PhilippinePayrollRules.money(regular_and_supplementary + taxable_thirteenth_month)
         tax_due = PhilippineWithholdingTax.annual_tax(taxable_income)
         tax_withheld = PhilippinePayrollRules.money(sum((record.withholding_tax for record in records), ZERO))
         adjustment = PhilippinePayrollRules.money(tax_due - tax_withheld)
-        return {
-            'year': year,
-            'taxable_income': taxable_income,
-            'taxable_thirteenth_month': PhilippinePayrollRules.money(taxable_thirteenth_month),
-            'tax_due': tax_due,
-            'tax_withheld': tax_withheld,
-            'adjustment': adjustment,
-        }
+        return {'year': year, 'taxable_income': taxable_income, 'taxable_thirteenth_month': PhilippinePayrollRules.money(taxable_thirteenth_month), 'tax_due': tax_due, 'tax_withheld': tax_withheld, 'adjustment': adjustment}
 
     @classmethod
     def preflight(cls, period, organization):
@@ -290,6 +293,8 @@ class PayrollCalculator:
                 for field, label in (('sss_number', 'SSS'), ('philhealth_number', 'PhilHealth'), ('pagibig_number', 'Pag-IBIG'), ('tin', 'TIN')):
                     if not getattr(profile, field):
                         warnings.append(f'{employee.employee_number}: missing {label} number')
+                if profile.minimum_wage_earner and not cls._wage_rate_for_employee(employee, period):
+                    warnings.append(f'{employee.employee_number}: MWE flag is set but no exact organization/global wage rate is configured')
             try:
                 cls.calculate(employee, period)
             except ValueError as exc:
@@ -314,6 +319,11 @@ class PayrollCalculator:
         period.status = period.Status.CALCULATED
         period.save(update_fields=('status', 'updated_at'))
         return processed
+
+
+def models_q_effective_to(as_of):
+    from django.db.models import Q
+    return Q(effective_to__isnull=True) | Q(effective_to__gte=as_of)
 
 
 def cls_money(value):
