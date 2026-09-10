@@ -7,6 +7,7 @@ from apps.employees.views import employee_directory, employee_directory_page
 from apps.organization.views import current_user
 from apps.leave.views import leave_api, leave_decision, leave_page, my_leave_api
 from apps.payroll.views import approve_payroll, mark_payroll_paid, my_payroll_api, payslip, payroll_api, payroll_page, payroll_preflight, process_payroll
+from apps.payroll.summary import payroll_summary_api
 from apps.reports.views import reports_api, reports_page
 from apps.ess.views import ess_api, ess_page
 from apps.accounts.views import employee_login, login_page
@@ -23,7 +24,7 @@ urlpatterns = [
     path('scheduling/', scheduling_page, name='scheduling-page'), path('api/dashboard/', dashboard, name='dashboard'), path('api/employees/', employee_directory, name='employee-directory'), path('api/attendance/', record_attendance, name='record-attendance'),
     path('api/attendance/import/', import_timekeeping, name='import-timekeeping'), path('api/attendance/template/', timekeeping_template, name='timekeeping-template'), path('api/me/', current_user, name='current-user'),
     path('leave/', leave_page, name='leave-page'), path('api/leave/', leave_api, name='leave-api'), path('api/leave/me/', my_leave_api, name='my-leave-api'), path('api/leave/<uuid:application_id>/decision/', leave_decision, name='leave-decision'),
-    path('payroll/', payroll_page, name='payroll-page'), path('api/payroll/', payroll_api, name='payroll-api'), path('api/payroll/me/', my_payroll_api, name='my-payroll-api'), path('api/payroll/preflight/', payroll_preflight, name='payroll-preflight'),
+    path('payroll/', payroll_page, name='payroll-page'), path('api/payroll/', payroll_api, name='payroll-api'), path('api/payroll/me/', my_payroll_api, name='my-payroll-api'), path('api/payroll/summary/', payroll_summary_api, name='payroll-summary-api'), path('api/payroll/preflight/', payroll_preflight, name='payroll-preflight'),
     path('api/payroll/process/', process_payroll, name='process-payroll'), path('api/payroll/<uuid:record_id>/approve/', approve_payroll, name='approve-payroll'), path('api/payroll/<uuid:record_id>/pay/', mark_payroll_paid, name='mark-payroll-paid'), path('api/payroll/<uuid:record_id>/payslip/', payslip, name='payslip'),
     path('reports/', reports_page, name='reports-page'), path('api/reports/', reports_api, name='reports-api'), path('ess/', ess_page, name='ess-page'), path('api/ess/', ess_api, name='ess-api'),
     path('api/scheduling/shifts/', get_shifts, name='scheduling-shifts'), path('api/scheduling/clients/', get_clients, name='scheduling-clients'), path('api/scheduling/employees/', get_assignable_employees, name='scheduling-employees'), path('api/scheduling/employee-schedule/', get_employee_schedule, name='scheduling-employee-schedule'), path('api/scheduling/assign/', assign_shift, name='scheduling-assign'), path('api/scheduling/delete/', delete_assignment, name='scheduling-delete'),
