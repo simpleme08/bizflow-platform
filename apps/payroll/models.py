@@ -14,6 +14,15 @@ class EmployeeSalary(BaseModel):
     effective_date = models.DateField()
 
 
+class PayrollProfile(BaseModel):
+    employee = models.OneToOneField(Employee, on_delete=models.CASCADE, related_name='payroll_profile')
+    sss_number = models.CharField(max_length=20, blank=True)
+    philhealth_number = models.CharField(max_length=20, blank=True)
+    pagibig_number = models.CharField(max_length=20, blank=True)
+    tin = models.CharField(max_length=20, blank=True)
+    minimum_wage_earner = models.BooleanField(default=False)
+
+
 class PayrollPeriod(BaseModel):
     class Status(models.TextChoices):
         OPEN = 'OPEN', 'Open'
@@ -21,11 +30,16 @@ class PayrollPeriod(BaseModel):
         APPROVED = 'APPROVED', 'Approved'
         PAID = 'PAID', 'Paid'
 
+    class Frequency(models.TextChoices):
+        SEMI_MONTHLY = 'SEMI_MONTHLY', 'Semi-monthly'
+        MONTHLY = 'MONTHLY', 'Monthly'
+
     organization = models.ForeignKey('organization.Organization', on_delete=models.PROTECT, related_name='payroll_periods')
     name = models.CharField(max_length=100)
     start_date = models.DateField()
     end_date = models.DateField()
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.OPEN)
+    frequency = models.CharField(max_length=20, choices=Frequency.choices, default=Frequency.SEMI_MONTHLY)
 
     class Meta:
         constraints = [
@@ -50,6 +64,10 @@ class PayrollRecord(BaseModel):
     overtime_pay = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     late_deduction = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     undertime_deduction = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    sss_employee = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    philhealth_employee = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    pagibig_employee = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    withholding_tax = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     other_deductions = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     gross_pay = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     net_pay = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
@@ -71,5 +89,15 @@ class PayrollRecord(BaseModel):
         return super().save(*args, **kwargs)
 
     @property
+    def statutory_deductions(self):
+        return self.sss_employee + self.philhealth_employee + self.pagibig_employee
+
+    @property
     def total_deductions(self):
-        return self.late_deduction + self.undertime_deduction + self.other_deductions
+        return (
+            self.late_deduction
+            + self.undertime_deduction
+            + self.statutory_deductions
+            + self.withholding_tax
+            + self.other_deductions
+        )
