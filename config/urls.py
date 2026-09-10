@@ -1,3 +1,5 @@
+from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import path
@@ -42,3 +44,6 @@ urlpatterns = [
     path('talent/', talent_page, name='talent-page'), path('api/recruiting/', recruiting_api, name='recruiting-api'), path('api/performance/', performance_api, name='performance-api'), path('api/benefits/', benefits_api, name='benefits-api'), path('api/offboarding/', offboarding_api, name='offboarding-api'),
     path('operations/', operations_page, name='operations-page'), path('employee-hub/', employee_hub_page, name='employee-hub-page'), path('api/operations/', operations_api, name='operations-api'), path('api/operations/employee/', employee_hub_api, name='employee-hub-api'), path('api/operations/approvals/<uuid:approval_id>/decision/', approval_decision, name='approval-decision'), path('api/operations/profile-requests/<uuid:request_id>/decision/', profile_request_decision, name='profile-request-decision'), path('api/operations/timesheets/<uuid:entry_id>/decision/', timesheet_decision, name='timesheet-decision'),
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
