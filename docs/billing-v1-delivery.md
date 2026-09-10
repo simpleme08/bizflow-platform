@@ -1,0 +1,1 @@
+Delivered on the SaaS foundation branch: organization subscription fields, PH plan catalog, active employee usage and limits, activation/status helpers, subscription usage API, admin controls, and automated regression coverage. Next step is payment-provider integration.
