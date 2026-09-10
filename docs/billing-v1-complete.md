@@ -1,0 +1,1 @@
+Billing v1 implementation is complete on this branch. The repository now has explicit organization plan/subscription state and a stable usage API. Provider-specific collection remains intentionally outside this milestone.
