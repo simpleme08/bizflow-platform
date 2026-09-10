@@ -93,9 +93,20 @@ class PayrollCalculatorTests(TestCase):
         PayrollRecord.objects.create(employee=self.employee, payroll_period=annual_period, basic_pay=Decimal('300000.00'), gross_pay=Decimal('300000.00'), net_pay=Decimal('300000.00'))
         result = PayrollCalculator.annual_tax_reconciliation(self.employee, 2026)
         self.assertEqual(result['taxable_income'], Decimal('300000.00'))
+        self.assertEqual(result['taxable_thirteenth_month'], Decimal('0.00'))
         self.assertEqual(result['tax_due'], Decimal('7500.00'))
         self.assertEqual(result['tax_withheld'], Decimal('0.00'))
         self.assertEqual(result['adjustment'], Decimal('7500.00'))
+
+    def test_annual_thirteenth_month_exemption_applies_once_across_installments(self):
+        first_period = PayrollPeriod.objects.create(organization=self.employee.organization, name='13th Installment 1', start_date=date(2026, 11, 1), end_date=date(2026, 11, 30), frequency=PayrollPeriod.Frequency.MONTHLY)
+        second_period = PayrollPeriod.objects.create(organization=self.employee.organization, name='13th Installment 2', start_date=date(2026, 12, 1), end_date=date(2026, 12, 31), frequency=PayrollPeriod.Frequency.MONTHLY)
+        PayrollRecord.objects.create(employee=self.employee, payroll_period=first_period, basic_pay=Decimal('300000.00'), thirteenth_month=Decimal('60000.00'), gross_pay=Decimal('360000.00'), net_pay=Decimal('360000.00'))
+        PayrollRecord.objects.create(employee=self.employee, payroll_period=second_period, basic_pay=Decimal('0.00'), thirteenth_month=Decimal('40000.00'), gross_pay=Decimal('40000.00'), net_pay=Decimal('40000.00'))
+        result = PayrollCalculator.annual_tax_reconciliation(self.employee, 2026)
+        self.assertEqual(result['taxable_thirteenth_month'], Decimal('10000.00'))
+        self.assertEqual(result['taxable_income'], Decimal('310000.00'))
+        self.assertEqual(result['tax_due'], Decimal('9000.00'))
 
     def test_preflight_reports_missing_profile_as_warning(self):
         result = PayrollCalculator.preflight(self.period, self.employee.organization)
