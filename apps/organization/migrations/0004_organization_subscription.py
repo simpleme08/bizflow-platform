@@ -2,7 +2,7 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-    dependencies = [('organization', '0002_alter_organizationmembership_role')]
+    dependencies = [('organization', '0003_costcenter_department_employmenttype_position')]
 
     operations = [
         migrations.AddField(model_name='organization', name='plan_code', field=models.CharField(choices=[('FREE', 'Free'), ('STARTER', 'Starter'), ('GROWTH', 'Growth'), ('BUSINESS', 'Business')], default='FREE', max_length=20)),
