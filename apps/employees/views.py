@@ -102,7 +102,7 @@ def employee_lifecycle_api(request, employee_id):
                 if status == EmploymentHistory.Status.ONBOARDING and employee.hire_date is None:
                     employee.hire_date = effective_date
             elif status == EmploymentHistory.Status.SUSPENDED:
-                employee.is_active = True
+                employee.is_active = False
             employee.save()
             history = EmploymentHistory(employee=employee, status=status, effective_date=effective_date, end_date=end_date, department=employee.department, position=employee.position, employment_type=employee.employment_type, manager=employee.manager, reason=payload.get('reason', ''))
             history.full_clean()
