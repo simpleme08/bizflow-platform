@@ -1,4 +1,5 @@
 from django.db import migrations, models
+import django.db.models.deletion
 
 
 class Migration(migrations.Migration):
@@ -18,7 +19,7 @@ class Migration(migrations.Migration):
                 ('pagibig_number', models.CharField(blank=True, max_length=20)),
                 ('tin', models.CharField(blank=True, max_length=20)),
                 ('minimum_wage_earner', models.BooleanField(default=False)),
-                ('employee', models.OneToOneField(on_delete=models.deletion.CASCADE, related_name='payroll_profile', to='employees.employee')),
+                ('employee', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='payroll_profile', to='employees.employee')),
             ],
             options={'abstract': False},
         ),
