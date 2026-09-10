@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from django.db.models import Count, Sum
 from django.db.models.functions import Coalesce
@@ -9,10 +9,11 @@ from apps.organization.models import OrganizationMembership
 from .models import PayrollPeriod, PayrollRecord
 
 ZERO = Decimal('0.00')
+CENT = Decimal('0.01')
 
 
 def _money(value):
-    return str(value or ZERO)
+    return str(Decimal(value or ZERO).quantize(CENT, rounding=ROUND_HALF_UP))
 
 
 def payroll_summary_api(request):
