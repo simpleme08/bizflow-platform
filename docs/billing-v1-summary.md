@@ -1,0 +1,1 @@
+SaaS foundation delivered: four PH plans, subscription lifecycle state, configurable overage, active employee usage and capacity helpers, read-only subscription usage API, admin visibility, and regression tests. Existing employees remain intact through plan changes. Payment-provider integration is next.
