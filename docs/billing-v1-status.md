@@ -1,0 +1,1 @@
+Billing v1 is implemented as a billing-ready domain boundary. It does not claim live payment processing. The next billing milestone can attach a provider to billing_customer_id and subscription status transitions without changing HRIS employee/payroll data contracts.
