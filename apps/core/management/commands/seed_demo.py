@@ -54,7 +54,12 @@ class Command(BaseCommand):
         today = timezone.localdate()
         for person in self.people:
             self.create_person(organization, departments, positions, employment_types, client, site, shifts, leave_types, today, person)
-        PayrollPeriod.objects.get_or_create(name='Demo August 1-15, 2026', start_date=date(2026, 8, 1), end_date=date(2026, 8, 15))
+        PayrollPeriod.objects.get_or_create(
+            organization=organization,
+            name='Demo August 1-15, 2026',
+            start_date=date(2026, 8, 1),
+            end_date=date(2026, 8, 15),
+        )
         self.seed_roles(organization, shifts['Day Shift'], today)
         self.seed_full_demo(organization, departments, today)
         self.stdout.write(self.style.SUCCESS(f'Full demo ready: {len(self.people)} employees, role accounts, payroll, talent, operations, and ESS data.'))
@@ -80,7 +85,12 @@ class Command(BaseCommand):
         employees = list(organization.employees.filter(is_active=True).select_related('user'))
         hr_user = get_user_model().objects.get(username='demo_hr')
         manager_user = get_user_model().objects.get(username='demo_manager')
-        period, _ = PayrollPeriod.objects.get_or_create(name='Demo August 1-15, 2026', start_date=date(2026, 8, 1), end_date=date(2026, 8, 15))
+        period, _ = PayrollPeriod.objects.get_or_create(
+            organization=organization,
+            name='Demo August 1-15, 2026',
+            start_date=date(2026, 8, 1),
+            end_date=date(2026, 8, 15),
+        )
         for employee in employees:
             salary = getattr(employee, 'salary', None)
             basic = salary.basic_salary / Decimal('2') if salary else Decimal('15000.00')
