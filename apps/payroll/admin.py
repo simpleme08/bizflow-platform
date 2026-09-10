@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import EmployeeSalary, EmployeeSalaryHistory, PayrollAdjustment, PayrollHoliday, PayrollPeriod, PayrollProfile, PayrollRecord
+from .models import EmployeeSalary, EmployeeSalaryHistory, PayrollAdjustment, PayrollHoliday, PayrollPeriod, PayrollProfile, PayrollRecord, PayrollWageRate
 
 
 @admin.register(EmployeeSalary)
@@ -18,9 +18,17 @@ class EmployeeSalaryHistoryAdmin(admin.ModelAdmin):
 
 @admin.register(PayrollProfile)
 class PayrollProfileAdmin(admin.ModelAdmin):
-    list_display = ('employee', 'sss_number', 'philhealth_number', 'pagibig_number', 'tin', 'minimum_wage_earner')
-    list_filter = ('minimum_wage_earner',)
+    list_display = ('employee', 'sss_number', 'philhealth_number', 'pagibig_number', 'tin', 'minimum_wage_earner', 'wage_region', 'wage_category')
+    list_filter = ('minimum_wage_earner', 'wage_category', 'wage_region')
     search_fields = ('employee__employee_number', 'employee__first_name', 'employee__last_name', 'tin')
+
+
+@admin.register(PayrollWageRate)
+class PayrollWageRateAdmin(admin.ModelAdmin):
+    list_display = ('region_code', 'category', 'daily_rate', 'effective_from', 'effective_to', 'wage_order', 'organization', 'is_active')
+    list_filter = ('region_code', 'category', 'is_active')
+    search_fields = ('region_code', 'category', 'wage_order', 'organization__name')
+    date_hierarchy = 'effective_from'
 
 
 @admin.register(PayrollHoliday)
