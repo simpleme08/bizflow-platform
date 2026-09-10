@@ -1,9 +1,13 @@
 from datetime import date, datetime, time, timedelta
+from io import BytesIO
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.utils import timezone
+
+from PIL import Image
 
 from apps.attendance.models import AttendanceRecord
 from apps.attendance.services import AttendanceCalculator
@@ -20,6 +24,12 @@ class AttendanceCalculatorTests(TestCase):
         shift = ShiftTemplate.objects.create(name='Day Shift', start_time=time(8), end_time=time(17))
         self.assignment = EmployeeAssignment.objects.create(employee=employee, shift_template=shift, start_date=date(2026, 1, 1), is_primary=True)
         self.client.login(username='juan', password='clock-password')
+
+    def photo(self, name='clock-proof.jpg'):
+        image = Image.new('RGB', (20, 20), 'white')
+        buffer = BytesIO()
+        image.save(buffer, format='JPEG')
+        return SimpleUploadedFile(name, buffer.getvalue(), content_type='image/jpeg')
 
     def record(self, time_in, time_out):
         return AttendanceRecord(employee=self.assignment.employee, assignment=self.assignment, attendance_date=date(2026, 8, 10), time_in=timezone.make_aware(datetime.combine(date(2026, 8, 10), time_in)), time_out=timezone.make_aware(datetime.combine(date(2026, 8, 10), time_out)))
@@ -59,17 +69,24 @@ class AttendanceCalculatorTests(TestCase):
         login_response = self.client.post('/clock/login/', {'username': 'juan', 'password': 'clock-password'})
         self.assertEqual(login_response.status_code, 200)
         self.assertEqual(login_response.json()['last_action'], 'NOT_STARTED')
-        clock_in_response = self.client.post('/clock/action/', {'action': 'CLOCK_IN'})
+        clock_in_response = self.client.post('/clock/action/', {'action': 'CLOCK_IN', 'photo': self.photo()})
         self.assertEqual(clock_in_response.status_code, 200)
         self.assertEqual(clock_in_response.json()['last_action'], 'CLOCKED_IN')
         record = AttendanceRecord.objects.get(employee=self.assignment.employee, attendance_date=timezone.localdate())
         self.assertIsNotNone(record.time_in)
-        clock_out_response = self.client.post('/clock/action/', {'action': 'CLOCK_OUT'})
+        self.assertTrue(record.clock_in_photo)
+        clock_out_response = self.client.post('/clock/action/', {'action': 'CLOCK_OUT', 'photo': self.photo('clock-out-proof.jpg')})
         self.assertEqual(clock_out_response.status_code, 200)
         record.refresh_from_db()
         self.assertIsNotNone(record.time_out)
+        self.assertTrue(record.clock_out_photo)
         self.assertGreaterEqual(record.hours_worked.total_seconds(), 0)
         self.assertEqual(AttendanceRecord.objects.filter(employee=self.assignment.employee).count(), 1)
+
+    def test_clocking_requires_photo(self):
+        response = self.client.post('/clock/action/', {'action': 'CLOCK_IN'})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('camera photo is required', response.json()['detail'].lower())
 
     def test_stale_open_record_does_not_disable_todays_clock_in(self):
         yesterday = timezone.localdate() - timedelta(days=1)
@@ -84,14 +101,14 @@ class AttendanceCalculatorTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()['can_clock_in'])
         self.assertFalse(response.json()['can_clock_out'])
-        clock_in_response = self.client.post('/clock/action/', {'action': 'CLOCK_IN'})
+        clock_in_response = self.client.post('/clock/action/', {'action': 'CLOCK_IN', 'photo': self.photo()})
         self.assertEqual(clock_in_response.status_code, 200)
         self.assertEqual(clock_in_response.json()['last_action'], 'CLOCKED_IN')
 
     def test_clock_in_requires_employee_assignment(self):
         self.assignment.end_date = timezone.localdate() - timedelta(days=1)
         self.assignment.save(update_fields=['end_date', 'updated_at'])
-        response = self.client.post('/clock/action/', {'action': 'CLOCK_IN'})
+        response = self.client.post('/clock/action/', {'action': 'CLOCK_IN', 'photo': self.photo()})
         self.assertEqual(response.status_code, 400)
 
     def test_employee_cannot_write_management_attendance_api(self):
