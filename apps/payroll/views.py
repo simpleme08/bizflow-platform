@@ -1,3 +1,4 @@
+from django.db import transaction
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
@@ -32,7 +33,7 @@ def payroll_api(request):
     membership = _membership(request, 'view_payroll')
     if membership is None:
         return JsonResponse({'detail': 'No active organization membership found.'}, status=403)
-    records = PayrollRecord.objects.filter(employee__organization=membership.organization).select_related('employee', 'payroll_period')
+    records = PayrollRecord.objects.filter(employee__organization=membership.organization, payroll_period__organization=membership.organization).select_related('employee', 'payroll_period')
     return JsonResponse({'records': [{
         'id': str(record.id), 'employee': f'{record.employee.first_name} {record.employee.last_name}', 'employee_number': record.employee.employee_number,
         'period': record.payroll_period.name, 'basic_pay': str(record.basic_pay), 'overtime_pay': str(record.overtime_pay),
@@ -70,7 +71,10 @@ def process_payroll(request):
         period = PayrollPeriod.objects.get(id=request.POST.get('period_id'), organization=membership.organization)
     except PayrollPeriod.DoesNotExist:
         return JsonResponse({'detail': 'Payroll period was not found.'}, status=404)
-    processed = PayrollCalculator.process_period(period, membership.organization)
+    try:
+        processed = PayrollCalculator.process_period(period, membership.organization)
+    except ValueError as exc:
+        return JsonResponse({'detail': str(exc)}, status=409)
     record_audit(organization=membership.organization, actor=request.user, action='payroll.processed', entity=period, details={'processed': processed})
     return JsonResponse({'period': period.name, 'processed': processed, 'status': period.status})
 
@@ -82,14 +86,21 @@ def approve_payroll(request, record_id):
     membership = _membership(request, 'manage_payroll')
     if membership is None:
         return JsonResponse({'detail': 'Payroll management permission is required.'}, status=403)
-    try:
-        record = PayrollRecord.objects.get(id=record_id, employee__organization=membership.organization, payroll_period__organization=membership.organization)
-    except PayrollRecord.DoesNotExist:
-        return JsonResponse({'detail': 'Payroll record was not found.'}, status=404)
-    if record.status != PayrollRecord.Status.DRAFT:
-        return JsonResponse({'detail': 'Only draft payroll records can be approved.'}, status=409)
-    record.status = PayrollRecord.Status.APPROVED
-    record.save(update_fields=('status', 'updated_at'))
+    with transaction.atomic():
+        try:
+            record = PayrollRecord.objects.select_for_update().select_related('payroll_period').get(
+                id=record_id,
+                employee__organization=membership.organization,
+                payroll_period__organization=membership.organization,
+            )
+        except PayrollRecord.DoesNotExist:
+            return JsonResponse({'detail': 'Payroll record was not found.'}, status=404)
+        if record.payroll_period.status != PayrollPeriod.Status.CALCULATED:
+            return JsonResponse({'detail': 'Payroll must be calculated before records can be approved.'}, status=409)
+        if record.status != PayrollRecord.Status.DRAFT:
+            return JsonResponse({'detail': 'Only draft payroll records can be approved.'}, status=409)
+        record.status = PayrollRecord.Status.APPROVED
+        record.save(update_fields=('status', 'updated_at'))
     record_audit(organization=membership.organization, actor=request.user, action='payroll.approved', entity=record)
     return JsonResponse({'id': str(record.id), 'status': record.status})
 
