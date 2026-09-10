@@ -23,6 +23,31 @@ class PayrollProfile(BaseModel):
     minimum_wage_earner = models.BooleanField(default=False)
 
 
+class PayrollHoliday(BaseModel):
+    class Kind(models.TextChoices):
+        REGULAR = 'REGULAR', 'Regular holiday'
+        SPECIAL_NON_WORKING = 'SPECIAL_NON_WORKING', 'Special non-working day'
+        SPECIAL_WORKING = 'SPECIAL_WORKING', 'Special working day'
+
+    organization = models.ForeignKey('organization.Organization', on_delete=models.CASCADE, null=True, blank=True, related_name='payroll_holidays')
+    holiday_date = models.DateField()
+    name = models.CharField(max_length=150)
+    kind = models.CharField(max_length=30, choices=Kind.choices)
+    is_double = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=('organization', 'holiday_date'), name='unique_payroll_holiday_per_org_date'),
+        ]
+        ordering = ('holiday_date',)
+
+    def clean(self):
+        super().clean()
+        if self.kind == self.Kind.SPECIAL_WORKING and self.is_double:
+            raise ValidationError('A special working day cannot be a double holiday.')
+
+
 class PayrollPeriod(BaseModel):
     class Status(models.TextChoices):
         OPEN = 'OPEN', 'Open'
@@ -105,7 +130,7 @@ class PayrollRecord(BaseModel):
 
     @property
     def total_deductions(self):
-        return (self.late_deduction + self.undertime_deduction + self.leave_without_pay + self.loan_deductions + self.statutory_deductions + self.withholding_tax + self.other_deductions)
+        return self.late_deduction + self.undertime_deduction + self.leave_without_pay + self.loan_deductions + self.statutory_deductions + self.withholding_tax + self.other_deductions
 
     @property
     def employer_contributions(self):
