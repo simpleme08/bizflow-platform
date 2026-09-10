@@ -1,117 +1,113 @@
 # Operating workflows
 
-## Employee lifecycle
+## 1. Organization setup
 
-### Create an employee
+1. Create the Organization.
+2. Add departments, positions, employment types and cost centers.
+3. Add shift templates and clients/sites if required.
+4. Create users and active organization memberships.
+5. Create employee profiles and primary assignments.
+6. Configure leave types/balances and payroll salary/wage data.
+7. Configure the subscription and PayMongo plan mapping when paid billing is enabled.
 
-1. HR creates the user account and active organization membership in Admin.
-2. HR creates the Employee profile; employee number is unique across the system.
-3. HR assigns department, position, employment type, and a primary shift assignment.
-4. HR sets salary if payroll will be processed.
-5. HR starts onboarding at `/onboarding/`, selecting a workflow and expected completion date.
-6. HR or task owners complete onboarding tasks. Use Talent/Operations records for benefits, documents, goals, and policy acknowledgements.
+## 2. Employee lifecycle
 
-### Offboard an employee
+### Hire/onboard
 
-1. HR creates an Offboarding Record in Admin/Talent with last working day and reason.
-2. HR creates Offboarding Tasks: asset collection, access removal, final-pay review, exit interview, and benefits termination.
-3. Stop future shift assignments and mark the employee inactive only after required payroll/records actions are complete.
-4. Retain payroll and audit records according to your retention policy.
+1. Create the user and active organization membership.
+2. Create the Employee profile and unique employee number.
+3. Set department, position, employment type and primary assignment.
+4. Set salary/payroll profile when applicable.
+5. Start an onboarding workflow and assign tasks.
+6. Complete required documents, benefits, policies and acknowledgements.
 
-## Time, attendance, and scheduling
+### Changes
 
-### Employee time clock
+Use effective-dated employee/assignment history for changes that must preserve historical context. Controlled profile changes submitted by employees remain pending until authorized HR review applies them.
 
-The public `/clock/` page is separate from the HRIS workspace. The employee signs in with their own username/password, clocks in or out, and the system uses their active assignment. The clock rejects an active clock-in without an assignment and prevents duplicate open records.
+### Offboard
 
-### HR manual attendance
+1. Create an offboarding record with last working day/reason.
+2. Create tasks for assets, access, final pay, exit process and benefits.
+3. Stop future scheduling/assignments.
+4. Apply the lifecycle transition according to the configured effective date.
+5. Complete final-pay review and retain required payroll/audit history.
 
-At `/attendance/`, choose employee, date, time in/out, then save. The system calculates late, undertime, and overtime from the shift template. Use this for corrections only; it can overwrite the employee/date record.
+## 3. Scheduling and attendance
 
-### HR Excel timekeeping import
+Managers/HR create shift assignments for eligible employees. The employee time clock uses the employee's active assignment for the relevant date. Ineligible/separated employees cannot receive new operational assignments or perform normal clock-in actions.
 
-1. Sign in as HR, Super User, or Django superuser.
-2. Open Attendance and download the Excel template.
-3. Complete one row per employee/date using exact headers:
+### Manual attendance correction
 
-   ```text
-   Employee Number | Attendance Date | Time In | Time Out | Status | Remarks
-   ```
+Use Attendance to correct an employee/date record when required. Review the resulting late, undertime and overtime calculations against the assigned shift.
 
-4. Upload `.xlsx`. The importer verifies header order, employee organization, active assignment, valid status, date/time order, and size.
-5. If any row fails, nothing is saved; correct the listed rows and retry.
-6. If valid, the importer creates or updates each employee/date attendance record and writes audit events.
+### Excel import
 
-### Shift scheduling
+1. Download the in-app template.
+2. Preserve exact headers:
 
-1. Manager/HR selects a worker in `/scheduling/`.
-2. Select shift, optional client/site, start/end date, and whether it is primary.
-3. Save; the assignment is used by the time clock and attendance calculation.
-4. Review overlapping/old assignments before creating a new primary assignment. Delete only accidental assignments because attendance retains the assigned shift context.
+```text
+Employee Number | Attendance Date | Time In | Time Out | Status | Remarks
+```
 
-## Leave
+3. Upload `.xlsx`.
+4. Correct every validation error reported by the importer.
+5. Re-upload. The import is validated before save, so a failed workbook does not partially update attendance.
 
-1. HR configures Leave Types and annual credits in Admin.
-2. Employees use `/leave/` to see balances and submit date range/reason.
-3. The request is pending until a Manager, Team Leader, HR, Owner, or Super User approves/rejects it according to their role.
-4. Approval atomically checks remaining balance and increases used credits. Rejection leaves the balance unchanged.
-5. Employees review request status and remarks in their leave history.
+## 4. Leave
 
-## Payroll
+1. Configure leave types and credits.
+2. Employee submits a date range/reason.
+3. Authorized approver reviews the request.
+4. Approval validates eligibility and remaining balance before applying the balance change.
+5. Rejection leaves the balance unchanged.
+6. Employees see their own status/history.
 
-1. HR creates Employee Salary and Payroll Period records in Admin.
-2. HR processes the period through `/api/payroll/process/` or the applicable administrative process.
-3. Review draft records for salary, attendance adjustments, deductions, gross, and net pay.
-4. A payroll manager approves individual records.
-5. Employees only see approved/paid records at `/payroll/` and can download their own PDF payslip. They cannot access another employee’s payslip.
+## 5. Payroll
 
-This payroll calculation is a system workflow, not a substitute for country-specific tax/statutory computation, filing, or legal review.
+1. Maintain employee salary/wage data and effective dates.
+2. Create an organization-scoped payroll period.
+3. Review attendance, leave, adjustments and loan inputs.
+4. Process the period.
+5. Review gross, deductions, net pay and exceptions.
+6. Approve payroll records through the authorized workflow.
+7. Mark records paid only after payment has actually occurred.
+8. Generate payslips and reporting/remittance exports.
+9. Perform the organization's statutory filing/payment process as applicable.
 
-## Talent and performance
+## 6. Employee self-service
 
-### Recruiting
+Employees can use ESS/Employee Hub for their own supported information and requests. Self-service never grants access to another employee's payroll, leave, attendance, profile or billing data.
 
-1. HR creates Job Openings.
-2. HR adds Candidates and creates Job Applications.
-3. Move applications through Applied, Screening, Interview, Offer, Hired, or Rejected in Admin/API.
-4. When hired, create the employee/user/assignment then begin onboarding.
+## 7. HR Operations
 
-### Performance
+### Policies
 
-1. Create a Performance Cycle with dates and status.
-2. Assign employee goals with measurable title, progress, status, and due date.
-3. Managers create Performance Reviews with rating, strengths, development areas, comments, and review status.
-4. Keep compensation change proposals in HR Operations linked to approvals.
+Create a policy/document, choose whether acknowledgement is required, publish it, and have employees acknowledge it from Employee Hub. Avoid silently editing an already-acknowledged policy; publish a new version when historical wording must remain auditable.
 
-### Benefits
+### Announcements
 
-1. HR creates Benefit Plans with provider and employee/employer cost.
-2. HR creates Benefit Enrollments with effective date and status.
-3. Use an external carrier connector only after the provider integration, data-sharing agreement, and secure secret configuration are complete.
+Draft announcements remain internal until published. Published organization announcements are visible to eligible employees.
 
-## HR Operations and ESS
+### Approvals/profile changes
 
-### Documents and announcements
+Employee profile-change requests remain pending until authorized HR review. Compensation/controlled changes use the approval workflow where configured.
 
-1. HR opens `/operations/`, enters the policy title, category and summary, then either saves it as a draft or selects **Publish now**.
-2. Select `Require acknowledgement` for policies that employees must confirm. Published, unexpired policies appear in `/employee-hub/`.
-3. HR sends organization announcements from the same Operations page. A draft announcement is not visible to employees.
-4. The employee opens `/employee-hub/` and selects **I acknowledge**. An acknowledgement is unique per employee/document.
-5. Retire or replace outdated policies from Admin until document lifecycle actions are added to the Operations screen; do not silently edit a policy after employees have acknowledged it.
+### Projects/timesheets
 
-### Approvals and profile changes
+Employees submit project/date/hours entries. HR reviews and approves/rejects them. Approved timesheets should not feed payroll or billing externally until a formal integration and business rule is implemented.
 
-1. Employees enter the requested name or email change in `/employee-hub/`. Nothing changes immediately.
-2. HR reviews the pending request in `/operations/`, then chooses **Approve & apply** or **Reject**. Approval updates the authoritative Employee and User name/email fields.
-3. HR creates Approval Requests for compensation or other controlled changes and can assign an HR Operations approver.
-4. The assigned approver (or any authorized HR Operations user when unassigned) approves/rejects the request. Review audit events for traceability.
+## 8. Billing
 
-### Projects and timesheets
+1. Organization administrator selects a plan.
+2. Application starts the PayMongo subscription flow.
+3. Provider processes initial payment/subscription state.
+4. Verified webhook events synchronize local subscription/invoice state.
+5. Application enforces plan/employee limits server-side.
+6. Monitor failed payments and webhook failures.
 
-1. HR creates active Projects with a unique organization code and billable flag in `/operations/`.
-2. Employees submit a date, project, hours and optional notes through `/employee-hub/`. Future dates and entries above 24 hours are rejected.
-3. HR reviews submitted entries in `/operations/` and approves or rejects them. Only approved time should feed an external payroll/billing process after a formal integration is designed.
+Do not mark an organization paid based solely on browser redirect success.
 
-## Reports and audit
+## 9. Reporting and audit
 
-`/reports/` provides organization summaries for attendance, leave, and payroll. The Django Admin exposes `AuditEvent` records. Use report/audit review before payroll approval, after attendance imports, and during access/compliance reviews.
+Review attendance, leave and payroll reports before payroll approval. Use AuditEvent records for investigation and access/compliance reviews. Export/archive information according to the organization's approved retention policy.
