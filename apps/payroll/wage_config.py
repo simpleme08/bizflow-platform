@@ -32,7 +32,9 @@ REGIONAL_WAGE_RATES = {
 
 def regional_wage_reference(region_code, category='NON_AGRICULTURE', as_of=None):
     as_of = as_of or date.today()
-    region = REGIONAL_WAGE_RATES.get(region_code.upper())
+    if not region_code:
+        return None
+    region = REGIONAL_WAGE_RATES.get(str(region_code).upper())
     if not region or as_of < region['effective_from']:
         return None
     rate_range = region.get(category)
@@ -40,7 +42,7 @@ def regional_wage_reference(region_code, category='NON_AGRICULTURE', as_of=None)
         return None
     minimum, maximum = rate_range
     return {
-        'region_code': region_code.upper(),
+        'region_code': str(region_code).upper(),
         'category': category,
         'minimum_daily_rate': minimum,
         'maximum_daily_rate': maximum,
@@ -55,3 +57,19 @@ def is_mwe_candidate(daily_wage, region_code, category='NON_AGRICULTURE', as_of=
     if not reference or not reference['exact_rate_available']:
         return False
     return Decimal(daily_wage) <= reference['minimum_daily_rate']
+
+
+def mwe_tax_exempt_income(*, daily_wage, days_worked, regular_pay=Decimal('0.00'),
+                          overtime_pay=Decimal('0.00'), holiday_pay=Decimal('0.00'),
+                          night_differential=Decimal('0.00'), region_code=None,
+                          category='NON_AGRICULTURE', as_of=None):
+    """Return the qualifying MWE income that can be excluded from withholding.
+
+    This deliberately returns zero unless an exact applicable wage rate is
+    configured. It does not classify employees from the legacy boolean alone.
+    """
+    if not is_mwe_candidate(daily_wage, region_code, category, as_of):
+        return Decimal('0.00')
+    qualifying_base = Decimal(daily_wage) * Decimal(days_worked)
+    qualifying_base = min(qualifying_base, Decimal(regular_pay))
+    return qualifying_base + Decimal(overtime_pay) + Decimal(holiday_pay) + Decimal(night_differential)
