@@ -1,0 +1,1 @@
+Release note: organization billing primitives are now available for HRIS. Four plans, limits, subscription states, usage reporting, and capacity guards are included. Payment-provider flows remain separate.
