@@ -13,6 +13,16 @@ class EmployeeSalary(BaseModel):
     basic_salary = models.DecimalField(max_digits=12, decimal_places=2)
     effective_date = models.DateField()
 
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=Q(basic_salary__gte=0), name='employee_salary_non_negative'),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.basic_salary < 0:
+            raise ValidationError('Salary cannot be negative.')
+
 
 class EmployeeSalaryHistory(BaseModel):
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='salary_history')
@@ -92,6 +102,11 @@ class PayrollPeriod(BaseModel):
         ]
         ordering = ('-end_date', '-start_date')
 
+    def clean(self):
+        super().clean()
+        if self.end_date < self.start_date:
+            raise ValidationError('Payroll period end date cannot be before its start date.')
+
     def __str__(self):
         return self.name
 
@@ -140,6 +155,19 @@ class PayrollRecord(BaseModel):
             raise ValidationError('Payroll net pay cannot be negative.')
 
     def save(self, *args, **kwargs):
+        if self.pk:
+            previous = type(self).objects.get(pk=self.pk)
+            if previous.status in (self.Status.APPROVED, self.Status.PAID):
+                changed_fields = []
+                for field in self._meta.fields:
+                    if field.name in ('updated_at',):
+                        continue
+                    if getattr(previous, field.attname) != getattr(self, field.attname):
+                        changed_fields.append(field.name)
+                if changed_fields != ['status']:
+                    raise ValidationError('Approved or paid payroll records are immutable except for their lifecycle status.')
+                if previous.status == self.Status.PAID and self.status != self.Status.PAID:
+                    raise ValidationError('Paid payroll records cannot be reopened.')
         self.full_clean()
         return super().save(*args, **kwargs)
 
@@ -172,3 +200,9 @@ class PayrollAdjustment(BaseModel):
         super().clean()
         if self.amount <= 0:
             raise ValidationError('Adjustment amount must be greater than zero.')
+        if self.payroll_record_id and self.payroll_record.status in (PayrollRecord.Status.APPROVED, PayrollRecord.Status.PAID):
+            raise ValidationError('Adjustments cannot be changed after payroll approval.')
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
