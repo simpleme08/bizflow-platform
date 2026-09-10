@@ -17,13 +17,14 @@ from apps.payroll.summary import payroll_summary_api
 from apps.reports.views import reports_api, reports_page
 from apps.ess.views import ess_api, ess_page
 from apps.accounts.views import employee_login, login_page
-from apps.core.views import website
+from apps.core.views import health, readiness, website
 from apps.scheduling.views import scheduling_page, get_shifts, get_clients, get_assignable_employees, get_employee_schedule, assign_shift, delete_assignment
 from apps.onboarding.views import onboarding_page, onboarding_api, onboarding_task_update
 from apps.talent.views import benefits_api, offboarding_api, performance_api, recruiting_api, talent_page
 from apps.operations.views import approval_decision, employee_hub_api, employee_hub_page, operations_api, operations_page, profile_request_decision, timesheet_decision
 
 urlpatterns = [
+    path('health/', health, name='health'), path('ready/', readiness, name='readiness'),
     path('admin/', admin.site.urls), path('', website, name='website'), path('workspace/', dashboard_page, name='workspace'),
     path('employees/', employee_directory_page, name='employees-page'), path('attendance/', attendance_page, name='attendance-page'), path('clock/', clock_page, name='clock-page'),
     path('clock/login/', clock_login, name='clock-login'), path('clock/action/', clock_action, name='clock-action'), path('login/', login_page, name='login'), path('employee-login/', employee_login, name='employee-login'), path('logout/', auth_views.LogoutView.as_view(), name='logout'),
