@@ -1,3 +1,4 @@
+import uuid
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
@@ -14,9 +15,7 @@ class EmployeeSalary(BaseModel):
     effective_date = models.DateField()
 
     class Meta:
-        constraints = [
-            models.CheckConstraint(condition=Q(basic_salary__gte=0), name='employee_salary_non_negative'),
-        ]
+        constraints = [models.CheckConstraint(condition=Q(basic_salary__gte=0), name='employee_salary_non_negative')]
 
     def clean(self):
         super().clean()
@@ -50,6 +49,33 @@ class PayrollProfile(BaseModel):
     pagibig_number = models.CharField(max_length=20, blank=True)
     tin = models.CharField(max_length=20, blank=True)
     minimum_wage_earner = models.BooleanField(default=False)
+    wage_region = models.CharField(max_length=20, blank=True)
+    wage_category = models.CharField(max_length=40, blank=True, default='NON_AGRICULTURE')
+
+
+class PayrollWageRate(BaseModel):
+    organization = models.ForeignKey('organization.Organization', on_delete=models.CASCADE, null=True, blank=True, related_name='payroll_wage_rates')
+    region_code = models.CharField(max_length=20)
+    category = models.CharField(max_length=40, default='NON_AGRICULTURE')
+    daily_rate = models.DecimalField(max_digits=10, decimal_places=2)
+    effective_from = models.DateField()
+    effective_to = models.DateField(null=True, blank=True)
+    wage_order = models.CharField(max_length=50, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ('-effective_from', '-created_at')
+        constraints = [
+            models.CheckConstraint(condition=Q(daily_rate__gt=0), name='payroll_wage_rate_positive'),
+            models.CheckConstraint(condition=Q(effective_to__isnull=True) | Q(effective_to__gte=models.F('effective_from')), name='payroll_wage_rate_valid_dates'),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.daily_rate <= 0:
+            raise ValidationError('Daily wage rate must be greater than zero.')
+        if self.effective_to and self.effective_to < self.effective_from:
+            raise ValidationError('Wage rate end date cannot be before its effective date.')
 
 
 class PayrollHoliday(BaseModel):
@@ -66,9 +92,7 @@ class PayrollHoliday(BaseModel):
     is_active = models.BooleanField(default=True)
 
     class Meta:
-        constraints = [
-            models.UniqueConstraint(fields=('organization', 'holiday_date'), name='unique_payroll_holiday_per_org_date'),
-        ]
+        constraints = [models.UniqueConstraint(fields=('organization', 'holiday_date'), name='unique_payroll_holiday_per_org_date')]
         ordering = ('holiday_date',)
 
     def clean(self):
@@ -160,7 +184,7 @@ class PayrollRecord(BaseModel):
             if previous.status in (self.Status.APPROVED, self.Status.PAID):
                 changed_fields = []
                 for field in self._meta.fields:
-                    if field.name in ('updated_at',):
+                    if field.name == 'updated_at':
                         continue
                     if getattr(previous, field.attname) != getattr(self, field.attname):
                         changed_fields.append(field.name)
