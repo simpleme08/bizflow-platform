@@ -94,19 +94,35 @@ class PhilippineWithholdingTax:
         (Decimal('666666'), Decimal('33541.80'), Decimal('166667'), Decimal('.30')),
         (None, Decimal('183541.80'), Decimal('666667'), Decimal('.35')),
     )
+    ANNUAL = (
+        (Decimal('250000'), ZERO, Decimal('250000'), Decimal('0')),
+        (Decimal('400000'), ZERO, Decimal('250000'), Decimal('.15')),
+        (Decimal('800000'), Decimal('22500.00'), Decimal('400000'), Decimal('.20')),
+        (Decimal('2000000'), Decimal('102500.00'), Decimal('800000'), Decimal('.25')),
+        (Decimal('8000000'), Decimal('402500.00'), Decimal('2000000'), Decimal('.30')),
+        (None, Decimal('2202500.00'), Decimal('8000000'), Decimal('.35')),
+    )
 
     @classmethod
-    def calculate(cls, taxable_compensation, frequency='SEMI_MONTHLY', minimum_wage_earner=False):
+    def _calculate_table(cls, taxable_compensation, table):
         taxable = max(Decimal(taxable_compensation), ZERO)
-        if minimum_wage_earner:
-            return ZERO
-        table = cls.MONTHLY if frequency == 'MONTHLY' else cls.SEMI_MONTHLY
         for upper, base_tax, threshold, rate in table:
             if upper is None or taxable <= upper:
                 if rate == ZERO:
                     return ZERO
                 return max(ZERO, PhilippinePayrollRules.money(base_tax + (taxable - threshold) * rate))
         return ZERO
+
+    @classmethod
+    def calculate(cls, taxable_compensation, frequency='SEMI_MONTHLY', minimum_wage_earner=False):
+        if minimum_wage_earner:
+            return ZERO
+        table = cls.MONTHLY if frequency == 'MONTHLY' else cls.SEMI_MONTHLY
+        return cls._calculate_table(taxable_compensation, table)
+
+    @classmethod
+    def annual_tax(cls, taxable_compensation):
+        return cls._calculate_table(taxable_compensation, cls.ANNUAL)
 
 
 class PayrollCalculator:
@@ -139,21 +155,10 @@ class PayrollCalculator:
 
     @classmethod
     def _holiday_premium(cls, attendance, daily_rate):
-        holiday = PayrollHoliday.objects.filter(
-            holiday_date=attendance.attendance_date,
-            is_active=True,
-        ).filter(
-            organization=attendance.employee.organization,
-        ).first()
+        holiday = PayrollHoliday.objects.filter(holiday_date=attendance.attendance_date, is_active=True, organization=attendance.employee.organization).first()
         if holiday is None:
-            holiday = PayrollHoliday.objects.filter(
-                holiday_date=attendance.attendance_date,
-                organization__isnull=True,
-                is_active=True,
-            ).first()
-        if holiday is None or holiday.kind == PayrollHoliday.Kind.SPECIAL_WORKING:
-            return ZERO
-        if not attendance.time_in or not attendance.time_out:
+            holiday = PayrollHoliday.objects.filter(holiday_date=attendance.attendance_date, organization__isnull=True, is_active=True).first()
+        if holiday is None or holiday.kind == PayrollHoliday.Kind.SPECIAL_WORKING or not attendance.time_in or not attendance.time_out:
             return ZERO
         if holiday.kind == PayrollHoliday.Kind.REGULAR:
             premium_multiplier = Decimal('2.00') if holiday.is_double else Decimal('1.00')
@@ -163,13 +168,7 @@ class PayrollCalculator:
 
     @classmethod
     def _unpaid_leave(cls, employee, period, daily_rate):
-        applications = LeaveApplication.objects.filter(
-            employee=employee,
-            status=LeaveApplication.Status.APPROVED,
-            leave_type__is_paid=False,
-            start_date__lte=period.end_date,
-            end_date__gte=period.start_date,
-        )
+        applications = LeaveApplication.objects.filter(employee=employee, status=LeaveApplication.Status.APPROVED, leave_type__is_paid=False, start_date__lte=period.end_date, end_date__gte=period.start_date)
         total_days = sum((application.total_days for application in applications), ZERO)
         return cls_money(total_days * daily_rate)
 
@@ -193,10 +192,7 @@ class PayrollCalculator:
         overtime_pay = money(Decimal(overtime_minutes) / Decimal('60') * hourly_rate * cls.OVERTIME_MULTIPLIER)
         late_deduction = money(Decimal(late_minutes) * minute_rate)
         undertime_deduction = money(Decimal(undertime_minutes) * minute_rate)
-        if leave_without_pay is None:
-            leave_without_pay = cls._unpaid_leave(employee, period, daily_rate)
-        else:
-            leave_without_pay = money(leave_without_pay)
+        leave_without_pay = cls._unpaid_leave(employee, period, daily_rate) if leave_without_pay is None else money(leave_without_pay)
         loan_deductions = money(loan_deductions)
         other_deductions = money(other_deductions)
         allowances, commissions, bonuses = map(money, (allowances, commissions, bonuses))
@@ -229,6 +225,16 @@ class PayrollCalculator:
         records = PayrollRecord.objects.filter(employee=employee, payroll_period__end_date__year=year)
         basic = sum((record.basic_pay for record in records), ZERO)
         return PhilippinePayrollRules.money(basic / Decimal('12'))
+
+    @classmethod
+    def annual_tax_reconciliation(cls, employee, year):
+        records = PayrollRecord.objects.filter(employee=employee, payroll_period__end_date__year=year).order_by('payroll_period__end_date')
+        taxable_income = sum((record.basic_pay + record.allowances + record.commissions + record.bonuses + record.overtime_pay + record.holiday_pay + record.night_differential + max(ZERO, record.thirteenth_month - PhilippinePayrollRules.THIRTEENTH_MONTH_EXEMPTION) - record.sss_employee - record.philhealth_employee - record.pagibig_employee for record in records), ZERO)
+        taxable_income = PhilippinePayrollRules.money(taxable_income)
+        tax_due = PhilippineWithholdingTax.annual_tax(taxable_income)
+        tax_withheld = PhilippinePayrollRules.money(sum((record.withholding_tax for record in records), ZERO))
+        adjustment = PhilippinePayrollRules.money(tax_due - tax_withheld)
+        return {'year': year, 'taxable_income': taxable_income, 'tax_due': tax_due, 'tax_withheld': tax_withheld, 'adjustment': adjustment}
 
     @classmethod
     def preflight(cls, period, organization):
