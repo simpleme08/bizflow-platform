@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
 from django.http import HttpResponse, JsonResponse
@@ -133,7 +133,7 @@ def apply_payroll_adjustments(request, record_id):
         return JsonResponse({'detail': 'Payroll record was not found.'}, status=404)
     try:
         record = apply_record_adjustments(record)
-    except (ValueError, TypeError, Decimal.InvalidOperation) as exc:
+    except (ValueError, TypeError, InvalidOperation) as exc:
         return JsonResponse({'detail': str(exc)}, status=409)
     record_audit(organization=membership.organization, actor=request.user, action='payroll.adjustments.applied', entity=record)
     return JsonResponse({'id': str(record.id), 'gross_pay': str(record.gross_pay), 'loan_deductions': str(record.loan_deductions), 'withholding_tax': str(record.withholding_tax), 'net_pay': str(record.net_pay)})
