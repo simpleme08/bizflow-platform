@@ -80,6 +80,8 @@ def process_payroll(request):
         period = PayrollPeriod.objects.get(id=request.POST.get('period_id'), organization=membership.organization)
     except PayrollPeriod.DoesNotExist:
         return JsonResponse({'detail': 'Payroll period was not found.'}, status=404)
+    if PayrollRecord.objects.filter(payroll_period=period).exclude(status=PayrollRecord.Status.DRAFT).exists():
+        return JsonResponse({'detail': 'Payroll contains approved or paid records and cannot be recalculated.'}, status=409)
     try:
         processed = PayrollCalculator.process_period(period, membership.organization)
     except ValueError as exc:
@@ -126,8 +128,12 @@ def mark_payroll_paid(request, record_id):
             return JsonResponse({'detail': 'Only approved payroll records can be marked paid.'}, status=409)
         record.status = PayrollRecord.Status.PAID
         record.save(update_fields=('status', 'updated_at'))
+        period = PayrollPeriod.objects.select_for_update().get(pk=record.payroll_period_id)
+        if not PayrollRecord.objects.filter(payroll_period=period).exclude(status=PayrollRecord.Status.PAID).exists():
+            period.status = PayrollPeriod.Status.PAID
+            period.save(update_fields=('status', 'updated_at'))
     record_audit(organization=membership.organization, actor=request.user, action='payroll.paid', entity=record)
-    return JsonResponse({'id': str(record.id), 'status': record.status})
+    return JsonResponse({'id': str(record.id), 'status': record.status, 'period_status': period.status})
 
 
 def payslip(request, record_id):
