@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ profile.name }} | Official Site</title>
+  <meta name="description" content="{{ profile.description }}">
+  <style>
+    :root { --primary: {{ profile.primary }}; --dark: {{ profile.primary_dark }}; --accent: {{ profile.accent }}; --surface: {{ profile.surface }}; --ink: #0f172a; --muted: #64748b; }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--ink); background: #fff; }
+    a { color: inherit; text-decoration: none; }
+    .shell { max-width: 1180px; margin: auto; padding: 0 28px; }
+    header { position: sticky; top: 0; z-index: 10; background: rgba(255,255,255,.94); backdrop-filter: blur(16px); border-bottom: 1px solid #e2e8f0; }
+    .nav { min-height: 76px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+    .brand { display: flex; align-items: center; gap: 12px; font-weight: 800; letter-spacing: -.03em; }
+    .mark { width: 42px; height: 42px; border-radius: 13px; display: grid; place-items: center; color: white; background: linear-gradient(135deg,var(--primary),var(--accent)); box-shadow: 0 10px 24px rgba(14,165,233,.25); }
+    .navlinks { display: flex; align-items: center; gap: 24px; color: #475569; font-size: .94rem; }
+    .navlinks a:hover { color: var(--primary); }
+    .btn { display: inline-flex; align-items: center; justify-content: center; padding: 13px 18px; border-radius: 12px; font-weight: 750; transition: transform .18s, box-shadow .18s; }
+    .btn:hover { transform: translateY(-2px); }
+    .btn-primary { color: white; background: var(--primary); box-shadow: 0 12px 24px rgba(14,165,233,.22); }
+    .btn-outline { border: 1px solid #cbd5e1; background: white; }
+    .hero { overflow: hidden; background: radial-gradient(circle at 80% 20%, rgba(34,211,238,.25), transparent 30%), linear-gradient(135deg,var(--dark),#0f4c75 58%,var(--primary)); color: white; }
+    .hero-grid { min-height: 650px; display: grid; grid-template-columns: 1.15fr .85fr; align-items: center; gap: 60px; }
+    .eyebrow { display: inline-flex; padding: 8px 12px; border: 1px solid rgba(255,255,255,.2); border-radius: 999px; background: rgba(255,255,255,.08); color: #cffafe; font-size: .82rem; font-weight: 750; }
+    h1 { font-size: clamp(3rem, 6vw, 5.4rem); line-height: .98; letter-spacing: -.055em; margin: 22px 0; max-width: 760px; }
+    .hero p { max-width: 650px; color: #dbeafe; font-size: 1.12rem; line-height: 1.75; }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
+    .hero .btn-outline { color: white; background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.25); }
+    .signal { border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.08); border-radius: 28px; padding: 28px; box-shadow: 0 30px 80px rgba(0,0,0,.2); }
+    .signal-window { border-radius: 20px; background: #f8fafc; color: var(--ink); padding: 22px; }
+    .signal-top { display: flex; justify-content: space-between; align-items: center; font-size: .82rem; color: var(--muted); }
+    .signal-bars { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin: 24px 0; }
+    .signal-card { padding: 18px; border-radius: 15px; background: var(--surface); }
+    .signal-card strong { display: block; font-size: 1.5rem; color: var(--primary_dark); }
+    .signal-line { height: 9px; border-radius: 99px; background: linear-gradient(90deg,var(--primary),var(--accent)); }
+    section { padding: 92px 0; }
+    .section-head { max-width: 700px; margin-bottom: 42px; }
+    .section-head span { color: var(--primary); font-weight: 800; text-transform: uppercase; letter-spacing: .12em; font-size: .75rem; }
+    h2 { margin: 10px 0; font-size: clamp(2rem,4vw,3.2rem); letter-spacing: -.045em; }
+    .section-head p { color: var(--muted); line-height: 1.7; }
+    .cards { display: grid; grid-template-columns: repeat(3,1fr); gap: 20px; }
+    .card { border: 1px solid #e2e8f0; border-radius: 22px; padding: 28px; background: white; box-shadow: 0 12px 40px rgba(15,23,42,.06); }
+    .icon { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 15px; background: var(--surface); color: var(--primary); font-weight: 900; }
+    .card h3 { margin: 20px 0 8px; font-size: 1.2rem; }
+    .card p { margin: 0; color: var(--muted); line-height: 1.65; }
+    .locations { background: var(--surface); }
+    .location-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 20px; }
+    .location { padding: 28px; border-radius: 22px; background: white; border: 1px solid #dbeafe; }
+    .location strong { font-size: 1.2rem; }
+    .cta { background: var(--dark); color: white; }
+    .cta-box { display: flex; align-items: center; justify-content: space-between; gap: 30px; }
+    .cta p { color: #cbd5e1; max-width: 620px; line-height: 1.7; }
+    footer { padding: 34px 0; background: #061a2b; color: #94a3b8; font-size: .9rem; }
+    .footer-row { display: flex; justify-content: space-between; gap: 20px; align-items: center; }
+    @media(max-width: 850px) { .hero-grid, .cards, .location-grid { grid-template-columns: 1fr; } .hero-grid { padding: 72px 0; } .signal { max-width: 600px; } .navlinks a:not(.btn) { display:none; } .cta-box, .footer-row { flex-direction: column; align-items: flex-start; } }
+  </style>
+</head>
+<body>
+<header>
+  <div class="shell nav">
+    <a class="brand" href="#top"><span class="mark">HS</span><span>{{ profile.name }}</span></a>
+    <nav class="navlinks"><a href="#services">Services</a><a href="#locations">Locations</a><a href="{{ profile.facebook }}" target="_blank" rel="noopener">Facebook</a><a class="btn btn-primary" href="{{ login_url }}">Employee / HRIS Sign In</a></nav>
+  </div>
+</header>
+
+<main id="top">
+<section class="hero">
+  <div class="shell hero-grid">
+    <div>
+      <span class="eyebrow">{{ profile.eyebrow }}</span>
+      <h1>{{ profile.headline }}</h1>
+      <p>{{ profile.description }}</p>
+      <div class="hero-actions"><a class="btn btn-primary" href="{{ login_url }}">Sign in to HRIS</a><a class="btn btn-outline" href="{{ clock_url }}">Open Time Clock</a></div>
+    </div>
+    <div class="signal" aria-label="Operations overview">
+      <div class="signal-window">
+        <div class="signal-top"><strong>HSIS Operations</strong><span>CONNECTED</span></div>
+        <div class="signal-bars"><div class="signal-card"><strong>2</strong>locations</div><div class="signal-card"><strong>24/7</strong>people operations</div><div class="signal-card"><strong>1</strong>connected HRIS</div></div>
+        <div class="signal-line"></div>
+        <p style="margin:18px 0 0;color:#64748b;line-height:1.6">A single digital front door for employees, HR, attendance and workforce operations.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="services">
+  <div class="shell">
+    <div class="section-head"><span>What we do</span><h2>Support that starts with people.</h2><p>Designed around dependable service, clear communication and disciplined operations.</p></div>
+    <div class="cards">{% for title, description in profile.services %}<article class="card"><div class="icon">{{ forloop.counter }}</div><h3>{{ title }}</h3><p>{{ description }}</p></article>{% endfor %}</div>
+  </div>
+</section>
+
+<section class="locations" id="locations">
+  <div class="shell">
+    <div class="section-head"><span>Where we operate</span><h2>Local teams. One connected operation.</h2><p>High Speed Internet Support maintains a presence in two key Philippine locations.</p></div>
+    <div class="location-grid">{% for location in profile.locations %}<div class="location"><strong>{{ location }}</strong><p style="color:#64748b;line-height:1.6;margin-bottom:0">HSIS operations and support location.</p></div>{% endfor %}</div>
+  </div>
+</section>
+
+<section class="cta">
+  <div class="shell cta-box"><div><h2 style="margin-top:0">Ready to access your workplace tools?</h2><p>Employees can sign in to the HRIS workspace for self-service and people operations, or use the dedicated time clock for daily attendance.</p></div><div class="hero-actions"><a class="btn btn-primary" href="{{ login_url }}">HRIS Sign In</a><a class="btn btn-outline" href="{{ clock_url }}">Time Clock</a></div></div>
+</section>
+</main>
+
+<footer><div class="shell footer-row"><span>© {% now "Y" %} {{ profile.name }}</span><span>Powered by BizFlow HRIS</span></div></footer>
+</body>
+</html>
