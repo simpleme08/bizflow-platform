@@ -1,28 +1,32 @@
 """Client website content and visual identity profiles.
 
-Keep customer-facing copy here until a full website CMS is introduced. Each
-profile is keyed by the tenant organization slug, so new clients can receive
-a branded landing page without changing the page template.
+Each profile is keyed by the tenant organization slug. The first production
+profile is High Speed Internet Support and can be replaced by organization
+managed content when the website CMS is introduced.
 """
 
 CLIENT_SITES = {
     "high-speed-internet-support": {
         "name": "High Speed Internet Support",
         "short_name": "HSIS",
-        "eyebrow": "Connectivity support • Parañaque • Davao",
+        "eyebrow": "Internet support • customer service • Parañaque • Davao",
         "headline": "Keeping people connected. Keeping operations moving.",
-        "description": "High Speed Internet Support delivers dependable internet support and field operations for customers and teams across its Parañaque and Davao locations.",
-        "locations": ["Parañaque", "Davao"],
+        "description": "High Speed Internet Support provides customer-facing internet and technical support operations, with teams serving customers from its Parañaque and Davao locations.",
+        "locations": [
+            ("Parañaque", "35 Doña Soledad, Betterliving, Parañaque — Lido Cocina Tsina Building, 2nd Floor."),
+            ("Davao", "Davao operations and support location."),
+        ],
         "services": [
-            ("Internet Support", "Responsive support for connectivity and service concerns."),
-            ("Field Operations", "Local teams supporting customers and day-to-day service delivery."),
-            ("Customer Care", "People-focused support built around fast, clear communication."),
+            ("Technical Support", "Troubleshooting support for internet connectivity, Wi-Fi, devices, gateways and routers."),
+            ("Customer Support", "Clear, customer-focused assistance for service concerns, instructions and issue resolution."),
+            ("Virtual Front Desk", "Professional front-desk and virtual support operations built around communication and customer satisfaction."),
         ],
         "primary": "#0ea5e9",
         "primary_dark": "#082f49",
         "accent": "#22d3ee",
         "surface": "#f0f9ff",
         "facebook": "https://web.facebook.com/profile.php?id=61552178101935",
+        "website": "https://www.highspeedinternetsupportinc.com/",
     },
 }
 
@@ -43,5 +47,6 @@ def get_client_site(slug, organization=None):
             "accent": "#38bdf8",
             "surface": "#eff6ff",
             "facebook": "",
+            "website": "",
         }
     return profile
