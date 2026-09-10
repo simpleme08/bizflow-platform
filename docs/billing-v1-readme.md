@@ -1,0 +1,1 @@
+Billing v1 adds organization-level plan and subscription state, a four-tier PH pricing catalog, active employee usage and capacity helpers, subscription visibility API, admin visibility, and regression tests. Payment-provider integration is intentionally separate.
