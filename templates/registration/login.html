@@ -2,50 +2,27 @@
 <html lang="en">
 <head>
     <link rel="stylesheet" href="/static/adminlte/plugins/fontawesome-free/css/all.min.css"><link rel="stylesheet" href="/static/adminlte/dist/css/adminlte.min.css"><link rel="stylesheet" href="/static/css/custom.css">
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Sign in | BizFlow HRIS</title>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sign in | HSIS HRIS</title>
     <style>
-        :root { font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #0f172a; background: #f0f9ff; }
-        * { box-sizing: border-box; }
-        body { margin: 0; min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; background: radial-gradient(circle at 15% 15%, rgba(34,211,238,.18), transparent 30%), linear-gradient(135deg,#082f49,#0ea5e9); }
-        .login-container { width: min(430px, calc(100% - 40px)); }
-        header { text-align: center; margin-bottom: 2rem; color: white; }
-        .brand { display: inline-flex; align-items: center; gap: 10px; font-size: 1.3rem; font-weight: 800; }
-        .brand::before { content: 'HS'; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; background: linear-gradient(135deg,#0ea5e9,#22d3ee); font-size: .8rem; }
-        h1 { font-size: 1.9rem; font-weight: 800; margin: 1.1rem 0 0; letter-spacing: -.04em; }
-        .subtitle { color: #dbeafe; font-size: .95rem; margin: .5rem 0 0; }
-        main { background: white; padding: 2.5rem; border-radius: 20px; box-shadow: 0 28px 70px rgba(2,20,35,.25); border: 1px solid rgba(255,255,255,.5); }
-        .form-group { margin-bottom: 1.35rem; }
-        label { display: block; font-weight: 700; font-size: .88rem; margin-bottom: .5rem; color: #334155; }
-        input { width: 100%; padding: .85rem .9rem; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 1rem; }
-        input:focus { outline: none; border-color: #0ea5e9; box-shadow: 0 0 0 4px rgba(14,165,233,.12); }
-        button { width: 100%; padding: .85rem; background: #0ea5e9; color: white; border: none; border-radius: 10px; font-size: 1rem; font-weight: 800; cursor: pointer; margin-top: .5rem; }
-        button:hover { background: #0284c7; }
-        .error { background: #fff1f2; color: #be123c; padding: .8rem; border-radius: 10px; margin-bottom: 1.5rem; font-size: .92rem; }
-        .footer-links { text-align: center; margin-top: 1.4rem; font-size: .88rem; }
-        .footer-links a { color: #0284c7; text-decoration: none; font-weight: 700; }
-        .footer-links a:hover { text-decoration: underline; }
-        @media (max-width: 600px) { main { padding: 1.5rem; } }
+        :root{font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#102a5c;background:#062a63}*{box-sizing:border-box}
+        body{margin:0;min-height:100vh;display:grid;place-items:center;background:radial-gradient(circle at 18% 18%,rgba(24,201,239,.28),transparent 25%),radial-gradient(circle at 84% 12%,rgba(255,189,18,.2),transparent 20%),linear-gradient(135deg,#031b48,#0663bd 62%,#08a0df);overflow:hidden}
+        body:before,body:after{content:"";position:fixed;border-radius:50%;opacity:.95;pointer-events:none}.login-container{width:min(450px,calc(100% - 32px));position:relative;z-index:2}
+        header{text-align:center;color:#fff;margin-bottom:22px}.logo{width:64px;height:52px;position:relative;margin:0 auto 10px}.dot{position:absolute;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,.15)}.d1{width:22px;height:22px;background:#ef1724;left:23px;top:0}.d2{width:19px;height:19px;background:#ffbd12;left:0;top:13px}.d3{width:19px;height:19px;background:#0876e8;left:25px;top:18px}.d4{width:16px;height:16px;background:#18b9bc;left:5px;top:31px}.d5{width:21px;height:21px;background:#55c51b;left:43px;top:24px}.d6{width:10px;height:10px;background:#e50083;left:27px;top:42px}
+        .brand{font-size:1.8rem;font-weight:950;letter-spacing:-.06em}.tagline{font-size:.62rem;letter-spacing:.02em;color:#c9ddf6;font-weight:750}.subtitle{color:#dcecff;font-size:.9rem;margin:7px 0 0}
+        main{background:rgba(255,255,255,.98);padding:30px;border-radius:24px;box-shadow:0 30px 90px rgba(0,12,45,.32);border:1px solid rgba(255,255,255,.65)}.portal-label{color:#0876e8;font-size:.72rem;font-weight:900;letter-spacing:.12em;text-transform:uppercase;margin-bottom:7px}.portal-title{font-size:1.55rem;font-weight:900;letter-spacing:-.04em;margin-bottom:18px}
+        .form-group{margin-bottom:15px}label{display:block;font-weight:750;font-size:.84rem;margin-bottom:6px;color:#30496f}input{width:100%;padding:13px 14px;border:1px solid #cbd8e8;border-radius:11px;font-size:.96rem}input:focus{outline:none;border-color:#0876e8;box-shadow:0 0 0 4px rgba(8,118,232,.12)}button{width:100%;padding:13px;background:#0876e8;color:#fff;border:0;border-radius:999px;font-size:.95rem;font-weight:900;cursor:pointer;margin-top:5px;box-shadow:0 10px 22px rgba(8,118,232,.2)}button:hover{background:#005dc1}.error{background:#fff1f2;color:#be123c;padding:11px;border-radius:10px;margin-bottom:15px;font-size:.88rem}.footer-links{text-align:center;margin-top:16px;font-size:.82rem}.footer-links a{color:#0876e8;text-decoration:none;font-weight:800}.footer-links a:hover{text-decoration:underline}.access-note{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:20px;padding-top:18px;border-top:1px solid #e5edf7}.access-note div{text-align:center;color:#617492;font-size:.67rem}.access-note strong{display:block;color:#163b72;font-size:.72rem;margin-bottom:3px}@media(max-width:600px){main{padding:22px}.brand{font-size:1.55rem}}
     </style>
 </head>
 <body>
     <div class="login-container">
-        <header>
-            <div class="brand">BizFlow HRIS</div>
-            <h1>Sign in</h1>
-            <p class="subtitle">Secure access to your HR and employee workspace</p>
-        </header>
+        <header><div class="logo"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="dot d4"></i><i class="dot d5"></i><i class="dot d6"></i></div><div class="brand">HSIS</div><div class="tagline">HIGH SPEED INTERNET SUPPORT</div><p class="subtitle">Secure access to your people operations workspace</p></header>
         <main>
             {% if error %}<div class="error">{{ error }}</div>{% endif %}
-            <form method="post">
-                {% csrf_token %}
-                {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
-                <div class="form-group"><label for="id_username">Username</label><input id="id_username" name="username" type="text" autocomplete="username" required autofocus></div>
-                <div class="form-group"><label for="id_password">Password</label><input id="id_password" name="password" type="password" autocomplete="current-password" required></div>
-                <button type="submit">Sign in to HRIS</button>
-            </form>
-            <div class="footer-links"><a href="/clock/">→ Use employee time clock</a></div>
+            <div class="portal-label">Employee access</div><div class="portal-title">Sign in to HRIS</div>
+            <form method="post">{% csrf_token %}{% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}<div class="form-group"><label for="id_username">Username</label><input id="id_username" name="username" type="text" autocomplete="username" required autofocus></div><div class="form-group"><label for="id_password">Password</label><input id="id_password" name="password" type="password" autocomplete="current-password" required></div><button type="submit">Sign in to HRIS</button></form>
+            <div class="access-note"><div><strong>People</strong>Employee records</div><div><strong>Attendance</strong>Time &amp; leave</div><div><strong>Payroll</strong>Payslips &amp; pay</div></div>
+            <div class="footer-links"><a href="/clock/">→ Open employee time clock</a></div>
         </main>
     </div>
 </body>
