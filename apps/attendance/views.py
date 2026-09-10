@@ -88,11 +88,37 @@ def clock_page(request):
 
 
 def _clock_state(employee):
-    open_record = employee.attendance_records.filter(time_in__isnull=False, time_out__isnull=True).order_by('-attendance_date', '-time_in').first()
-    latest_record = employee.attendance_records.order_by('-attendance_date', '-created_at').first()
+    """Return state for the current attendance date only.
+
+    A stale open record from a previous day must not disable today's Clock In
+    button. This is especially important after a missed Clock Out or when
+    demo data has been seeded with an earlier open record.
+    """
+    today = timezone.localdate()
+    open_record = employee.attendance_records.filter(
+        attendance_date=today,
+        time_in__isnull=False,
+        time_out__isnull=True,
+    ).order_by('-time_in').first()
+    latest_record = employee.attendance_records.filter(attendance_date=today).order_by('-created_at').first()
     last_action = 'CLOCKED_IN' if open_record else ('CLOCKED_OUT' if latest_record and latest_record.time_out else 'NOT_STARTED')
     last_action_at = open_record.time_in if open_record else (latest_record.time_out if latest_record else None)
-    return {'employee_name': f'{employee.first_name} {employee.last_name}', 'last_action': last_action, 'last_action_at': last_action_at.isoformat() if last_action_at else None, 'attendance_date': open_record.attendance_date.isoformat() if open_record else (latest_record.attendance_date.isoformat() if latest_record else None), 'can_clock_in': open_record is None, 'can_clock_out': open_record is not None}
+    assignment = employee.assignments.filter(
+        start_date__lte=today,
+    ).filter(
+        Q(end_date__isnull=True) | Q(end_date__gte=today),
+    ).order_by('-is_primary', '-start_date').select_related('shift_template').first()
+    return {
+        'employee_name': f'{employee.first_name} {employee.last_name}',
+        'employee_number': employee.employee_number,
+        'last_action': last_action,
+        'last_action_at': last_action_at.isoformat() if last_action_at else None,
+        'attendance_date': today.isoformat(),
+        'shift_name': assignment.shift_template.name if assignment else None,
+        'can_clock_in': open_record is None and assignment is not None and employee.is_active,
+        'can_clock_out': open_record is not None,
+        'assignment_available': assignment is not None,
+    }
 
 
 @require_http_methods(['POST'])
@@ -106,6 +132,9 @@ def clock_login(request):
         return JsonResponse({'detail': 'This account is not linked to an employee profile.'}, status=403)
     if not employee.is_active:
         return JsonResponse({'detail': 'This employee profile is inactive.'}, status=403)
+    membership = employee.organization.organization_memberships.filter(user=user, is_active=True).first()
+    if membership is None or not employee.organization.is_active:
+        return JsonResponse({'detail': 'This employee does not have active organization access.'}, status=403)
     login(request, user)
     return JsonResponse(_clock_state(employee))
 
@@ -118,17 +147,22 @@ def clock_action(request):
         employee = request.user.employee_profile
     except Employee.DoesNotExist:
         return JsonResponse({'detail': 'This account is not linked to an employee profile.'}, status=403)
+    if not employee.is_active or not employee.organization.is_active:
+        return JsonResponse({'detail': 'This employee is not eligible to record attendance.'}, status=403)
+    membership = employee.organization.organization_memberships.filter(user=request.user, is_active=True).first()
+    if membership is None:
+        return JsonResponse({'detail': 'This employee does not have active organization access.'}, status=403)
     if request.method == 'GET':
         return JsonResponse(_clock_state(employee))
     action = request.POST.get('action')
     now = timezone.now()
+    attendance_date = timezone.localdate()
     if action == 'CLOCK_IN':
-        attendance_date = timezone.localdate()
         if employee.attendance_records.filter(attendance_date=attendance_date, time_in__isnull=False, time_out__isnull=True).exists():
             return JsonResponse({'detail': 'You are already clocked in.'}, status=409)
         assignment = employee.assignments.filter(start_date__lte=attendance_date).filter(Q(end_date__isnull=True) | Q(end_date__gte=attendance_date)).order_by('-is_primary', '-start_date').select_related('shift_template').first()
         if assignment is None:
-            return JsonResponse({'detail': 'No active shift assignment is available for today.'}, status=400)
+            return JsonResponse({'detail': 'No active shift assignment is available for today. Please ask HR to assign your shift.'}, status=400)
         record, _ = AttendanceRecord.objects.update_or_create(employee=employee, attendance_date=attendance_date, defaults={'assignment': assignment, 'time_in': now, 'time_out': None, 'status': AttendanceRecord.Status.PRESENT})
         record_audit(organization=employee.organization, actor=request.user, action='attendance.clocked_in', entity=record)
         return JsonResponse(_clock_state(employee))
