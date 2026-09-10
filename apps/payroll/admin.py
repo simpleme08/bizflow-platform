@@ -1,11 +1,19 @@
 from django.contrib import admin
 
-from .models import EmployeeSalary, PayrollAdjustment, PayrollHoliday, PayrollPeriod, PayrollProfile, PayrollRecord
+from .models import EmployeeSalary, EmployeeSalaryHistory, PayrollAdjustment, PayrollHoliday, PayrollPeriod, PayrollProfile, PayrollRecord
 
 
 @admin.register(EmployeeSalary)
 class EmployeeSalaryAdmin(admin.ModelAdmin):
     list_display = ('employee', 'basic_salary', 'effective_date')
+
+
+@admin.register(EmployeeSalaryHistory)
+class EmployeeSalaryHistoryAdmin(admin.ModelAdmin):
+    list_display = ('employee', 'basic_salary', 'effective_date', 'reason')
+    list_filter = ('effective_date',)
+    search_fields = ('employee__employee_number', 'employee__first_name', 'employee__last_name', 'reason')
+    date_hierarchy = 'effective_date'
 
 
 @admin.register(PayrollProfile)
