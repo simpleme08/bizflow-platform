@@ -34,6 +34,20 @@ Every access-controlled feature should include tests for:
 
 For stateful workflows also test duplicate submission, invalid transitions and rollback behavior.
 
+## Timekeeping photo-proof tests
+
+Employee Clock In and Clock Out must require a camera image. Attendance tests should verify:
+
+- clocking without a photo is rejected
+- invalid/non-image uploads are rejected
+- oversized photos are rejected
+- a valid Clock In stores `clock_in_photo`
+- a valid Clock Out stores `clock_out_photo`
+- the clock action remains tenant- and employee-scoped
+- stale open records from a prior date do not prevent today's Clock In
+
+The browser time clock captures a JPEG from the employee's camera and submits it as multipart form data. Camera permission is therefore required for employee clocking.
+
 ## Payroll tests
 
 Payroll changes should test calculations, period boundaries, employee eligibility, approval/payment state, adjustments, loans, final pay, payslip authorization and reporting outputs. Compliance-sensitive values should be tied to effective dates and verified against current authoritative sources before release.
