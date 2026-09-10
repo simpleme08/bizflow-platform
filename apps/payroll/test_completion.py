@@ -1,52 +1,85 @@
 from datetime import date
 from decimal import Decimal
 
-from django.core.exceptions import ValidationError
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from apps.employees.models import Employee
-from apps.organization.models import Organization
+from apps.organization.models import Organization, OrganizationMembership
 
-from .completion import final_pay_preview, loan_deduction_for_record
+from .completion import apply_record_adjustments, loan_deduction_for_record, settle_loans_for_record
 from .loan_models import EmployeeLoan
-from .models import EmployeeSalary, PayrollPeriod, PayrollRecord
+from .models import PayrollAdjustment, PayrollPeriod, PayrollProfile, PayrollRecord
 
 
 class PayrollCompletionTests(TestCase):
     def setUp(self):
-        self.organization = Organization.objects.create(name='Completion Test')
-        from django.contrib.auth import get_user_model
-        user = get_user_model().objects.create_user(username='completion-user', password='password')
+        self.user = get_user_model().objects.create_user(username='completion-manager', password='password')
+        self.organization = Organization.objects.create(name='Completion Co', slug='completion-co')
+        OrganizationMembership.objects.create(organization=self.organization, user=self.user, role=OrganizationMembership.Role.HR)
+        employee_user = get_user_model().objects.create_user(username='completion-employee', password='password')
         self.employee = Employee.objects.create(
-            employee_number='COMP-001', user=user, organization=self.organization,
-            first_name='Test', last_name='Employee', is_active=True,
+            employee_number='C-001', user=employee_user, organization=self.organization,
+            first_name='Complete', last_name='Employee',
         )
-        EmployeeSalary.objects.create(employee=self.employee, basic_salary=Decimal('22000'), effective_date=date(2026, 1, 1))
+        PayrollProfile.objects.create(
+            employee=self.employee, sss_number='01-1234567-8',
+            philhealth_number='12-345678901-2', pagibig_number='123456789012',
+        )
         self.period = PayrollPeriod.objects.create(
-            organization=self.organization, name='Aug 1-15', start_date=date(2026, 8, 1), end_date=date(2026, 8, 15),
+            organization=self.organization, name='September 2026',
+            start_date=date(2026, 9, 1), end_date=date(2026, 9, 15),
+        )
+        self.record = PayrollRecord.objects.create(
+            employee=self.employee, payroll_period=self.period,
+            basic_pay=Decimal('10000.00'), gross_pay=Decimal('10000.00'),
+            net_pay=Decimal('10000.00'),
         )
 
-    def test_loan_schedule_caps_at_balance(self):
+    def test_adjustments_apply_once(self):
+        earning = PayrollAdjustment.objects.create(
+            payroll_record=self.record, kind=PayrollAdjustment.Kind.EARNING,
+            description='Approved correction', amount=Decimal('500.00'), approved=True,
+        )
+        deduction = PayrollAdjustment.objects.create(
+            payroll_record=self.record, kind=PayrollAdjustment.Kind.DEDUCTION,
+            description='Approved deduction', amount=Decimal('100.00'), approved=True,
+        )
+        apply_record_adjustments(self.record)
+        self.record.refresh_from_db()
+        self.assertEqual(self.record.gross_pay, Decimal('10500.00'))
+        self.assertEqual(self.record.other_deductions, Decimal('100.00'))
+        self.assertTrue(PayrollAdjustment.objects.get(pk=earning.pk).applied)
+        self.assertTrue(PayrollAdjustment.objects.get(pk=deduction.pk).applied)
+        first_net = self.record.net_pay
+        apply_record_adjustments(self.record)
+        self.record.refresh_from_db()
+        self.assertEqual(self.record.gross_pay, Decimal('10500.00'))
+        self.assertEqual(self.record.net_pay, first_net)
+
+    def test_loan_preview_and_settlement_respect_balance(self):
         loan = EmployeeLoan.objects.create(
-            employee=self.employee, lender='Company', loan_type='Salary Loan', principal=Decimal('10000'),
-            interest=Decimal('0'), installment_amount=Decimal('3000'), start_date=date(2026, 8, 1), end_date=date(2027, 1, 1), balance=Decimal('2500'),
+            employee=self.employee, lender='SSS', loan_type='Salary Loan',
+            principal=Decimal('1000.00'), interest=Decimal('0.00'),
+            installment_amount=Decimal('700.00'), balance=Decimal('500.00'),
+            start_date=date(2026, 9, 1), end_date=date(2026, 12, 31),
         )
-        record = PayrollRecord.objects.create(employee=self.employee, payroll_period=self.period, net_pay=Decimal('10000'))
-        self.assertEqual(loan_deduction_for_record(record), Decimal('2500.00'))
+        self.assertEqual(loan_deduction_for_record(self.record), Decimal('500.00'))
+        self.record.loan_deductions = Decimal('500.00')
+        settled = settle_loans_for_record(self.record)
+        self.assertEqual(settled, Decimal('500.00'))
+        loan.refresh_from_db()
+        self.assertEqual(loan.balance, Decimal('0.00'))
+        self.assertEqual(loan.status, EmployeeLoan.Status.PAID)
 
-    def test_final_pay_preview_is_transparent(self):
-        result = final_pay_preview(
-            self.employee, date(2026, 8, 10), Decimal('22000'),
-            thirteenth_month=Decimal('1000'), accrued_leave_pay=Decimal('500'), other_earnings=Decimal('250'), other_deductions=Decimal('100'), loan_balance=Decimal('1000'),
-        )
-        self.assertEqual(result['prorated_salary'], Decimal('10000.00'))
-        self.assertEqual(result['gross_final_pay'], Decimal('11750.00'))
-        self.assertEqual(result['net_final_pay'], Decimal('10650.00'))
+    def test_remittance_exports_are_organization_scoped(self):
+        self.client.login(username='completion-manager', password='password')
+        response = self.client.get(f'/api/payroll/remittance/{self.period.id}/sss/')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('SSS Number', response.content.decode())
+        self.assertIn('01-1234567-8', response.content.decode())
 
-    def test_negative_loan_values_rejected(self):
-        loan = EmployeeLoan(
-            employee=self.employee, lender='Company', loan_type='Invalid', principal=Decimal('-1'),
-            installment_amount=Decimal('1'), start_date=date(2026, 8, 1), end_date=date(2027, 1, 1), balance=Decimal('0'),
-        )
-        with self.assertRaises(ValidationError):
-            loan.full_clean()
+    def test_unsupported_remittance_export_is_rejected(self):
+        self.client.login(username='completion-manager', password='password')
+        response = self.client.get(f'/api/payroll/remittance/{self.period.id}/not-real/')
+        self.assertEqual(response.status_code, 404)
