@@ -1,0 +1,1 @@
+SaaS productization foundation is ready: explicit plans, limits, subscription lifecycle, usage reporting, capacity guards, and admin visibility are implemented. Payment processing remains a separate integration concern.
