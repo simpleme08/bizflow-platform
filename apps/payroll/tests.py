@@ -7,10 +7,11 @@ from django.utils import timezone
 
 from apps.attendance.models import AttendanceRecord
 from apps.employees.models import Employee, EmployeeAssignment
+from apps.leave.models import LeaveApplication, LeaveType
 from apps.organization.models import Organization, OrganizationMembership
 from apps.workforce.models import ShiftTemplate
 
-from .models import EmployeeSalary, PayrollPeriod, PayrollRecord
+from .models import EmployeeSalary, PayrollHoliday, PayrollPeriod, PayrollRecord
 from .services import PhilippinePayrollRules, PhilippineWithholdingTax, PayrollCalculator
 
 
@@ -52,6 +53,50 @@ class PayrollCalculatorTests(TestCase):
         self.assertEqual(result['pagibig_employer'], Decimal('50.00'))
         self.assertEqual(result['gross_pay'], Decimal('10071.02'))
         self.assertEqual(result['net_pay'], Decimal('9242.61'))
+
+    def test_night_differential_is_based_on_actual_hours_between_10pm_and_6am(self):
+        assignment = self.employee.assignments.first()
+        AttendanceRecord.objects.create(
+            employee=self.employee,
+            assignment=assignment,
+            attendance_date=date(2026, 8, 11),
+            time_in=timezone.make_aware(datetime(2026, 8, 11, 21, 0)),
+            time_out=timezone.make_aware(datetime(2026, 8, 11, 23, 0)),
+        )
+        result = PayrollCalculator.calculate(self.employee, self.period)
+        self.assertEqual(result['night_differential'], Decimal('11.36'))
+
+    def test_regular_holiday_work_adds_the_holiday_premium(self):
+        assignment = self.employee.assignments.first()
+        AttendanceRecord.objects.create(
+            employee=self.employee,
+            assignment=assignment,
+            attendance_date=date(2026, 8, 11),
+            time_in=timezone.make_aware(datetime(2026, 8, 11, 8, 0)),
+            time_out=timezone.make_aware(datetime(2026, 8, 11, 17, 0)),
+        )
+        PayrollHoliday.objects.create(
+            organization=self.employee.organization,
+            holiday_date=date(2026, 8, 11),
+            name='Test Regular Holiday',
+            kind=PayrollHoliday.Kind.REGULAR,
+        )
+        result = PayrollCalculator.calculate(self.employee, self.period)
+        self.assertEqual(result['holiday_pay'], Decimal('909.09'))
+
+    def test_approved_unpaid_leave_is_automatically_deducted(self):
+        leave_type = LeaveType.objects.create(name='Unpaid Leave', code='UL', annual_credits=Decimal('10.00'), is_paid=False)
+        LeaveApplication.objects.create(
+            employee=self.employee,
+            leave_type=leave_type,
+            start_date=date(2026, 8, 12),
+            end_date=date(2026, 8, 12),
+            total_days=Decimal('1.00'),
+            reason='Test unpaid leave',
+            status=LeaveApplication.Status.APPROVED,
+        )
+        result = PayrollCalculator.calculate(self.employee, self.period)
+        self.assertEqual(result['leave_without_pay'], Decimal('909.09'))
 
     def test_monthly_period_uses_monthly_salary_and_contributions(self):
         monthly_period = PayrollPeriod.objects.create(organization=self.employee.organization, name='August 2026 Monthly', start_date=date(2026, 8, 1), end_date=date(2026, 8, 31), frequency=PayrollPeriod.Frequency.MONTHLY)
