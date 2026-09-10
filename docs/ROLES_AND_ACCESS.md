@@ -1,24 +1,51 @@
 # Roles and access
 
-Every record is scoped to an organization. A user needs an active organization membership and the relevant permission. Django superusers additionally have maintenance access.
+## Access model
 
-| Role | Main capabilities |
+BizFlow uses organization membership plus role-based permissions. A user should have an active `OrganizationMembership` for the organization they are accessing. Django superusers additionally have Django maintenance/admin access.
+
+## Roles
+
+| Role | Typical capabilities |
 | --- | --- |
-| Super User / Owner | Full organization, user, employee, attendance, leave, payroll, reports, talent, and operations access |
-| HR | Employees, users, attendance, Excel timekeeping import, leave approvals, payroll, reports, talent, and HR Operations |
-| Administrator | Users, employees, attendance, leave approvals, reports, talent, and HR Operations |
-| CEO | Employee/attendance visibility, leave approval, payroll visibility, reports |
-| Manager / Team Leader | Employee/attendance visibility, shift scheduling, attendance actions, leave approvals |
-| SME | Employee/attendance visibility, attendance actions, reports |
-| Employee | ESS, their own leave submission, approved payroll/payslips, HR Hub, and standalone time clock |
+| Owner / Super User | Full organization administration, users, employees, workforce, payroll, reports, talent and operations |
+| HR | Employees, users, attendance/imports, leave approvals, payroll, reports, talent and HR Operations |
+| Administrator | Administrative employee/attendance/leave/report/talent/operations functions according to configured permissions |
+| CEO | Employee/attendance visibility, leave approval, payroll visibility and reports |
+| Manager / Team Leader | Team employee/attendance visibility, scheduling, attendance actions and leave approvals |
+| SME | Employee/attendance visibility, attendance actions and reports |
+| Employee | Own ESS, leave requests, approved/paid payroll/payslips, HR Hub and time clock |
 
-## Administration workflow
+The exact permission mapping in code is authoritative if this table and implementation ever differ.
 
-1. Sign in as `demo_superuser` or a designated owner.
-2. Open `/admin/`.
-3. Create the Organization, then departments, positions, employment types, and cost centers.
-4. Create a Django User and an Organization Membership with the correct role.
-5. Create an Employee linked one-to-one to that user, then a primary Employee Assignment and Shift Template.
-6. For payroll, create Employee Salary and Payroll Period records.
+## Least privilege
 
-Do not assign more access than required. Revoke access by setting the membership inactive; do not delete a user while payroll/audit records need preservation.
+Give each person the lowest role that supports their job. In particular:
+
+- payroll approval should be limited to designated payroll authorities
+- employee data should be limited to HR/authorized managers
+- organization/billing configuration should be limited to designated administrators
+- employees should only access their own self-service data
+
+## Administration sequence
+
+1. Create Organization.
+2. Create departments, positions, employment types and cost centers.
+3. Create shift templates and workforce clients/sites where needed.
+4. Create Django users.
+5. Add active OrganizationMembership records with the intended role.
+6. Create Employee profiles linked to the correct users.
+7. Create primary/current assignments.
+8. Configure leave and salary/payroll data.
+
+## Access changes
+
+When someone leaves or should no longer have access, deactivate the organization membership promptly. Preserve the user/audit/payroll history rather than deleting records that are needed for traceability.
+
+## Security rule
+
+Never rely on route visibility or frontend controls for authorization. Every sensitive API/view must check authentication, membership, organization scope and permission on the server.
+
+## Access review
+
+At least monthly, review active memberships and privileged users. Before each payroll cycle, confirm payroll roles and employee status are correct. After role changes, sign out/in to refresh session context where necessary.
