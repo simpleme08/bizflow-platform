@@ -11,9 +11,8 @@ from reportlab.pdfgen import canvas
 from apps.organization.models import OrganizationMembership
 from apps.core.services import record_audit
 
-from .completion import apply_record_adjustments, loan_deduction_for_record, settle_loans_for_record
+from .completion import apply_record_adjustments, settle_loans_for_record
 from .models import PayrollAdjustment, PayrollPeriod, PayrollRecord
-from .loan_models import EmployeeLoan
 from .services import PayrollCalculator
 
 
@@ -95,25 +94,6 @@ def process_payroll(request):
 
 
 @require_http_methods(['POST'])
-def apply_payroll_adjustments(request, record_id):
-    if not request.user.is_authenticated:
-        return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
-    membership = _membership(request, 'manage_payroll')
-    if membership is None:
-        return JsonResponse({'detail': 'Payroll management permission is required.'}, status=403)
-    try:
-        record = PayrollRecord.objects.select_related('employee', 'payroll_period').get(id=record_id, employee__organization=membership.organization, payroll_period__organization=membership.organization)
-    except PayrollRecord.DoesNotExist:
-        return JsonResponse({'detail': 'Payroll record was not found.'}, status=404)
-    try:
-        record = apply_record_adjustments(record)
-    except (ValueError, Exception) as exc:
-        return JsonResponse({'detail': str(exc)}, status=409)
-    record_audit(organization=membership.organization, actor=request.user, action='payroll.adjustments.applied', entity=record)
-    return JsonResponse({'id': str(record.id), 'gross_pay': str(record.gross_pay), 'loan_deductions': str(record.loan_deductions), 'withholding_tax': str(record.withholding_tax), 'net_pay': str(record.net_pay)})
-
-
-@require_http_methods(['POST'])
 def create_payroll_adjustment(request, record_id):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
@@ -127,18 +107,36 @@ def create_payroll_adjustment(request, record_id):
     if record.status != PayrollRecord.Status.DRAFT:
         return JsonResponse({'detail': 'Only draft payroll records can receive adjustments.'}, status=409)
     try:
-        amount = Decimal(request.POST.get('amount', '0'))
         adjustment = PayrollAdjustment.objects.create(
             payroll_record=record,
             kind=request.POST.get('kind', PayrollAdjustment.Kind.EARNING),
             description=request.POST.get('description', '').strip(),
-            amount=amount,
+            amount=Decimal(request.POST.get('amount', '0')),
             taxable=request.POST.get('taxable', 'true').lower() == 'true',
             approved=request.POST.get('approved', 'false').lower() == 'true',
         )
     except Exception as exc:
         return JsonResponse({'detail': str(exc)}, status=400)
     return JsonResponse({'id': str(adjustment.id), 'kind': adjustment.kind, 'description': adjustment.description, 'amount': str(adjustment.amount), 'approved': adjustment.approved}, status=201)
+
+
+@require_http_methods(['POST'])
+def apply_payroll_adjustments(request, record_id):
+    if not request.user.is_authenticated:
+        return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
+    membership = _membership(request, 'manage_payroll')
+    if membership is None:
+        return JsonResponse({'detail': 'Payroll management permission is required.'}, status=403)
+    try:
+        record = PayrollRecord.objects.select_related('employee', 'payroll_period').get(id=record_id, employee__organization=membership.organization, payroll_period__organization=membership.organization)
+    except PayrollRecord.DoesNotExist:
+        return JsonResponse({'detail': 'Payroll record was not found.'}, status=404)
+    try:
+        record = apply_record_adjustments(record)
+    except (ValueError, TypeError, Decimal.InvalidOperation) as exc:
+        return JsonResponse({'detail': str(exc)}, status=409)
+    record_audit(organization=membership.organization, actor=request.user, action='payroll.adjustments.applied', entity=record)
+    return JsonResponse({'id': str(record.id), 'gross_pay': str(record.gross_pay), 'loan_deductions': str(record.loan_deductions), 'withholding_tax': str(record.withholding_tax), 'net_pay': str(record.net_pay)})
 
 
 @require_http_methods(['POST'])
