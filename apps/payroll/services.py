@@ -173,6 +173,20 @@ class PayrollCalculator:
         return cls_money(total_days * daily_rate)
 
     @classmethod
+    def _taxable_thirteenth_for_period(cls, employee, period, thirteenth_month):
+        if not thirteenth_month:
+            return ZERO
+        prior = PayrollRecord.objects.filter(
+            employee=employee,
+            payroll_period__end_date__year=period.end_date.year,
+            payroll_period__end_date__lt=period.end_date,
+        ).aggregate_total_thirteenth_month()
+        cumulative = prior + thirteenth_month
+        exempt_used = min(prior, PhilippinePayrollRules.THIRTEENTH_MONTH_EXEMPTION)
+        exempt_after = min(cumulative, PhilippinePayrollRules.THIRTEENTH_MONTH_EXEMPTION)
+        return PhilippinePayrollRules.money(max(ZERO, cumulative - exempt_after + exempt_used))
+
+    @classmethod
     def calculate(cls, employee, period, other_deductions=ZERO, leave_without_pay=None, loan_deductions=ZERO, allowances=ZERO, commissions=ZERO, bonuses=ZERO, holiday_pay=None, night_differential=None, thirteenth_month=ZERO):
         if employee.organization_id != period.organization_id:
             raise ValueError('Employee and payroll period must belong to the same organization.')
@@ -204,7 +218,7 @@ class PayrollCalculator:
         gross_pay = money(basic_pay + overtime_pay + holiday_pay + night_differential + allowances + commissions + bonuses + thirteenth_month)
         statutory = PhilippinePayrollRules.statutory(salary.basic_salary, periods_per_month=periods)
         taxable_regular = money(basic_pay + allowances - statutory['sss_employee'] - statutory['philhealth_employee'] - statutory['pagibig_employee'])
-        taxable_supplementary = money(commissions + bonuses + overtime_pay + holiday_pay + night_differential + max(ZERO, thirteenth_month - PhilippinePayrollRules.THIRTEENTH_MONTH_EXEMPTION))
+        taxable_supplementary = money(commissions + bonuses + overtime_pay + holiday_pay + night_differential + cls._taxable_thirteenth_for_period(employee, period, thirteenth_month))
         withholding_tax = PhilippineWithholdingTax.calculate(taxable_regular + taxable_supplementary, period.frequency, bool(getattr(getattr(employee, 'payroll_profile', None), 'minimum_wage_earner', False)))
         net_pay = money(gross_pay - late_deduction - undertime_deduction - leave_without_pay - loan_deductions - statutory['sss_employee'] - statutory['philhealth_employee'] - statutory['pagibig_employee'] - withholding_tax - other_deductions)
         if net_pay < ZERO:
@@ -229,12 +243,31 @@ class PayrollCalculator:
     @classmethod
     def annual_tax_reconciliation(cls, employee, year):
         records = PayrollRecord.objects.filter(employee=employee, payroll_period__end_date__year=year).order_by('payroll_period__end_date')
-        taxable_income = sum((record.basic_pay + record.allowances + record.commissions + record.bonuses + record.overtime_pay + record.holiday_pay + record.night_differential + max(ZERO, record.thirteenth_month - PhilippinePayrollRules.THIRTEENTH_MONTH_EXEMPTION) - record.sss_employee - record.philhealth_employee - record.pagibig_employee for record in records), ZERO)
-        taxable_income = PhilippinePayrollRules.money(taxable_income)
+        records_values = records.values(
+            'basic_pay', 'allowances', 'commissions', 'bonuses', 'overtime_pay',
+            'holiday_pay', 'night_differential', 'thirteenth_month',
+            'sss_employee', 'philhealth_employee', 'pagibig_employee',
+        )
+        regular_and_supplementary = sum((
+            row['basic_pay'] + row['allowances'] + row['commissions'] + row['bonuses'] +
+            row['overtime_pay'] + row['holiday_pay'] + row['night_differential'] -
+            row['sss_employee'] - row['philhealth_employee'] - row['pagibig_employee']
+            for row in records_values
+        ), ZERO)
+        total_thirteenth_month = sum((row['thirteenth_month'] for row in records_values), ZERO)
+        taxable_thirteenth_month = max(ZERO, total_thirteenth_month - PhilippinePayrollRules.THIRTEENTH_MONTH_EXEMPTION)
+        taxable_income = PhilippinePayrollRules.money(regular_and_supplementary + taxable_thirteenth_month)
         tax_due = PhilippineWithholdingTax.annual_tax(taxable_income)
         tax_withheld = PhilippinePayrollRules.money(sum((record.withholding_tax for record in records), ZERO))
         adjustment = PhilippinePayrollRules.money(tax_due - tax_withheld)
-        return {'year': year, 'taxable_income': taxable_income, 'tax_due': tax_due, 'tax_withheld': tax_withheld, 'adjustment': adjustment}
+        return {
+            'year': year,
+            'taxable_income': taxable_income,
+            'taxable_thirteenth_month': PhilippinePayrollRules.money(taxable_thirteenth_month),
+            'tax_due': tax_due,
+            'tax_withheld': tax_withheld,
+            'adjustment': adjustment,
+        }
 
     @classmethod
     def preflight(cls, period, organization):
