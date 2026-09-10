@@ -1,3 +1,6 @@
+import uuid
+
+import django.db.models.deletion
 from django.db import migrations, models
 from django.db.models import Q
 
@@ -17,7 +20,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='PayrollWageRate',
             fields=[
-                ('id', models.UUIDField(default=__import__('uuid').uuid4, editable=False, primary_key=True, serialize=False)),
+                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
                 ('region_code', models.CharField(max_length=20)),
@@ -27,7 +30,7 @@ class Migration(migrations.Migration):
                 ('effective_to', models.DateField(blank=True, null=True)),
                 ('wage_order', models.CharField(blank=True, max_length=50)),
                 ('is_active', models.BooleanField(default=True)),
-                ('organization', models.ForeignKey(blank=True, null=True, on_delete=models.deletion.CASCADE, related_name='payroll_wage_rates', to='organization.organization')),
+                ('organization', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='payroll_wage_rates', to='organization.organization')),
             ],
             options={'ordering': ('-effective_from', '-created_at')},
         ),
