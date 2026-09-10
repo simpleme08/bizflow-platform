@@ -1,5 +1,6 @@
 from decimal import Decimal
 from django.db import migrations, models
+import django.db.models.deletion
 
 
 class Migration(migrations.Migration):
@@ -25,8 +26,7 @@ class Migration(migrations.Migration):
                 ('amount', models.DecimalField(decimal_places=2, max_digits=12)),
                 ('taxable', models.BooleanField(default=True)),
                 ('approved', models.BooleanField(default=False)),
-                ('payroll_record', models.ForeignKey(on_delete=models.deletion.PROTECT, related_name='adjustments', to='payroll.payrollrecord')),
+                ('payroll_record', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='adjustments', to='payroll.payrollrecord')),
             ],
-            options={'abstract': False},
         ),
     ]
