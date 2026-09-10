@@ -10,8 +10,8 @@ from apps.employees.models import Employee, EmployeeAssignment
 from apps.organization.models import Organization, OrganizationMembership
 from apps.workforce.models import ShiftTemplate
 
-from .models import EmployeeSalary, PayrollPeriod, PayrollRecord
-from .services import PayrollCalculator
+from .models import EmployeeSalary, PayrollPeriod, PayrollRecord, PayrollProfile
+from .services import PhilippinePayrollRules, PhilippineWithholdingTax, PayrollCalculator
 
 
 class PayrollCalculatorTests(TestCase):
@@ -33,12 +33,25 @@ class PayrollCalculatorTests(TestCase):
             end_date=date(2026, 8, 15),
         )
 
+    def test_statutory_rules_match_current_schedules(self):
+        self.assertEqual(PhilippinePayrollRules.sss(Decimal('20000.00')), (Decimal('1000.00'), Decimal('2030.00')))
+        self.assertEqual(PhilippinePayrollRules.philhealth(Decimal('20000.00')), (Decimal('500.00'), Decimal('500.00')))
+        self.assertEqual(PhilippinePayrollRules.pagibig(Decimal('20000.00')), (Decimal('100.00'), Decimal('100.00')))
+
+    def test_withholding_tax_uses_bir_semi_monthly_table(self):
+        self.assertEqual(PhilippineWithholdingTax.calculate(Decimal('10417.00')), Decimal('0.00'))
+        self.assertEqual(PhilippineWithholdingTax.calculate(Decimal('12000.00')), Decimal('237.45'))
+        self.assertEqual(PhilippineWithholdingTax.calculate(Decimal('40000.00')), Decimal('5959.20'))
+
     def test_calculator_returns_exact_decimal_components(self):
         result = PayrollCalculator.calculate(self.employee, self.period)
 
         self.assertEqual(result, {
             'basic_pay': Decimal('10000.00'), 'overtime_pay': Decimal('71.02'), 'late_deduction': Decimal('28.41'),
-            'undertime_deduction': Decimal('0.00'), 'other_deductions': Decimal('0.00'), 'gross_pay': Decimal('10071.02'), 'net_pay': Decimal('10042.61'),
+            'undertime_deduction': Decimal('0.00'), 'sss_employee': Decimal('500.00'),
+            'philhealth_employee': Decimal('250.00'), 'pagibig_employee': Decimal('50.00'),
+            'withholding_tax': Decimal('0.00'), 'other_deductions': Decimal('0.00'),
+            'gross_pay': Decimal('10071.02'), 'net_pay': Decimal('9242.61'),
         })
 
     def test_process_period_creates_calculated_record(self):
@@ -46,7 +59,7 @@ class PayrollCalculatorTests(TestCase):
 
         record = PayrollRecord.objects.get(employee=self.employee, payroll_period=self.period)
         self.assertEqual(record.status, PayrollRecord.Status.DRAFT)
-        self.assertEqual(record.net_pay, Decimal('10042.61'))
+        self.assertEqual(record.net_pay, Decimal('9242.61'))
         self.assertEqual(self.period.status, PayrollPeriod.Status.CALCULATED)
 
     def test_approved_period_cannot_be_recalculated(self):
