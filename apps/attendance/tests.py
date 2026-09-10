@@ -71,6 +71,23 @@ class AttendanceCalculatorTests(TestCase):
         self.assertGreaterEqual(record.hours_worked.total_seconds(), 0)
         self.assertEqual(AttendanceRecord.objects.filter(employee=self.assignment.employee).count(), 1)
 
+    def test_stale_open_record_does_not_disable_todays_clock_in(self):
+        yesterday = timezone.localdate() - timedelta(days=1)
+        AttendanceRecord.objects.create(
+            employee=self.assignment.employee,
+            assignment=self.assignment,
+            attendance_date=yesterday,
+            time_in=timezone.make_aware(datetime.combine(yesterday, time(8))),
+            status=AttendanceRecord.Status.PRESENT,
+        )
+        response = self.client.get('/clock/action/')
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['can_clock_in'])
+        self.assertFalse(response.json()['can_clock_out'])
+        clock_in_response = self.client.post('/clock/action/', {'action': 'CLOCK_IN'})
+        self.assertEqual(clock_in_response.status_code, 200)
+        self.assertEqual(clock_in_response.json()['last_action'], 'CLOCKED_IN')
+
     def test_clock_in_requires_employee_assignment(self):
         self.assignment.end_date = timezone.localdate() - timedelta(days=1)
         self.assignment.save(update_fields=['end_date', 'updated_at'])
