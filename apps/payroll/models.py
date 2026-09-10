@@ -234,3 +234,6 @@ class PayrollAdjustment(BaseModel):
     def save(self, *args, **kwargs):
         self.full_clean()
         return super().save(*args, **kwargs)
+
+
+from .loan_models import EmployeeLoan
