@@ -39,6 +39,7 @@ class PayrollCalculatorTests(TestCase):
         self.assertEqual(PhilippineWithholdingTax.calculate(Decimal('40000.00')), Decimal('5937.45'))
         self.assertEqual(PhilippineWithholdingTax.calculate(Decimal('20833.00'), frequency='MONTHLY'), Decimal('0.00'))
         self.assertEqual(PhilippineWithholdingTax.calculate(Decimal('25000.00'), frequency='MONTHLY'), Decimal('625.05'))
+        self.assertEqual(PhilippineWithholdingTax.annual_tax(Decimal('300000.00')), Decimal('7500.00'))
 
     def test_calculator_returns_exact_decimal_components(self):
         result = PayrollCalculator.calculate(self.employee, self.period)
@@ -56,45 +57,20 @@ class PayrollCalculatorTests(TestCase):
 
     def test_night_differential_is_based_on_actual_hours_between_10pm_and_6am(self):
         assignment = self.employee.assignments.first()
-        AttendanceRecord.objects.create(
-            employee=self.employee,
-            assignment=assignment,
-            attendance_date=date(2026, 8, 11),
-            time_in=timezone.make_aware(datetime(2026, 8, 11, 21, 0)),
-            time_out=timezone.make_aware(datetime(2026, 8, 11, 23, 0)),
-        )
+        AttendanceRecord.objects.create(employee=self.employee, assignment=assignment, attendance_date=date(2026, 8, 11), time_in=timezone.make_aware(datetime(2026, 8, 11, 21, 0)), time_out=timezone.make_aware(datetime(2026, 8, 11, 23, 0)))
         result = PayrollCalculator.calculate(self.employee, self.period)
         self.assertEqual(result['night_differential'], Decimal('11.36'))
 
     def test_regular_holiday_work_adds_the_holiday_premium(self):
         assignment = self.employee.assignments.first()
-        AttendanceRecord.objects.create(
-            employee=self.employee,
-            assignment=assignment,
-            attendance_date=date(2026, 8, 11),
-            time_in=timezone.make_aware(datetime(2026, 8, 11, 8, 0)),
-            time_out=timezone.make_aware(datetime(2026, 8, 11, 17, 0)),
-        )
-        PayrollHoliday.objects.create(
-            organization=self.employee.organization,
-            holiday_date=date(2026, 8, 11),
-            name='Test Regular Holiday',
-            kind=PayrollHoliday.Kind.REGULAR,
-        )
+        AttendanceRecord.objects.create(employee=self.employee, assignment=assignment, attendance_date=date(2026, 8, 11), time_in=timezone.make_aware(datetime(2026, 8, 11, 8, 0)), time_out=timezone.make_aware(datetime(2026, 8, 11, 17, 0)))
+        PayrollHoliday.objects.create(organization=self.employee.organization, holiday_date=date(2026, 8, 11), name='Test Regular Holiday', kind=PayrollHoliday.Kind.REGULAR)
         result = PayrollCalculator.calculate(self.employee, self.period)
         self.assertEqual(result['holiday_pay'], Decimal('909.09'))
 
     def test_approved_unpaid_leave_is_automatically_deducted(self):
         leave_type = LeaveType.objects.create(name='Unpaid Leave', code='UL', annual_credits=Decimal('10.00'), is_paid=False)
-        LeaveApplication.objects.create(
-            employee=self.employee,
-            leave_type=leave_type,
-            start_date=date(2026, 8, 12),
-            end_date=date(2026, 8, 12),
-            total_days=Decimal('1.00'),
-            reason='Test unpaid leave',
-            status=LeaveApplication.Status.APPROVED,
-        )
+        LeaveApplication.objects.create(employee=self.employee, leave_type=leave_type, start_date=date(2026, 8, 12), end_date=date(2026, 8, 12), total_days=Decimal('1.00'), reason='Test unpaid leave', status=LeaveApplication.Status.APPROVED)
         result = PayrollCalculator.calculate(self.employee, self.period)
         self.assertEqual(result['leave_without_pay'], Decimal('909.09'))
 
@@ -111,6 +87,15 @@ class PayrollCalculatorTests(TestCase):
     def test_thirteenth_month_is_one_twelfth_of_basic_pay_paid(self):
         PayrollCalculator.process_period(self.period, self.employee.organization)
         self.assertEqual(PayrollCalculator.thirteenth_month(self.employee, 2026), Decimal('833.33'))
+
+    def test_annual_tax_reconciliation_reports_year_end_adjustment(self):
+        annual_period = PayrollPeriod.objects.create(organization=self.employee.organization, name='Annual Test', start_date=date(2026, 12, 1), end_date=date(2026, 12, 31), frequency=PayrollPeriod.Frequency.MONTHLY)
+        PayrollRecord.objects.create(employee=self.employee, payroll_period=annual_period, basic_pay=Decimal('300000.00'), gross_pay=Decimal('300000.00'), net_pay=Decimal('300000.00'))
+        result = PayrollCalculator.annual_tax_reconciliation(self.employee, 2026)
+        self.assertEqual(result['taxable_income'], Decimal('300000.00'))
+        self.assertEqual(result['tax_due'], Decimal('7500.00'))
+        self.assertEqual(result['tax_withheld'], Decimal('0.00'))
+        self.assertEqual(result['adjustment'], Decimal('7500.00'))
 
     def test_preflight_reports_missing_profile_as_warning(self):
         result = PayrollCalculator.preflight(self.period, self.employee.organization)
