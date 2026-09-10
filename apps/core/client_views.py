@@ -1,4 +1,5 @@
-from django.shortcuts import get_object_or_404, render
+from django.http import Http404
+from django.shortcuts import render
 
 from apps.organization.models import Organization
 
@@ -6,11 +7,13 @@ from .client_sites import get_client_site
 
 
 def client_site(request, slug):
-    organization = get_object_or_404(Organization, slug=slug, is_active=True)
+    organization = Organization.objects.filter(slug=slug, is_active=True).first()
     profile = get_client_site(slug, organization)
+    if not profile:
+        raise Http404('Client website not found.')
     return render(request, 'client_site.html', {
         'organization': organization,
         'profile': profile,
-        'login_url': f'/login/?org={organization.slug}',
-        'clock_url': f'/clock/?org={organization.slug}',
+        'login_url': f'/login/?org={slug}',
+        'clock_url': f'/clock/?org={slug}',
     })
