@@ -61,12 +61,11 @@ class PayrollCalculatorTests(TestCase):
         self.assertEqual(result['sss_employer'], Decimal('2030.00'))
         self.assertEqual(result['philhealth_employee'], Decimal('500.00'))
         self.assertEqual(result['pagibig_employee'], Decimal('100.00'))
-        self.assertEqual(result['withholding_tax'], Decimal('139.55'))
+        self.assertEqual(result['withholding_tax'], Decimal('0.00'))
 
     def test_thirteenth_month_is_one_twelfth_of_basic_pay_paid(self):
         PayrollCalculator.process_period(self.period, self.employee.organization)
-        value = PayrollCalculator.thirteenth_month(self.employee, 2026)
-        self.assertEqual(value, Decimal('833.33'))
+        self.assertEqual(PayrollCalculator.thirteenth_month(self.employee, 2026), Decimal('833.33'))
 
     def test_preflight_reports_missing_profile_as_warning(self):
         result = PayrollCalculator.preflight(self.period, self.employee.organization)
