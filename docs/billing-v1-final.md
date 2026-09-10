@@ -1,0 +1,1 @@
+Billing milestone completed: plans and pricing defaults, subscription lifecycle fields, usage/limit calculations, activation guards, read-only usage API, admin visibility, tenant-aware access checks, and tests. Checkout, invoices, payment collection, and webhooks remain provider-integration work.
