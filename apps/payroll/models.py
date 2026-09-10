@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
 
@@ -58,6 +59,16 @@ class PayrollRecord(BaseModel):
         constraints = [
             models.UniqueConstraint(fields=('employee', 'payroll_period'), name='unique_employee_payroll_period'),
         ]
+
+    def clean(self):
+        super().clean()
+        if self.employee_id and self.payroll_period_id:
+            if self.employee.organization_id != self.payroll_period.organization_id:
+                raise ValidationError('Employee and payroll period must belong to the same organization.')
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
 
     @property
     def total_deductions(self):
