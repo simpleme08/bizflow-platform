@@ -1,3 +1,4 @@
+from datetime import timedelta
 from decimal import Decimal
 
 from django.http import HttpResponse, JsonResponse
@@ -8,7 +9,7 @@ from reportlab.pdfgen import canvas
 
 from apps.attendance.models import AttendanceRecord
 from apps.core.services import record_audit
-from .models import PayrollRecord
+from .models import PayrollAdjustment, PayrollRecord
 
 
 def _money(value):
@@ -72,17 +73,20 @@ def payslip(request, record_id):
         total_hours += max(hours, Decimal('0'))
         days_worked += 1
         overtime_hours += Decimal(item.overtime_minutes) / Decimal('60')
-        # Count minutes falling inside the Philippine 10 PM-6 AM night window.
         cursor = timezone.localtime(item.time_in)
         end = timezone.localtime(item.time_out)
         while cursor < end:
             if cursor.hour >= 22 or cursor.hour < 6:
                 night_hours += Decimal('1') / Decimal('60')
-            cursor += timezone.timedelta(minutes=1)
+            cursor += timedelta(minutes=1)
     total_hours = total_hours.quantize(Decimal('0.01'))
     overtime_hours = overtime_hours.quantize(Decimal('0.01'))
     night_hours = night_hours.quantize(Decimal('0.01'))
     regular_hours = max(total_hours - overtime_hours, Decimal('0')).quantize(Decimal('0.01'))
+
+    adjustments = list(record.adjustments.filter(approved=True))
+    adjustment_earnings = sum((a.amount for a in adjustments if a.kind == PayrollAdjustment.Kind.EARNING), Decimal('0'))
+    adjustment_deductions = sum((a.amount for a in adjustments if a.kind == PayrollAdjustment.Kind.DEDUCTION), Decimal('0'))
 
     response = HttpResponse(content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="Payslip-{employee.employee_number}-{record.payroll_period.name}.pdf"'
@@ -93,7 +97,6 @@ def payslip(request, record_id):
     width = right - left
     y = page_height - 42
 
-    # Company header
     pdf.setFont('Helvetica-Bold', 14)
     pdf.drawCentredString(page_width / 2, y, employee.organization.name.upper())
     y -= 16
@@ -103,7 +106,6 @@ def payslip(request, record_id):
     pdf.line(left, y, right, y)
     y -= 18
 
-    # Employee information block mirrors the supplied payslip.
     mid = left + width / 2 + 10
     _label_value(pdf, left, y, 'EMPLOYEE NAME:', f'{employee.last_name}, {employee.first_name}', left + 80)
     _label_value(pdf, mid, y, 'PAY PERIOD:', record.payroll_period.name, mid + 62)
@@ -130,7 +132,7 @@ def payslip(request, record_id):
         ('De Minimis Benefits', Decimal('0')),
         ('Non-taxable Allowances', record.allowances),
         ('Reimbursements', Decimal('0')),
-        ('Adjustments (+/-)', Decimal('0')),
+        ('Adjustments (+)', adjustment_earnings),
     ]
     deductions = [
         ('SSS', record.sss_employee),
@@ -140,16 +142,16 @@ def payslip(request, record_id):
         ('Government Loans', Decimal('0')),
         ('HMO', Decimal('0')),
         ('Company Loans', record.loan_deductions),
-        ('Other Deductions', record.other_deductions + record.late_deduction + record.undertime_deduction + record.leave_without_pay),
+        ('Other Deductions', record.other_deductions + record.late_deduction + record.undertime_deduction + record.leave_without_pay + adjustment_deductions),
     ]
     left_end = _amount_column(pdf, left, y, column_width, 'Earnings', earnings)
     right_end = _amount_column(pdf, left + column_width + column_gap, y, column_width, 'Deductions', deductions)
     y = min(left_end, right_end) - 5
     pdf.setFont('Helvetica-Bold', 8.5)
     pdf.drawString(left, y, 'TOTAL EARNINGS:')
-    pdf.drawRightString(left + column_width, y, _money(record.gross_pay))
+    pdf.drawRightString(left + column_width, y, _money(record.gross_pay + adjustment_earnings))
     pdf.drawString(left + column_width + column_gap, y, 'TOTAL DEDUCTIONS:')
-    pdf.drawRightString(right, y, _money(record.total_deductions))
+    pdf.drawRightString(right, y, _money(record.total_deductions + adjustment_deductions))
     y -= 24
     pdf.setFont('Helvetica-Bold', 12)
     pdf.drawString(left, y, 'NET PAY:')
