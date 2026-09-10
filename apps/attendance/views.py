@@ -10,6 +10,8 @@ from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
+from PIL import Image, UnidentifiedImageError
+
 from apps.core.services import record_audit
 from apps.employees.models import Employee
 from apps.organization.models import OrganizationMembership
@@ -19,6 +21,7 @@ from .services import AttendanceCalculator
 
 
 TIMEKEEPING_HEADERS = ('Employee Number', 'Attendance Date', 'Time In', 'Time Out', 'Status', 'Remarks')
+MAX_CLOCK_PHOTO_BYTES = 5 * 1024 * 1024
 
 
 def _can_import_timekeeping(request, membership):
@@ -26,6 +29,23 @@ def _can_import_timekeeping(request, membership):
         OrganizationMembership.Role.SUPER_USER,
         OrganizationMembership.Role.HR,
     )
+
+
+def _validate_clock_photo(uploaded):
+    if uploaded is None:
+        raise ValueError('A camera photo is required before clocking.')
+    if uploaded.size > MAX_CLOCK_PHOTO_BYTES:
+        raise ValueError('The clock photo must be 5 MB or smaller.')
+    if not getattr(uploaded, 'content_type', '').startswith('image/'):
+        raise ValueError('The clock photo must be an image.')
+    try:
+        uploaded.seek(0)
+        image = Image.open(uploaded)
+        image.verify()
+        uploaded.seek(0)
+    except (UnidentifiedImageError, OSError, ValueError):
+        raise ValueError('The clock photo is not a valid image.')
+    return uploaded
 
 
 def _cell_datetime(attendance_date, value):
@@ -88,12 +108,7 @@ def clock_page(request):
 
 
 def _clock_state(employee):
-    """Return state for the current attendance date only.
-
-    A stale open record from a previous day must not disable today's Clock In
-    button. This is especially important after a missed Clock Out or when
-    demo data has been seeded with an earlier open record.
-    """
+    """Return time-clock state for today's attendance and active assignment."""
     today = timezone.localdate()
     open_record = employee.attendance_records.filter(
         attendance_date=today,
@@ -118,6 +133,8 @@ def _clock_state(employee):
         'can_clock_in': open_record is None and assignment is not None and employee.is_active,
         'can_clock_out': open_record is not None,
         'assignment_available': assignment is not None,
+        'clock_in_photo_captured': bool(open_record and open_record.clock_in_photo),
+        'clock_out_photo_captured': bool(latest_record and latest_record.time_out and latest_record.clock_out_photo),
     }
 
 
@@ -154,7 +171,13 @@ def clock_action(request):
         return JsonResponse({'detail': 'This employee does not have active organization access.'}, status=403)
     if request.method == 'GET':
         return JsonResponse(_clock_state(employee))
+
     action = request.POST.get('action')
+    try:
+        photo = _validate_clock_photo(request.FILES.get('photo'))
+    except ValueError as error:
+        return JsonResponse({'detail': str(error)}, status=400)
+
     now = timezone.now()
     attendance_date = timezone.localdate()
     if action == 'CLOCK_IN':
@@ -163,18 +186,30 @@ def clock_action(request):
         assignment = employee.assignments.filter(start_date__lte=attendance_date).filter(Q(end_date__isnull=True) | Q(end_date__gte=attendance_date)).order_by('-is_primary', '-start_date').select_related('shift_template').first()
         if assignment is None:
             return JsonResponse({'detail': 'No active shift assignment is available for today. Please ask HR to assign your shift.'}, status=400)
-        record, _ = AttendanceRecord.objects.update_or_create(employee=employee, attendance_date=attendance_date, defaults={'assignment': assignment, 'time_in': now, 'time_out': None, 'status': AttendanceRecord.Status.PRESENT})
-        record_audit(organization=employee.organization, actor=request.user, action='attendance.clocked_in', entity=record)
+        record, _ = AttendanceRecord.objects.update_or_create(
+            employee=employee,
+            attendance_date=attendance_date,
+            defaults={
+                'assignment': assignment,
+                'time_in': now,
+                'time_out': None,
+                'clock_in_photo': photo,
+                'clock_out_photo': None,
+                'status': AttendanceRecord.Status.PRESENT,
+            },
+        )
+        record_audit(organization=employee.organization, actor=request.user, action='attendance.clocked_in', entity=record, details={'photo_required': True})
         return JsonResponse(_clock_state(employee))
     if action == 'CLOCK_OUT':
         record = employee.attendance_records.filter(time_in__isnull=False, time_out__isnull=True).order_by('-attendance_date', '-time_in').first()
         if record is None:
             return JsonResponse({'detail': 'You are not currently clocked in.'}, status=409)
         record.time_out = now
+        record.clock_out_photo = photo
         record.full_clean()
-        record.save(update_fields=('time_out', 'updated_at'))
+        record.save(update_fields=('time_out', 'clock_out_photo', 'updated_at'))
         AttendanceCalculator.update_record(record)
-        record_audit(organization=employee.organization, actor=request.user, action='attendance.clocked_out', entity=record)
+        record_audit(organization=employee.organization, actor=request.user, action='attendance.clocked_out', entity=record, details={'photo_required': True})
         return JsonResponse(_clock_state(employee))
     return JsonResponse({'detail': 'Action must be CLOCK_IN or CLOCK_OUT.'}, status=400)
 
