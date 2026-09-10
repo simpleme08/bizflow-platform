@@ -154,6 +154,11 @@ class PayrollCalculator:
         return total_seconds / Decimal('3600')
 
     @classmethod
+    def _salary_for_period(cls, employee, period):
+        history = employee.salary_history.filter(effective_date__lte=period.end_date).order_by('-effective_date').first()
+        return history or getattr(employee, 'salary', None)
+
+    @classmethod
     def _holiday_premium(cls, attendance, daily_rate):
         holiday = PayrollHoliday.objects.filter(holiday_date=attendance.attendance_date, is_active=True, organization=attendance.employee.organization).first()
         if holiday is None:
@@ -191,7 +196,7 @@ class PayrollCalculator:
     def calculate(cls, employee, period, other_deductions=ZERO, leave_without_pay=None, loan_deductions=ZERO, allowances=ZERO, commissions=ZERO, bonuses=ZERO, holiday_pay=None, night_differential=None, thirteenth_month=ZERO):
         if employee.organization_id != period.organization_id:
             raise ValueError('Employee and payroll period must belong to the same organization.')
-        salary = getattr(employee, 'salary', None)
+        salary = cls._salary_for_period(employee, period)
         if salary is None:
             raise ValueError('Employee salary is required before payroll can be calculated.')
         attendance = AttendanceRecord.objects.filter(employee=employee, employee__organization=period.organization, attendance_date__range=(period.start_date, period.end_date))
@@ -275,7 +280,7 @@ class PayrollCalculator:
         errors, warnings = [], []
         employees = organization.employees.filter(is_active=True).select_related('salary', 'payroll_profile')
         for employee in employees:
-            if getattr(employee, 'salary', None) is None:
+            if cls._salary_for_period(employee, period) is None:
                 errors.append(f'{employee.employee_number}: missing salary')
                 continue
             profile = getattr(employee, 'payroll_profile', None)
