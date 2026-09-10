@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -149,4 +151,4 @@ class EmployeeDocument(BaseModel):
     def expires_soon(self):
         if not self.expiry_date:
             return False
-        return timezone.localdate() <= self.expiry_date <= timezone.localdate() + timezone.timedelta(days=30)
+        return timezone.localdate() <= self.expiry_date <= timezone.localdate() + timedelta(days=30)
