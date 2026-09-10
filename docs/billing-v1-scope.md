@@ -1,0 +1,1 @@
+Included: organization plan catalog, subscription lifecycle, employee limits, usage API, configurable overage, activation guards, admin visibility, and regression tests. Excluded: payment processor, checkout, invoices, recurring collection, webhooks, and tax/payment-provider objects.
