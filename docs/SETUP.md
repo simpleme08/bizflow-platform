@@ -1,11 +1,20 @@
 # Setup and configuration
 
-## 1. Install prerequisites
+## 1. Prerequisites
 
-Install Python 3.11+ and Git. PostgreSQL 15+ is recommended for any shared or hosted environment. SQLite is supported only for local evaluation.
+Install:
+
+- Python 3.11+
+- Git
+- PostgreSQL 15+ for shared/staging/production environments
+
+SQLite is supported for local evaluation only.
+
+## 2. Local installation
+
+Windows PowerShell:
 
 ```powershell
-cd C:\Users\pcruz\Documents\HRIS
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
@@ -13,29 +22,32 @@ python -m pip install -r requirements.txt
 Copy-Item .env.example .env
 python manage.py migrate
 python manage.py check
+python manage.py test
 python manage.py runserver
 ```
 
-Browse to `http://127.0.0.1:8000/`.
+Open `http://127.0.0.1:8000/`.
 
-If `python` is not recognized, install Python from python.org and select **Add Python to PATH**, then recreate `.venv`. Do not reuse a virtual environment that references a removed Python installation.
+If `python` is not recognized, install Python with PATH enabled and recreate `.venv` rather than reusing an environment tied to a removed interpreter.
 
-## 2. Environment variables
+## 3. Environment configuration
 
-| Variable | Development | Production |
+| Variable | Local | Hosted/production |
 | --- | --- | --- |
-| `DJANGO_SECRET_KEY` | Unique local secret | New random, private value |
+| `DJANGO_SECRET_KEY` | Unique local secret | Long random secret in secret store |
 | `DJANGO_DEBUG` | `True` | `False` |
-| `DJANGO_ALLOWED_HOSTS` | `127.0.0.1,localhost` | Exact comma-separated hosts |
-| `DB_ENGINE` | `sqlite` | `postgresql` |
-| `POSTGRES_*` | Not needed with SQLite | Required |
-| `POSTGRES_SSLMODE` | `prefer` locally | `require` or stronger hosted |
+| `DJANGO_ALLOWED_HOSTS` | `127.0.0.1,localhost` | Exact hostnames only |
+| `DJANGO_CSRF_TRUSTED_ORIGINS` | Usually empty/local | Exact HTTPS origins |
+| `DB_ENGINE` | `sqlite` or `postgresql` | `postgresql` |
+| `POSTGRES_*` | Only for PostgreSQL | Required |
+| `POSTGRES_SSLMODE` | `prefer` | `require` or stronger |
+| PayMongo variables | Test mode when needed | Live values in secret store |
 
-Never commit `.env`, database passwords, Supabase credentials, or connector secrets.
+Never commit `.env`, credentials, database dumps or provider secrets.
 
-## 3. PostgreSQL
+## 4. PostgreSQL
 
-Create a least-privilege application database/user, then set:
+Example local configuration:
 
 ```dotenv
 DB_ENGINE=postgresql
@@ -47,52 +59,66 @@ POSTGRES_PORT=5432
 POSTGRES_SSLMODE=prefer
 ```
 
-Run `python manage.py migrate` followed by `python manage.py seed_demo` for demonstration data.
+Use a least-privilege application database user. Run migrations before starting the application.
 
-## 4. Supabase
+## 5. Supabase PostgreSQL
 
-Create a project, select **Connect**, then copy the exact connection host, user, port, and password. A persistent Django service should use Direct connection when its host supports IPv6; otherwise use the Supavisor **Session Pooler** connection.
+Create a Supabase project and copy the exact connection details from its **Connect** panel. For persistent Django hosting, use a Direct connection where IPv6/networking permits it; otherwise use the Supavisor Session Pooler connection appropriate to the host.
 
 ```dotenv
 DB_ENGINE=postgresql
 POSTGRES_DB=postgres
-POSTGRES_USER=postgres.PROJECT_REF
+POSTGRES_USER=YOUR_SUPABASE_USER
 POSTGRES_PASSWORD=YOUR_DATABASE_PASSWORD
-POSTGRES_HOST=aws-REGION.pooler.supabase.com
+POSTGRES_HOST=YOUR_SUPABASE_HOST
 POSTGRES_PORT=5432
 POSTGRES_SSLMODE=require
 ```
 
-Then migrate and seed. Use the values supplied by the Supabase project, not the examples above. Consult the official [Supabase connection guide](https://supabase.com/docs/guides/database/connecting-to-postgres) for current pooler details.
+Never use the sample values literally. Use the current connection details supplied by the project.
 
-## 5. Demo seed
+## 6. Demo data
+
+For a disposable local database:
 
 ```powershell
 python manage.py migrate
 python manage.py seed_demo
 ```
 
-This command is safe to rerun. It creates a superuser, organization memberships, employees, attendance, payroll, leave balances, onboarding, talent, operations, and connector placeholders.
+The command is intended for demonstrations and is safe to rerun within that purpose. Do not run it against a production HR database.
 
-| Login | Password | Intended walkthrough |
-| --- | --- | --- |
-| `demo_superuser` | `DemoRole2026!` | Admin Console and all HRIS features |
-| `demo_hr` | `DemoRole2026!` | HR workspace and Excel timekeeping import |
-| `demo_manager` | `DemoRole2026!` | Shift scheduling and leave approvals |
-| `demo_employee` | `DemoRole2026!` | ESS, leave, payroll, and HR Hub |
-| `demo.juan` – `demo.sofia` | `DemoEmployee2026!` | Individual employee/time-clock samples |
+## 7. Render deployment
 
-Change or remove every demo account before real use.
+The repository includes `render.yaml`. Its production-oriented command sequence runs migrations and static collection before Gunicorn starts, and the service uses `/ready/` as the health check.
 
-## 6. Deploy to Render
+Configure at minimum:
 
-The repository contains `render.yaml`. Push to GitHub, create a Render Blueprint or Web Service, and configure:
+- `DJANGO_DEBUG=False`
+- generated `DJANGO_SECRET_KEY`
+- exact `DJANGO_ALLOWED_HOSTS`
+- exact `DJANGO_CSRF_TRUSTED_ORIGINS`
+- PostgreSQL connection values
+- PayMongo production/test configuration as appropriate
 
-```text
-Build command: pip install -r requirements.txt && python manage.py collectstatic --noinput
-Start command: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
-```
+A free Render service is suitable for demonstration but is not an appropriate production HRIS hosting tier because availability and filesystem characteristics are limited. Use persistent PostgreSQL and production infrastructure with backups and monitoring.
 
-Set `DJANGO_DEBUG=False`, `DJANGO_ALLOWED_HOSTS=YOUR-SERVICE.onrender.com`, a generated `DJANGO_SECRET_KEY`, and the Supabase variables in Render’s secret environment settings. Run migrations and seed data after first deployment.
+## 8. First deployment verification
 
-Free Render web services idle after inactivity and their filesystem is temporary. Use Supabase/PostgreSQL, never `db.sqlite3`, for a hosted deployment. The free `onrender.com` URL is suitable for a demo; a branded domain must be registered separately. See [Render free services](https://render.com/docs/free) and [custom domains](https://render.com/docs/custom-domains).
+After deployment:
+
+1. Open `/health/` and confirm HTTP 200.
+2. Open `/ready/` and confirm HTTP 200 with database readiness.
+3. Sign in with a controlled account.
+4. Verify organization/membership scope.
+5. Run the relevant smoke tests.
+6. Confirm backups and monitoring before accepting real customer data.
+
+## 9. Common problems
+
+- **DisallowedHost:** fix `DJANGO_ALLOWED_HOSTS`.
+- **CSRF failure:** fix `DJANGO_CSRF_TRUSTED_ORIGINS`.
+- **Database refused:** verify host/user/password/port/SSL mode.
+- **Static files missing:** run `collectstatic` and inspect WhiteNoise deployment.
+- **Migration failure:** restore the database, inspect migration history, and fix dependencies before deploying application code.
+- **PayMongo failures:** verify environment mode, plan identifiers, API credentials and webhook signing secret.
