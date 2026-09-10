@@ -6,21 +6,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Time Clock | BizFlow HRIS</title>
     <style>
-        :root { font-family: Arial, sans-serif; color: #17221d; background: #eef2ed; }
+        :root { font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #0f172a; background: #082f49; }
         * { box-sizing: border-box; }
-        body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: linear-gradient(135deg, #eef2ed, #dfe9df); }
-        main { width: min(510px, calc(100% - 32px)); padding: 36px; background: #fffdf8; border: 1px solid #cfd9cf; box-shadow: 10px 10px 0 #cbd9ca; text-align: center; }
-        .brand { color: #1e4f35; font: 700 13px Georgia, serif; letter-spacing: 2px; text-transform: uppercase; }
-        .kicker { margin-top: 30px; color: #637067; font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; }
-        .clock { margin: 8px 0 28px; color: #1e4f35; font: 500 48px Georgia, serif; }
-        .field { display: block; width: 100%; margin: 12px 0; padding: 14px; border: 1px solid #b9c2b8; background: #f7f8f3; font-size: 16px; text-align: center; }
-        .button { width: 100%; padding: 15px; margin-top: 12px; border: 0; background: #f0aa48; color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; }
-        .button.out { background: #1e4f35; }
+        body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: radial-gradient(circle at 75% 15%, rgba(34,211,238,.28), transparent 30%), linear-gradient(135deg,#082f49,#0ea5e9); }
+        main { width: min(510px, calc(100% - 32px)); padding: 36px; background: #fff; border: 1px solid rgba(255,255,255,.6); border-radius: 24px; box-shadow: 0 30px 80px rgba(2,20,35,.28); text-align: center; }
+        .brand { color: #082f49; font: 800 13px Inter, sans-serif; letter-spacing: 1.4px; text-transform: uppercase; }
+        .kicker { margin-top: 30px; color: #64748b; font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; }
+        .clock { margin: 8px 0 28px; color: #0ea5e9; font: 750 48px Inter, sans-serif; letter-spacing: -.04em; }
+        .field { display: block; width: 100%; margin: 12px 0; padding: 14px; border: 1px solid #cbd5e1; border-radius: 10px; background: #f8fafc; font-size: 16px; text-align: center; }
+        .field:focus { outline: none; border-color: #0ea5e9; box-shadow: 0 0 0 4px rgba(14,165,233,.12); }
+        .button { width: 100%; padding: 15px; margin-top: 12px; border: 0; border-radius: 10px; background: #0ea5e9; color: #fff; font-size: 16px; font-weight: 800; cursor: pointer; }
+        .button.out { background: #082f49; }
         .button:disabled { cursor: not-allowed; opacity: .45; }
-        .status { margin: 18px 0 4px; color: #637067; font-size: 14px; }
-        .last { color: #1e4f35; font-size: 13px; }
-        .error { min-height: 20px; margin-top: 16px; color: #a0382f; font-size: 14px; }
-        .back { display: inline-block; margin-top: 24px; color: #1e4f35; font-size: 13px; font-weight: 700; text-decoration: none; }
+        .status { margin: 18px 0 4px; color: #64748b; font-size: 14px; }
+        .last { color: #082f49; font-size: 13px; font-weight: 700; }
+        .error { min-height: 20px; margin-top: 16px; color: #be123c; font-size: 14px; }
+        .back { display: inline-block; margin-top: 24px; color: #0284c7; font-size: 13px; font-weight: 800; text-decoration: none; }
         .hidden { display: none; }
     </style>
 </head>
@@ -34,7 +35,7 @@
                 {% csrf_token %}
                 <input class="field" name="username" placeholder="username" autocomplete="username" required>
                 <input class="field" name="password" placeholder="password" type="password" autocomplete="current-password" required>
-                <button class="button" type="submit">Login</button>
+                <button class="button" type="submit">Sign in</button>
             </form>
         </div>
         <div id="clock-box" class="hidden">
