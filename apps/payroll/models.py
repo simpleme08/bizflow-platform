@@ -14,6 +14,25 @@ class EmployeeSalary(BaseModel):
     effective_date = models.DateField()
 
 
+class EmployeeSalaryHistory(BaseModel):
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='salary_history')
+    basic_salary = models.DecimalField(max_digits=12, decimal_places=2)
+    effective_date = models.DateField()
+    reason = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=('employee', 'effective_date'), name='unique_employee_salary_history_date'),
+            models.CheckConstraint(condition=Q(basic_salary__gte=0), name='salary_history_non_negative'),
+        ]
+        ordering = ('-effective_date', '-created_at')
+
+    def clean(self):
+        super().clean()
+        if self.basic_salary < 0:
+            raise ValidationError('Salary cannot be negative.')
+
+
 class PayrollProfile(BaseModel):
     employee = models.OneToOneField(Employee, on_delete=models.CASCADE, related_name='payroll_profile')
     sss_number = models.CharField(max_length=20, blank=True)
