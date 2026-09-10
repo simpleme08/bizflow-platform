@@ -5,7 +5,6 @@ import django.db.models.deletion
 def backfill_organizations(apps, schema_editor):
     PayrollPeriod = apps.get_model('payroll', 'PayrollPeriod')
     PayrollRecord = apps.get_model('payroll', 'PayrollRecord')
-    Employee = apps.get_model('employees', 'Employee')
 
     for period in PayrollPeriod.objects.all().iterator():
         organization_ids = set(
