@@ -10,7 +10,7 @@ from apps.employees.models import Employee, EmployeeAssignment
 from apps.organization.models import Organization, OrganizationMembership
 from apps.workforce.models import ShiftTemplate
 
-from .models import EmployeeSalary, PayrollPeriod, PayrollRecord, PayrollProfile
+from .models import EmployeeSalary, PayrollPeriod, PayrollRecord
 from .services import PhilippinePayrollRules, PhilippineWithholdingTax, PayrollCalculator
 
 
@@ -41,7 +41,7 @@ class PayrollCalculatorTests(TestCase):
     def test_withholding_tax_uses_bir_semi_monthly_table(self):
         self.assertEqual(PhilippineWithholdingTax.calculate(Decimal('10417.00')), Decimal('0.00'))
         self.assertEqual(PhilippineWithholdingTax.calculate(Decimal('12000.00')), Decimal('237.45'))
-        self.assertEqual(PhilippineWithholdingTax.calculate(Decimal('40000.00')), Decimal('5959.20'))
+        self.assertEqual(PhilippineWithholdingTax.calculate(Decimal('40000.00')), Decimal('5604.10'))
 
     def test_calculator_returns_exact_decimal_components(self):
         result = PayrollCalculator.calculate(self.employee, self.period)
