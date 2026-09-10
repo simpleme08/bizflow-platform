@@ -6,7 +6,8 @@ from apps.attendance.views import attendance_page, clock_action, clock_login, cl
 from apps.employees.views import employee_directory, employee_directory_page
 from apps.organization.views import current_user
 from apps.leave.views import leave_api, leave_decision, leave_page, my_leave_api
-from apps.payroll.views import apply_payroll_adjustments, approve_payroll, create_payroll_adjustment, mark_payroll_paid, my_payroll_api, payslip, payroll_api, payroll_page, payroll_preflight, process_payroll
+from apps.payroll.views import apply_payroll_adjustments, approve_payroll, create_payroll_adjustment, mark_payroll_paid, my_payroll_api, payroll_api, payroll_page, payroll_preflight, process_payroll
+from apps.payroll.payslip_views import payslip
 from apps.payroll.loan_views import loans_api, payroll_loan_preview
 from apps.payroll.final_pay_views import final_pay_api
 from apps.payroll.summary import payroll_summary_api
