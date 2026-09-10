@@ -8,15 +8,10 @@ from .models import PayrollRecord
 
 
 ZERO = Decimal('0.00')
-HUNDRED = Decimal('100')
 
 
 class PhilippinePayrollRules:
-    """Centralized 2025+ Philippine payroll rules.
-
-    Rates are kept here so future government schedule changes can be versioned
-    without scattering constants through payroll calculation code.
-    """
+    """Centralized 2025+ Philippine payroll rules."""
 
     SSS_EMPLOYEE_RATE = Decimal('0.05')
     SSS_EMPLOYER_RATE = Decimal('0.10')
@@ -25,11 +20,9 @@ class PhilippinePayrollRules:
     SSS_MSC_STEP = Decimal('500.00')
     SSS_EC_LOW = Decimal('10.00')
     SSS_EC_HIGH = Decimal('30.00')
-
     PHILHEALTH_RATE = Decimal('0.05')
     PHILHEALTH_MIN_BASE = Decimal('10000.00')
     PHILHEALTH_MAX_BASE = Decimal('100000.00')
-
     PAGIBIG_THRESHOLD = Decimal('1500.00')
     PAGIBIG_EMPLOYEE_RATE_LOW = Decimal('0.01')
     PAGIBIG_EMPLOYEE_RATE_HIGH = Decimal('0.02')
@@ -84,7 +77,7 @@ class PhilippinePayrollRules:
 
 
 class PhilippineWithholdingTax:
-    """BIR Annex E withholding table, effective January 1, 2023 onward."""
+    """BIR Annex E withholding tables, effective January 1, 2023 onward."""
 
     SEMI_MONTHLY = (
         (Decimal('10417'), ZERO, Decimal('0'), Decimal('0')),
@@ -94,13 +87,22 @@ class PhilippineWithholdingTax:
         (Decimal('333332'), Decimal('16770.70'), Decimal('83333'), Decimal('0.30')),
         (None, Decimal('91770.70'), Decimal('333333'), Decimal('0.35')),
     )
+    MONTHLY = (
+        (Decimal('20833'), ZERO, Decimal('0'), Decimal('0')),
+        (Decimal('33332'), ZERO, Decimal('20833'), Decimal('0.15')),
+        (Decimal('66666'), Decimal('1875.00'), Decimal('33333'), Decimal('0.20')),
+        (Decimal('166666'), Decimal('8541.80'), Decimal('66667'), Decimal('0.25')),
+        (Decimal('666666'), Decimal('33541.80'), Decimal('166667'), Decimal('0.30')),
+        (None, Decimal('183541.80'), Decimal('666667'), Decimal('0.35')),
+    )
 
     @classmethod
-    def calculate(cls, taxable_regular_compensation, minimum_wage_earner=False):
+    def calculate(cls, taxable_regular_compensation, frequency='SEMI_MONTHLY', minimum_wage_earner=False):
         taxable = max(Decimal(taxable_regular_compensation), ZERO)
         if minimum_wage_earner:
             return ZERO
-        for upper, base_tax, threshold, rate in cls.SEMI_MONTHLY:
+        table = cls.MONTHLY if frequency == 'MONTHLY' else cls.SEMI_MONTHLY
+        for upper, base_tax, threshold, rate in table:
             if upper is None or taxable <= upper:
                 if rate == ZERO:
                     return ZERO
@@ -117,7 +119,6 @@ class PayrollCalculator:
     def calculate(cls, employee, period, other_deductions=ZERO):
         if employee.organization_id != period.organization_id:
             raise ValueError('Employee and payroll period must belong to the same organization.')
-
         salary = getattr(employee, 'salary', None)
         if salary is None:
             raise ValueError('Employee salary is required before payroll can be calculated.')
@@ -135,29 +136,27 @@ class PayrollCalculator:
         hourly_rate = daily_rate / cls.WORKING_HOURS
         minute_rate = hourly_rate / Decimal('60')
         money = PhilippinePayrollRules.money
-        basic_pay = money(salary.basic_salary / Decimal('2'))
+        is_monthly = period.frequency == period.Frequency.MONTHLY
+        periods_per_month = 1 if is_monthly else 2
+        basic_pay = money(salary.basic_salary if is_monthly else salary.basic_salary / Decimal('2'))
         overtime_pay = money(Decimal(overtime_minutes) / Decimal('60') * hourly_rate * cls.OVERTIME_MULTIPLIER)
         late_deduction = money(Decimal(late_minutes) * minute_rate)
         undertime_deduction = money(Decimal(undertime_minutes) * minute_rate)
         other_deductions = money(other_deductions)
         gross_pay = money(basic_pay + overtime_pay)
 
-        statutory = PhilippinePayrollRules.statutory(salary.basic_salary, periods_per_month=2)
+        statutory = PhilippinePayrollRules.statutory(salary.basic_salary, periods_per_month=periods_per_month)
         taxable_regular = money(basic_pay - statutory['sss_employee'] - statutory['philhealth_employee'] - statutory['pagibig_employee'])
         profile = getattr(employee, 'payroll_profile', None)
         withholding_tax = PhilippineWithholdingTax.calculate(
             taxable_regular,
+            frequency=period.frequency,
             minimum_wage_earner=bool(profile and profile.minimum_wage_earner),
         )
         net_pay = money(
-            gross_pay
-            - late_deduction
-            - undertime_deduction
-            - statutory['sss_employee']
-            - statutory['philhealth_employee']
-            - statutory['pagibig_employee']
-            - withholding_tax
-            - other_deductions
+            gross_pay - late_deduction - undertime_deduction
+            - statutory['sss_employee'] - statutory['philhealth_employee']
+            - statutory['pagibig_employee'] - withholding_tax - other_deductions
         )
         return {
             'basic_pay': basic_pay,
@@ -165,8 +164,11 @@ class PayrollCalculator:
             'late_deduction': late_deduction,
             'undertime_deduction': undertime_deduction,
             'sss_employee': statutory['sss_employee'],
+            'sss_employer': statutory['sss_employer'],
             'philhealth_employee': statutory['philhealth_employee'],
+            'philhealth_employer': statutory['philhealth_employer'],
             'pagibig_employee': statutory['pagibig_employee'],
+            'pagibig_employer': statutory['pagibig_employer'],
             'withholding_tax': withholding_tax,
             'other_deductions': other_deductions,
             'gross_pay': gross_pay,
@@ -176,27 +178,17 @@ class PayrollCalculator:
     @classmethod
     @transaction.atomic
     def process_period(cls, period, organization):
-        period = type(period).objects.select_for_update().get(
-            pk=period.pk,
-            organization=organization,
-        )
+        period = type(period).objects.select_for_update().get(pk=period.pk, organization=organization)
         if period.status in (period.Status.APPROVED, period.Status.PAID):
             raise ValueError('Approved or paid payroll periods are locked and cannot be recalculated.')
-
         employees = organization.employees.filter(is_active=True).select_related('salary', 'payroll_profile')
         processed = 0
         for employee in employees:
-            salary = getattr(employee, 'salary', None)
-            if salary is None:
+            if getattr(employee, 'salary', None) is None:
                 continue
             values = cls.calculate(employee, period)
-            PayrollRecord.objects.update_or_create(
-                employee=employee,
-                payroll_period=period,
-                defaults=values,
-            )
+            PayrollRecord.objects.update_or_create(employee=employee, payroll_period=period, defaults=values)
             processed += 1
-
         period.status = period.Status.CALCULATED
         period.save(update_fields=('status', 'updated_at'))
         return processed
