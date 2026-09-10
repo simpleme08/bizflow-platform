@@ -16,6 +16,7 @@
 - [x] Production health/readiness endpoints
 - [x] Render deployment health check and migration command
 - [x] Production operations/runbook and first-customer acceptance checklist
+- [x] Final launch hardening merged to `main`
 
 ## Final operational gate
 
