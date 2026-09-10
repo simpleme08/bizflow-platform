@@ -1,67 +1,99 @@
-# Operations, security, and release procedure
+# Operations, security, backup, and release procedure
 
-## Routine operations
+## Daily operations
 
-### Daily
-
-- Verify time-clock exceptions and imported attendance errors.
+- Review time-clock exceptions and attendance import errors.
 - Review leave and approval queues.
-- Check the HR dashboard and audit events for unexpected activity.
+- Check payroll exceptions before the next payroll run.
+- Check application health/readiness and infrastructure alerts.
+- Review audit events for unexpected privileged or sensitive activity.
 
-### Per payroll cycle
+## Payroll-cycle operations
 
-1. Confirm employee salaries and active assignments.
-2. Review attendance including late, undertime, overtime, leave, and manual corrections.
-3. Process payroll, perform independent review, and approve records.
-4. Confirm employees can access only their approved payslips.
-5. Export/archive reports according to internal policy.
+1. Confirm active employee roster and assignments.
+2. Verify salary/wage effective dates.
+3. Review attendance, leave, corrections, overtime/undertime and adjustments.
+4. Process payroll.
+5. Independently review gross, deductions and net pay.
+6. Approve records.
+7. Mark paid only after payment.
+8. Generate payslips and reporting/remittance exports.
+9. Archive required outputs according to policy.
 
-### Monthly
+## Monthly operations
 
-- Review active users and memberships; disable departed/temporary access.
-- Check leave balances and benefit enrollments.
-- Test backup restoration for PostgreSQL.
-- Review external connector records and ensure disabled connectors do not contain credentials.
+- Review active memberships and privileged users.
+- Review employee lifecycle/separation records.
+- Review leave balances and benefit enrollments.
+- Test PostgreSQL backup restoration.
+- Review PayMongo subscription/invoice/webhook health.
+- Review disabled connector metadata and confirm no secrets are stored there.
+- Review application dependencies and security advisories.
 
-## Database backup and restore
+## Database backup and recovery
 
-For PostgreSQL, take a logical backup before upgrades:
+For PostgreSQL, a logical backup can be created with:
 
 ```powershell
 pg_dump -Fc -h HOST -U USER -d bizflow -f bizflow-backup.dump
 ```
 
-Restore only into a verified target database:
+Restore only into a verified recovery target:
 
 ```powershell
 pg_restore -h HOST -U USER -d bizflow_restored --clean --if-exists bizflow-backup.dump
 ```
 
-For Supabase, use its database backup/export facilities and test recovery according to your plan.
+Hosted PostgreSQL providers may provide managed point-in-time recovery/backups; configure retention and test actual restoration rather than relying on a backup-success indicator alone.
 
 ## Release procedure
 
-1. Back up production PostgreSQL.
-2. Create/test changes in a staging database.
-3. Install pinned project dependencies: `python -m pip install -r requirements.txt`.
-4. Run `python manage.py check` and `python manage.py test`.
-5. Apply migrations: `python manage.py migrate`.
-6. Run `python manage.py collectstatic --noinput` for production.
-7. Deploy Gunicorn application.
-8. Perform smoke tests: login, ESS, time clock, leave submission, attendance import template, payroll payslip, and Admin access.
+1. Confirm the change has tests and documentation.
+2. Back up production PostgreSQL.
+3. Validate against a staging database.
+4. Install pinned requirements.
+5. Run `python manage.py check`.
+6. Run `python manage.py migrate --check`.
+7. Run `python manage.py test`.
+8. Review migration files and tenant/security impact.
+9. Deploy application and migrations using the platform procedure.
+10. Run `collectstatic` for production.
+11. Verify `/health/` and `/ready/`.
+12. Smoke-test login, ESS, time clock, leave, attendance import, payroll/payslip and Admin access.
+13. Monitor errors and rollback/recover if required.
 
-## Security requirements
+## Security baseline
 
-- Use HTTPS and `DJANGO_DEBUG=False` in production.
-- Set exact `DJANGO_ALLOWED_HOSTS`; never use `*`.
-- Use unique passwords, MFA/SSO through a real identity-provider connector when available, and least-privilege memberships.
-- Keep DB/provider secrets only in environment-managed secret stores.
-- Do not enable connectors merely by adding an endpoint: require vendor credentials, agreement, security review, and test environment.
-- Store employee data only where permitted by the organization’s privacy and retention policy.
-- Review Philippine employment, payroll, tax, statutory-benefit, privacy, and retention obligations with qualified advisers before production use.
+- HTTPS only in production.
+- `DJANGO_DEBUG=False`.
+- Exact `DJANGO_ALLOWED_HOSTS` and CSRF trusted origins.
+- Secret values stored outside Git.
+- Least-privilege memberships.
+- Tenant-scoped queries for every organization-facing operation.
+- Server-side authorization on every sensitive endpoint.
+- PayMongo webhook signature verification and idempotent event handling.
+- Regular backup/restore tests.
+- Appropriate privacy/retention controls for employee data.
+
+## Monitoring
+
+At minimum monitor:
+
+- `/health/`
+- `/ready/`
+- HTTP 5xx rate and latency
+- database connectivity/storage/connection saturation
+- failed payroll operations
+- billing webhook failures/retries and failed payments
+- backup success/failure
+- application error logs
+
+Alert an operator when readiness fails, backups fail, or billing events repeatedly fail.
 
 ## Known operational boundaries
 
-- Payroll tax calculation/filing, benefits-carrier transmission, background checks, legally binding third-party signatures, email/SMS delivery, and SSO require real external providers.
-- The connector registry is configuration metadata, not an active integration engine and never stores secrets.
-- A free Render service is for demonstrations, not a production HRIS: it can sleep, restart, and has no persistent local disk.
+- Government filing/payment and tax/legal advice are not automatically provided by the application.
+- Carrier transmission, SSO, background checks, signatures, email/SMS and other provider-dependent capabilities require verified external integrations.
+- Connector registry data is metadata and must never be treated as a credential vault.
+- A free Render service is demonstration infrastructure, not a production HRIS hosting tier.
+- `seed_demo` is for disposable demo/staging data and must not be used on production HR data.
