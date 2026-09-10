@@ -1,6 +1,6 @@
 # BizFlow HRIS
 
-BizFlow is a Django HRIS covering employee records, attendance, timekeeping, leave, payroll, scheduling, onboarding, talent, HR operations, and employee self-service.
+BizFlow is a Django HRIS covering employee records, attendance, timekeeping, leave, payroll, scheduling, onboarding, talent, HR operations, employee self-service, and Philippine SaaS billing.
 
 ## Documentation
 
@@ -8,6 +8,8 @@ BizFlow is a Django HRIS covering employee records, attendance, timekeeping, lea
 - [Roles and access](docs/ROLES_AND_ACCESS.md)
 - [Module workflows](docs/WORKFLOWS.md)
 - [Operations, security, backup, and release](docs/OPERATIONS.md)
+- [Production launch runbook](docs/production-launch.md)
+- [Master project checklist](docs/master-checklist.md)
 - [Architecture, route map, data setup order, and troubleshooting](docs/ARCHITECTURE_AND_API.md)
 
 ## Modules
@@ -18,6 +20,12 @@ BizFlow is a Django HRIS covering employee records, attendance, timekeeping, lea
 - Leave balances/requests/approvals, payroll records, and printable payslips
 - Recruiting, onboarding, performance, benefits, compensation, and offboarding
 - HR Operations: announcements, policies/documents, acknowledgements, approvals, profile changes, projects/timesheets, and optional external connectors
+- SaaS subscriptions, PayMongo billing checkout, invoices, and verified webhooks
+
+## Production health
+
+- `/health/` — process availability check
+- `/ready/` — database readiness check; returns HTTP 503 when the database is unavailable
 
 ## Local setup
 
@@ -85,44 +93,23 @@ Then run `python manage.py migrate` and `python manage.py seed_demo`.
 ## Supabase PostgreSQL
 
 1. Create a Supabase project, select **Connect**, and copy its connection details.
-2. A persistent Django server should use a Direct connection when IPv6 is available, or the **Supavisor Session Pooler** on IPv4-only hosting. Use the exact host, username, and port provided in the dashboard. [Supabase connection guide](https://supabase.com/docs/guides/database/connecting-to-postgres)
-3. Set:
+2. A persistent Django server should use a Direct connection when IPv6 is available, or the **Supavisor Session Pooler** on IPv4-only hosting. Use the exact host, username, and port provided in the dashboard.
+3. Set the PostgreSQL environment variables from the Supabase dashboard and `POSTGRES_SSLMODE=require`.
+4. Run migrations and seed data for a demo environment. Never commit database credentials or expose them in browser code.
 
-```dotenv
-DB_ENGINE=postgresql
-POSTGRES_DB=postgres
-POSTGRES_USER=postgres.PROJECT_REF
-POSTGRES_PASSWORD=YOUR_SUPABASE_DATABASE_PASSWORD
-POSTGRES_HOST=aws-REGION.pooler.supabase.com
-POSTGRES_PORT=5432
-POSTGRES_SSLMODE=require
-```
+## Deployment
 
-4. Run migrations and seed data. Never commit database credentials or expose them in browser code or connector records.
+The included `render.yaml` runs migrations and static collection during deployment, uses PostgreSQL, and checks `/ready/` for database readiness. Production configuration must set a real `DJANGO_SECRET_KEY`, allowed hosts, and CSRF trusted origins.
 
-## Free deployment with Render + Supabase
-
-The included `render.yaml` configures a Django web service. Push this repository to GitHub, create a Render Blueprint/Web Service, and set:
-
-```text
-Build: pip install -r requirements.txt && python manage.py collectstatic --noinput
-Start: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
-```
-
-Add `DJANGO_DEBUG=False`, a generated `DJANGO_SECRET_KEY`, `DJANGO_ALLOWED_HOSTS=YOUR-SERVICE.onrender.com`, and the Supabase PostgreSQL variables above in Render’s environment settings. After deployment run:
-
-```text
-python manage.py migrate && python manage.py seed_demo
-```
-
-Render provides a free `*.onrender.com` URL. Free web services sleep after idle time and have an ephemeral filesystem, so use Supabase/PostgreSQL—not SQLite—for data. [Render free-tier details](https://render.com/docs/free)
-
-For a branded domain, buy/register one, add it in Render Custom Domains, configure the requested DNS record, and add it to `DJANGO_ALLOWED_HOSTS`. Render provisions HTTPS automatically. [Render custom-domain guide](https://render.com/docs/custom-domains)
+For the complete deployment, PayMongo, backup, monitoring, recovery, and first-customer procedure, follow [docs/production-launch.md](docs/production-launch.md).
 
 ## Production checklist
 
-- Set `DJANGO_DEBUG=False`, an unguessable secret key, exact allowed hosts, and strong administrator passwords.
-- Run migrations before deployment and back up PostgreSQL.
+- Set `DJANGO_DEBUG=False`, a unique secret key, exact allowed hosts, and CSRF trusted origins.
+- Use PostgreSQL and enable automated backups with a tested restore procedure.
 - Remove demo users/data before processing real employee data.
-- Keep payroll, benefits, e-signature, messaging, and other provider secrets in host-managed environment variables—not in this repository.
+- Configure PayMongo live credentials, recurring plans, and the production webhook signing secret.
+- Configure email delivery and monitoring/alerts.
+- Keep payroll, billing, benefits, messaging, and other provider secrets in host-managed environment variables—not in this repository.
+- Complete the first-customer acceptance test before accepting real production data.
 - Obtain appropriate legal, privacy, and payroll review before production use.
