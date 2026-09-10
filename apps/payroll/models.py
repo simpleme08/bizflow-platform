@@ -130,6 +130,10 @@ class PayrollPeriod(BaseModel):
         super().clean()
         if self.end_date < self.start_date:
             raise ValidationError('Payroll period end date cannot be before its start date.')
+        if self.organization_id:
+            overlap = type(self).objects.filter(organization_id=self.organization_id, start_date__lte=self.end_date, end_date__gte=self.start_date).exclude(pk=self.pk)
+            if overlap.exists():
+                raise ValidationError('Payroll period overlaps an existing period for this organization.')
 
     def __str__(self):
         return self.name
@@ -179,7 +183,7 @@ class PayrollRecord(BaseModel):
             raise ValidationError('Payroll net pay cannot be negative.')
 
     def save(self, *args, **kwargs):
-        if self.pk:
+        if self.pk and not self._state.adding:
             previous = type(self).objects.get(pk=self.pk)
             if previous.status in (self.Status.APPROVED, self.Status.PAID):
                 changed_fields = []
