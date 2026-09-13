@@ -44,3 +44,7 @@ class CurrentMembershipTests(TestCase):
 
     def test_invalid_selection_does_not_fall_back_to_another_tenant(self):
         self.assertIsNone(current_membership(self._request(selected='00000000-0000-0000-0000-000000000000')))
+
+    def test_selected_session_takes_precedence_over_header(self):
+        membership = current_membership(self._request(selected=self.org_a.id, header=self.org_b.id))
+        self.assertEqual(membership.organization_id, self.org_a.id)
