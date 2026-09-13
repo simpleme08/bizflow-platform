@@ -5,6 +5,7 @@ from django.contrib.auth import views as auth_views
 from django.urls import path
 
 from apps.attendance.views import attendance_page, clock_action, clock_login, clock_page, dashboard, dashboard_page, import_timekeeping, record_attendance, timekeeping_template
+from apps.attendance.private_media_views import attendance_proof
 from apps.employees.views import employee_directory, employee_directory_page, employee_lifecycle_api, employee_profile_api
 from apps.organization.views import current_user
 from apps.organization.subscription_views import subscription_api
@@ -25,7 +26,7 @@ from apps.core.client_views import client_site
 from apps.scheduling.views import scheduling_page, get_shifts, get_clients, get_assignable_employees, get_employee_schedule, assign_shift, delete_assignment
 from apps.onboarding.views import onboarding_page, onboarding_api, onboarding_task_update
 from apps.talent.views import benefits_api, offboarding_api, performance_api, recruiting_api, talent_page
-from apps.operations.views import approval_decision, employee_hub_api, employee_hub_page, operations_api, operations_page, profile_request_decision, timesheet_decision
+from apps.operations.views import approval_decision, employee_hub_api, operations_api, operations_page, employee_hub_page, profile_request_decision, timesheet_decision
 
 urlpatterns = [
     path('health/', health, name='health'), path('ready/', readiness, name='readiness'),
@@ -33,7 +34,7 @@ urlpatterns = [
     path('employees/', employee_directory_page, name='employees-page'), path('attendance/', attendance_page, name='attendance-page'), path('clock/', clock_page, name='clock-page'),
     path('clock/login/', clock_login, name='clock-login'), path('clock/action/', clock_action, name='clock-action'), path('login/', login_page, name='login'), path('employee-login/', employee_login, name='employee-login'), path('logout/', auth_views.LogoutView.as_view(), name='logout'),
     path('scheduling/', scheduling_page, name='scheduling-page'), path('api/dashboard/', dashboard, name='dashboard'), path('api/employees/', employee_directory, name='employee-directory'), path('api/employees/<uuid:employee_id>/', employee_profile_api, name='employee-profile-api'), path('api/employees/<uuid:employee_id>/lifecycle/', employee_lifecycle_api, name='employee-lifecycle-api'), path('api/attendance/', record_attendance, name='record-attendance'),
-    path('api/attendance/import/', import_timekeeping, name='import-timekeeping'), path('api/attendance/template/', timekeeping_template, name='timekeeping-template'), path('api/me/', current_user, name='current-user'), path('api/subscription/', subscription_api, name='subscription-api'),
+    path('api/attendance/import/', import_timekeeping, name='import-timekeeping'), path('api/attendance/template/', timekeeping_template, name='timekeeping-template'), path('api/attendance/<uuid:record_id>/proof/<str:proof_type>/', attendance_proof, name='attendance-proof'), path('api/me/', current_user, name='current-user'), path('api/subscription/', subscription_api, name='subscription-api'),
     path('api/billing/checkout/', billing_checkout, name='billing-checkout'), path('api/billing/change-plan/', billing_change_plan, name='billing-change-plan'), path('api/billing/cancel/', billing_cancel, name='billing-cancel'), path('api/billing/invoices/', billing_invoices, name='billing-invoices'), path('api/billing/webhook/paymongo/', paymongo_webhook, name='paymongo-webhook'),
     path('leave/', leave_page, name='leave-page'), path('api/leave/', leave_api, name='leave-api'), path('api/leave/me/', my_leave_api, name='my-leave-api'), path('api/leave/<uuid:application_id>/decision/', leave_decision, name='leave-decision'),
     path('payroll/', payroll_page, name='payroll-page'), path('api/payroll/', payroll_api, name='payroll-api'), path('api/payroll/me/', my_payroll_api, name='my-payroll-api'), path('api/payroll/summary/', payroll_summary_api, name='payroll-summary-api'), path('api/payroll/preflight/', payroll_preflight, name='payroll-preflight'),
