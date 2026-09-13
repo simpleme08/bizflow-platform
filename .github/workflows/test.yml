@@ -9,6 +9,20 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: bizflow
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d bizflow"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -22,12 +36,24 @@ jobs:
           DJANGO_ENV: development
           DJANGO_SECRET_KEY: ci-test-secret
           DJANGO_DEBUG: '1'
+          DB_ENGINE: postgresql
+          POSTGRES_DB: bizflow
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-password
+          POSTGRES_HOST: localhost
+          POSTGRES_SSLMODE: disable
         run: python manage.py migrate --noinput
       - name: Run tests
         env:
           DJANGO_ENV: development
           DJANGO_SECRET_KEY: ci-test-secret
           DJANGO_DEBUG: '1'
+          DB_ENGINE: postgresql
+          POSTGRES_DB: bizflow
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-password
+          POSTGRES_HOST: localhost
+          POSTGRES_SSLMODE: disable
         run: python manage.py test
       - name: Run production deployment checks
         env:
