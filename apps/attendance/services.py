@@ -8,25 +8,17 @@ from .models import AttendanceRecord
 class AttendanceCalculator:
     @staticmethod
     def calculate(record):
-        if not record.assignment_id or not record.assignment.shift_template_id:
+        shift = record.effective_shift
+        if not shift or not record.time_in or not record.time_out:
             return {'late_minutes': 0, 'undertime_minutes': 0, 'overtime_minutes': 0}
-        if not record.time_in or not record.time_out:
-            return {'late_minutes': 0, 'undertime_minutes': 0, 'overtime_minutes': 0}
-
-        shift = record.assignment.shift_template
         scheduled_start = timezone.make_aware(datetime.combine(record.attendance_date, shift.start_time))
         scheduled_end = timezone.make_aware(datetime.combine(record.attendance_date, shift.end_time))
         if shift.end_time <= shift.start_time:
             scheduled_end += timedelta(days=1)
-
         late = max(0, int((record.time_in - scheduled_start).total_seconds() // 60))
         undertime = max(0, int((scheduled_end - record.time_out).total_seconds() // 60))
         overtime = max(0, int((record.time_out - scheduled_end).total_seconds() // 60))
-        return {
-            'late_minutes': late,
-            'undertime_minutes': undertime,
-            'overtime_minutes': overtime,
-        }
+        return {'late_minutes': late, 'undertime_minutes': undertime, 'overtime_minutes': overtime}
 
     @classmethod
     def update_record(cls, record):
