@@ -1,6 +1,7 @@
 import mimetypes
 
 from django.http import FileResponse, JsonResponse
+from django.utils import timezone
 from django.views.decorators.http import require_GET
 
 from apps.organization.models import OrganizationMembership
@@ -31,7 +32,7 @@ def employee_document_file(request, document_id):
     if document is None:
         return JsonResponse({'detail': 'Document was not found in your organization.'}, status=404)
 
-    if document.expires_on and document.expires_on < __import__('django.utils.timezone', fromlist=['localdate']).localdate():
+    if document.expires_on and document.expires_on < timezone.localdate():
         return JsonResponse({'detail': 'This document is no longer available.'}, status=404)
 
     if not document.file:
