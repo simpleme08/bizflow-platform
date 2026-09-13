@@ -2,7 +2,7 @@ import json
 from datetime import date
 from decimal import Decimal, InvalidOperation
 
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
@@ -66,7 +66,7 @@ def employee_hub_api(request):
         docs = EmployeeDocument.objects.filter(organization=membership.organization, status=EmployeeDocument.Status.PUBLISHED).filter(Q(expires_on__isnull=True) | Q(expires_on__gte=today)).order_by('title')
         acknowledged = set(DocumentAcknowledgement.objects.filter(employee=employee, document__in=docs).values_list('document_id', flat=True))
         announcements = Announcement.objects.filter(organization=membership.organization, is_published=True).filter(Q(expires_on__isnull=True) | Q(expires_on__gte=today)).order_by('-published_at')
-        return JsonResponse({'documents': [{'id': str(d.id), 'title': d.title, 'category': d.category, 'body': d.body, 'requires_acknowledgement': d.requires_acknowledgement, 'acknowledged': d.id in acknowledged, 'file_url': reverse('employee-document-file', kwargs={'document_id': d.id}) if d.file else None} for d in docs], 'announcements': [{'id': str(a.id), 'title': a.title, 'message': a.message, 'published_at': a.published_at.isoformat() if a.published_at else None} for a in announcements], 'profile': {'first_name': employee.first_name, 'last_name': employee.last_name, 'email': request.user.email}, 'profile_requests': [{'id': str(r.id), 'changes': r.requested_changes, 'status': r.status, 'remarks': r.remarks, 'created_at': r.created_at.isoformat()} for r in employee.profile_change_requests.order_by('-created_at')[:20]], 'projects': [{'id': str(p.id), 'code': p.code, 'name': p.name} for p in Project.objects.filter(organization=membership.organization, is_active=True).order_by('code')], 'timesheets': [{'id': str(t.id), 'project': t.project.name, 'date': t.work_date.isoformat(), 'hours': str(t.hours), 'notes': t.notes, 'status': t.status} for t in employee.timesheet_entries.select_related('project').order_by('-work_date')[:30]]})
+        return JsonResponse({'documents': [{'id': str(d.id), 'title': d.title, 'category': d.category, 'body': d.body, 'requires_acknowledgement': d.requires_acknowledgement, 'acknowledged': d.id in acknowledged, 'file_url': reverse('employee-document-file', kwargs={'document_id': d.id}) if d.file else None} for d in docs], 'announcements': [{'id': str(a.id), 'title': a.title, 'message': a.message, 'published_at': a.published_at.isoformat() if a.published_at else None} for a in announcements], 'profile': {'first_name': employee.first_name, 'last_name': employee.last_name, 'email': request.user.email}, 'profile_requests': [{'id': str(r.id), 'changes': r.requested_changes, 'status': r.status, 'remarks': r.remarks, 'created_at': r.created_at.isoformat()} for r in employee.profile_change_requests.order_by('-created_at')[:20]], 'projects': [{'id': str(p.id), 'code': str(p.code), 'name': p.name} for p in Project.objects.filter(organization=membership.organization, is_active=True).order_by('code')], 'timesheets': [{'id': str(t.id), 'project': t.project.name, 'date': t.work_date.isoformat(), 'hours': str(t.hours), 'notes': t.notes, 'status': t.status} for t in employee.timesheet_entries.select_related('project').order_by('-work_date')[:30]]})
     try:
         payload = _json(request)
         kind = payload['kind']
@@ -169,25 +169,26 @@ def profile_request_decision(request, request_id):
     if error:
         return error
     try:
-        item = ProfileChangeRequest.objects.select_related('employee__user').get(id=request_id, employee__organization=membership.organization, status=ProfileChangeRequest.Status.PENDING)
-        payload = _json(request)
-        decision = payload['decision']
-        if decision not in ('approve', 'reject'):
-            raise ValueError
-        item.status = ProfileChangeRequest.Status.APPROVED if decision == 'approve' else ProfileChangeRequest.Status.REJECTED
-        item.reviewer = request.user
-        item.remarks = str(payload.get('note', '')).strip()
-        if decision == 'approve':
-            changes = item.requested_changes
-            for field in ('first_name', 'last_name'):
-                if field in changes:
-                    setattr(item.employee, field, str(changes[field]).strip())
-                    setattr(item.employee.user, field, str(changes[field]).strip())
-            if 'email' in changes:
-                item.employee.user.email = str(changes['email']).strip()
-            item.employee.save()
-            item.employee.user.save()
-        item.save()
+        with transaction.atomic():
+            item = ProfileChangeRequest.objects.select_for_update().select_related('employee__user').get(id=request_id, employee__organization=membership.organization, status=ProfileChangeRequest.Status.PENDING)
+            payload = _json(request)
+            decision = payload['decision']
+            if decision not in ('approve', 'reject'):
+                raise ValueError
+            item.status = ProfileChangeRequest.Status.APPROVED if decision == 'approve' else ProfileChangeRequest.Status.REJECTED
+            item.reviewer = request.user
+            item.remarks = str(payload.get('note', '')).strip()
+            if decision == 'approve':
+                changes = item.requested_changes
+                for field in ('first_name', 'last_name'):
+                    if field in changes:
+                        setattr(item.employee, field, str(changes[field]).strip())
+                        setattr(item.employee.user, field, str(changes[field]).strip())
+                if 'email' in changes:
+                    item.employee.user.email = str(changes['email']).strip()
+                item.employee.save()
+                item.employee.user.save()
+            item.save()
     except (ProfileChangeRequest.DoesNotExist, KeyError, ValueError, json.JSONDecodeError):
         return JsonResponse({'detail': 'A valid pending profile request and decision are required.'}, status=400)
     record_audit(organization=membership.organization, actor=request.user, action=f'profile_change.{decision}d', entity=item)
