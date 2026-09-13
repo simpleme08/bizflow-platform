@@ -24,7 +24,7 @@ def ess_page(request):
     if not request.user.is_authenticated:
         return redirect('login')
     from apps.accounts.views import workspace_url_for_user
-    return render(request, 'ess/ess.html', {'workspace_url': workspace_url_for_user(request.user)})
+    return render(request, 'ess/ess.html', {'workspace_url': workspace_url_for_user(request)})
 
 
 def ess_api(request):
