@@ -59,7 +59,7 @@ class FlexibleClockingTests(TestCase):
             'photo': image_upload(),
         })
         self.assertEqual(response.status_code, 400)
-        self.assertIn('valid shift', response.json()['detail'])
+        self.assertIn('select the shift', response.json()['detail'].lower())
 
 
 class SchedulingSecurityTests(TestCase):
