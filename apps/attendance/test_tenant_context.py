@@ -24,8 +24,10 @@ class AttendanceTenantContextTests(TestCase):
             role=OrganizationMembership.Role.MANAGER,
             is_active=True,
         )
+        employee_user = User.objects.create_user(username='alpha-employee', password='test-password')
         self.employee = Employee.objects.create(
             employee_number='EMP-ALPHA-001',
+            user=employee_user,
             organization=self.org_a,
             first_name='Alpha',
             last_name='Employee',
@@ -34,7 +36,7 @@ class AttendanceTenantContextTests(TestCase):
         self.client.login(username='multi-manager', password='test-password')
 
     def test_dashboard_fails_closed_without_selected_organization(self):
-        response = self.client.get(reverse('dashboard-api'))
+        response = self.client.get(reverse('dashboard'))
         self.assertEqual(response.status_code, 403)
         self.assertIn('Select an organization', response.json()['detail'])
 
