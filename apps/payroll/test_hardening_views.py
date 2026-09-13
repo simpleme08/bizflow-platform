@@ -63,6 +63,7 @@ class PayrollAuthoritySeparationTests(TestCase):
         self.assertEqual(self.period.status, PayrollPeriod.Status.PAID)
 
     def test_cross_tenant_record_cannot_be_approved(self):
+        User = get_user_model()
         foreign_employee_user = User.objects.create_user(username='foreign-employee', password='password')
         foreign_employee = Employee.objects.create(
             employee_number='FOREIGN-001', user=foreign_employee_user, organization=self.other_organization,
@@ -83,6 +84,7 @@ class PayrollAuthoritySeparationTests(TestCase):
         self.assertEqual(foreign_record.status, PayrollRecord.Status.DRAFT)
 
     def test_cross_tenant_record_cannot_be_paid(self):
+        User = get_user_model()
         foreign_employee_user = User.objects.create_user(username='foreign-paid-employee', password='password')
         foreign_employee = Employee.objects.create(
             employee_number='FOREIGN-002', user=foreign_employee_user, organization=self.other_organization,
