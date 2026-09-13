@@ -27,7 +27,7 @@ def payroll_page(request):
     if not request.user.is_authenticated:
         return redirect('login')
     from apps.accounts.views import workspace_url_for_user
-    return render(request, 'payroll/payroll.html', {'workspace_url': workspace_url_for_user(request.user)})
+    return render(request, 'payroll/payroll.html', {'workspace_url': workspace_url_for_user(request)})
 
 
 def payroll_api(request):
@@ -47,11 +47,16 @@ def payroll_api(request):
 def my_payroll_api(request):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
+    membership = _membership(request, 'view_payroll')
+    if membership is None:
+        return JsonResponse({'detail': 'No active organization membership found.'}, status=403)
     try:
         employee = request.user.employee_profile
     except AttributeError:
         return JsonResponse({'detail': 'No employee profile is linked to this account.'}, status=404)
-    records = employee.payroll_records.select_related('payroll_period').filter(status__in=(PayrollRecord.Status.APPROVED, PayrollRecord.Status.PAID), payroll_period__organization=employee.organization).order_by('-payroll_period__end_date', '-created_at')
+    if employee.organization_id != membership.organization_id or not employee.organization.is_active:
+        return JsonResponse({'detail': 'Employee organization access is not available.'}, status=403)
+    records = employee.payroll_records.select_related('payroll_period').filter(status__in=(PayrollRecord.Status.APPROVED, PayrollRecord.Status.PAID), payroll_period__organization=membership.organization, employee__organization=membership.organization).order_by('-payroll_period__end_date', '-created_at')
     return JsonResponse({'records': [{
         'id': str(record.id), 'period': record.payroll_period.name, 'period_start': record.payroll_period.start_date.isoformat(), 'period_end': record.payroll_period.end_date.isoformat(),
         'basic_pay': str(record.basic_pay), 'overtime_pay': str(record.overtime_pay), 'gross_pay': str(record.gross_pay), 'total_deductions': str(record.total_deductions), 'net_pay': str(record.net_pay), 'status': record.status,
@@ -142,9 +147,12 @@ def apply_payroll_adjustments(request, record_id):
 def payslip(request, record_id):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
+    membership = _membership(request, 'view_payroll')
+    if membership is None:
+        return JsonResponse({'detail': 'No active organization membership found.'}, status=403)
     try:
         employee = request.user.employee_profile
-        record = PayrollRecord.objects.select_related('employee', 'payroll_period').get(id=record_id, employee=employee, payroll_period__organization=employee.organization, status__in=(PayrollRecord.Status.APPROVED, PayrollRecord.Status.PAID))
+        record = PayrollRecord.objects.select_related('employee', 'payroll_period').get(id=record_id, employee=employee, employee__organization=membership.organization, payroll_period__organization=membership.organization, status__in=(PayrollRecord.Status.APPROVED, PayrollRecord.Status.PAID))
     except (AttributeError, PayrollRecord.DoesNotExist):
         return JsonResponse({'detail': 'Approved payslip was not found.'}, status=404)
     response = HttpResponse(content_type='application/pdf')
@@ -166,5 +174,5 @@ def payslip(request, record_id):
         pdf.drawRightString(420, 660 - index * 22, f'PHP {amount:,.2f}')
     pdf.drawString(72, 230, f'Generated: {timezone.localtime().strftime("%B %d, %Y %I:%M %p")} PHT')
     pdf.save()
-    record_audit(organization=employee.organization, actor=request.user, action='payslip.generated', entity=record)
+    record_audit(organization=membership.organization, actor=request.user, action='payslip.generated', entity=record)
     return response
