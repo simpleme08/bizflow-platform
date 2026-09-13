@@ -2,7 +2,7 @@ name: Django tests
 
 on:
   push:
-    branches: [main, 'fix/**', 'feat/**', 'hardening/**']
+    branches: [main, 'fix/**', 'feat/**', 'hardening/**', 'release/**']
   pull_request:
     branches: [main]
 
@@ -34,6 +34,12 @@ jobs:
           DJANGO_ENV: production
           DJANGO_SECRET_KEY: ci-production-check-secret
           DJANGO_DEBUG: '0'
-          DJANGO_ALLOWED_HOSTS: localhost
-          DJANGO_CSRF_TRUSTED_ORIGINS: https://localhost
+          DJANGO_ALLOWED_HOSTS: app.example.com
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://app.example.com
+          DB_ENGINE: postgresql
+          POSTGRES_DB: bizflow
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-password
+          POSTGRES_HOST: localhost
+          POSTGRES_SSLMODE: disable
         run: python manage.py check --deploy
