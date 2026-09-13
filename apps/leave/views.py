@@ -39,17 +39,22 @@ def leave_page(request):
     if not request.user.is_authenticated:
         return redirect('login')
     from apps.accounts.views import workspace_url_for_user
-    return render(request, 'leave/leave.html', {'workspace_url': workspace_url_for_user(request.user)})
+    return render(request, 'leave/leave.html', {'workspace_url': workspace_url_for_user(request)})
 
 
 @require_http_methods(['GET', 'POST'])
 def my_leave_api(request):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
+    membership = _membership(request)
+    if membership is None:
+        return JsonResponse({'detail': 'No active organization membership found.'}, status=403)
     try:
         employee = request.user.employee_profile
     except (AttributeError, Employee.DoesNotExist):
         return JsonResponse({'detail': 'No employee profile is linked to this account.'}, status=404)
+    if employee.organization_id != membership.organization_id or not employee.organization.is_active:
+        return JsonResponse({'detail': 'Employee organization access is not available.'}, status=403)
     current_year = timezone.localdate().year
     if request.method == 'GET':
         balances = {balance.leave_type_id: balance for balance in employee.leave_balances.filter(year=current_year).select_related('leave_type')}
@@ -94,6 +99,8 @@ def leave_api(request):
     try:
         payload = json.loads(request.body)
         employee = request.user.employee_profile
+        if employee.organization_id != membership.organization_id or not employee.organization.is_active:
+            return JsonResponse({'detail': 'Employee organization access is not available.'}, status=403)
         if not _eligible(employee):
             return JsonResponse({'detail': 'Your current employment status is not eligible for new leave requests.'}, status=409)
         leave_type = LeaveType.objects.get(id=payload['leave_type_id'], is_active=True)
