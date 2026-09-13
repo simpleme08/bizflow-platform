@@ -12,16 +12,12 @@ from django.views.decorators.csrf import csrf_exempt
 from apps.core.models import AuditEvent
 from apps.organization.billing import get_plan
 from apps.organization.billing_models import BillingInvoice, BillingSubscription, BillingWebhookEvent
-from apps.organization.models import OrganizationMembership
+from apps.organization.context import current_membership
 from apps.organization.paymongo import PayMongoClient, PayMongoError
 
 
 def _membership(request):
-    if not request.user.is_authenticated:
-        return None
-    return OrganizationMembership.objects.filter(
-        user=request.user, is_active=True, organization__is_active=True,
-    ).select_related('organization').first()
+    return current_membership(request)
 
 
 def _authorized(request, permission='manage_organization'):
