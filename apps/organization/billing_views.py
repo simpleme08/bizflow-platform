@@ -264,7 +264,9 @@ def paymongo_webhook(request):
             provider_event_id=event_id,
             defaults={'event_type': event_type, 'livemode': bool(attrs.get('livemode')), 'payload': payload},
         )
-        if not created and webhook.processed_at:
+        if not created:
+            webhook = BillingWebhookEvent.objects.select_for_update().get(pk=webhook.pk)
+        if webhook.processed_at:
             return JsonResponse({'received': True, 'duplicate': True})
 
         resource = attrs.get('data') or {}
