@@ -31,7 +31,7 @@ class FlexibleClockingTests(TestCase):
         return SimpleUploadedFile(name, buffer.getvalue(), content_type='image/jpeg')
 
     def test_employee_can_clock_in_without_preassigned_shift(self):
-        response = self.client.post('/clock/action/', {'action': 'CLOCK_IN', 'photo': self.photo()})
+        response = self.client.post('/clock/action/', {'action': 'CLOCK_IN', 'clock_in_mode': 'COVER', 'photo': self.photo()})
         self.assertEqual(response.status_code, 200)
         record = AttendanceRecord.objects.get(employee=self.employee, attendance_date=timezone.localdate())
         self.assertIsNone(record.assignment_id)
@@ -39,7 +39,7 @@ class FlexibleClockingTests(TestCase):
         self.assertIn('schedule reconciliation', record.remarks.lower())
 
     def test_unassigned_clock_in_can_clock_out(self):
-        self.client.post('/clock/action/', {'action': 'CLOCK_IN', 'photo': self.photo()})
+        self.client.post('/clock/action/', {'action': 'CLOCK_IN', 'clock_in_mode': 'COVER', 'photo': self.photo()})
         response = self.client.post('/clock/action/', {'action': 'CLOCK_OUT', 'photo': self.photo('out.jpg')})
         self.assertEqual(response.status_code, 200)
         record = AttendanceRecord.objects.get(employee=self.employee, attendance_date=timezone.localdate())
@@ -47,14 +47,7 @@ class FlexibleClockingTests(TestCase):
         self.assertTrue(record.clock_out_photo)
 
     def test_cover_punch_can_use_clock_shift_for_metrics(self):
-        record = AttendanceRecord(
-            employee=self.employee,
-            clock_shift=self.shift,
-            clock_in_mode=AttendanceRecord.ClockInMode.COVER,
-            attendance_date=date(2026, 8, 10),
-            time_in=timezone.make_aware(datetime(2026, 8, 10, 22, 10)),
-            time_out=timezone.make_aware(datetime(2026, 8, 11, 7, 30)),
-        )
+        record = AttendanceRecord(employee=self.employee, clock_shift=self.shift, clock_in_mode=AttendanceRecord.ClockInMode.COVER, attendance_date=date(2026, 8, 10), time_in=timezone.make_aware(datetime(2026, 8, 10, 22, 10)), time_out=timezone.make_aware(datetime(2026, 8, 11, 7, 30)))
         record.full_clean()
         metrics = AttendanceCalculator.calculate(record)
         self.assertEqual(metrics['late_minutes'], 10)
@@ -62,8 +55,7 @@ class FlexibleClockingTests(TestCase):
 
     def test_scheduled_mode_still_requires_assignment(self):
         record = AttendanceRecord(employee=self.employee, attendance_date=date(2026, 8, 10), clock_in_mode=AttendanceRecord.ClockInMode.SCHEDULED)
-        with self.assertRaises(ValidationError):
-            record.full_clean()
+        with self.assertRaises(ValidationError): record.full_clean()
 
     def test_clock_state_allows_punch_without_assignment(self):
         response = self.client.get('/clock/action/')
