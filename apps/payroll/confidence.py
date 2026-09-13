@@ -3,18 +3,11 @@ from django.db.models import Q
 from apps.attendance.models import AttendanceRecord
 from apps.employees.models import Employee
 
-from .models import EmployeeSalary, PayrollProfile, PayrollWageRate, PayrollRecord
-from .services import PayrollCalculator
+from .models import PayrollWageRate
 
 
 class PayrollConfidenceEngine:
-    """Operational safety gate around the payroll calculator.
-
-    READY means the period can move forward without known data exceptions.
-    REVIEW means payroll can be calculated, but a human must reconcile flagged
-    attendance or classification exceptions before approval.
-    BLOCKED means calculation should not proceed.
-    """
+    """Operational safety gate for payroll source data and reconciliation."""
 
     READY = 'READY'
     REVIEW = 'REVIEW'
@@ -22,21 +15,15 @@ class PayrollConfidenceEngine:
 
     @classmethod
     def preflight(cls, period, organization):
-        employees = Employee.objects.filter(
-            organization=organization,
-            is_active=True,
-        ).select_related('payroll_profile', 'salary')
+        employees = Employee.objects.filter(organization=organization, is_active=True).select_related('payroll_profile', 'salary')
         errors = []
         warnings = []
-        checks = []
 
         if period.organization_id != organization.id:
             return {'ok': False, 'status': cls.BLOCKED, 'checks': [], 'errors': ['Payroll period belongs to another organization.'], 'warnings': []}
 
         for employee in employees:
-            salary = employee.salary_history.filter(effective_date__lte=period.end_date).order_by('-effective_date').first()
-            if salary is None:
-                salary = getattr(employee, 'salary', None)
+            salary = employee.salary_history.filter(effective_date__lte=period.end_date).order_by('-effective_date').first() or getattr(employee, 'salary', None)
             if salary is None:
                 errors.append(f'{employee.employee_number}: salary is missing.')
                 continue
@@ -59,10 +46,7 @@ class PayrollConfidenceEngine:
                     if wage_rate is None:
                         errors.append(f'{employee.employee_number}: no effective wage rate exists for {profile.wage_region}/{profile.wage_category}.')
 
-            attendance = AttendanceRecord.objects.filter(
-                employee=employee,
-                attendance_date__range=(period.start_date, period.end_date),
-            )
+            attendance = AttendanceRecord.objects.filter(employee=employee, attendance_date__range=(period.start_date, period.end_date))
             for record in attendance:
                 if record.time_in and not record.time_out:
                     errors.append(f'{employee.employee_number} {record.attendance_date}: open attendance punch must be resolved.')
@@ -71,17 +55,11 @@ class PayrollConfidenceEngine:
                 if record.status == AttendanceRecord.Status.ABSENT:
                     warnings.append(f'{employee.employee_number} {record.attendance_date}: ABSENT record requires payroll treatment review; it is not automatically unpaid.')
 
-            try:
-                result = PayrollCalculator.calculate(employee, period)
-                if result['net_pay'] < 0:
-                    errors.append(f'{employee.employee_number}: calculated net pay is negative.')
-            except ValueError as exc:
-                errors.append(f'{employee.employee_number}: {exc}')
-
-        checks.append({'name': 'Employee salary', 'status': 'PASS' if not any('salary is missing' in x for x in errors) else 'FAIL'})
-        checks.append({'name': 'Payroll profile / statutory classification', 'status': 'REVIEW' if any('payroll profile' in x for x in warnings) else 'PASS'})
-        checks.append({'name': 'Attendance reconciliation', 'status': 'REVIEW' if any('attendance' in x.lower() or 'punch' in x.lower() for x in warnings + errors) else 'PASS'})
-        checks.append({'name': 'Calculation safety', 'status': 'FAIL' if any('calculated' in x or 'net pay' in x for x in errors) else 'PASS'})
-
+        checks = [
+            {'name': 'Employee salary', 'status': 'PASS' if not any('salary is missing' in x for x in errors) else 'FAIL'},
+            {'name': 'Payroll profile / statutory classification', 'status': 'REVIEW' if any('payroll profile' in x for x in warnings) else 'PASS'},
+            {'name': 'Wage-rate coverage', 'status': 'FAIL' if any('wage rate' in x for x in errors) else 'PASS'},
+            {'name': 'Attendance reconciliation', 'status': 'REVIEW' if any('attendance' in x.lower() or 'punch' in x.lower() for x in warnings + errors) else 'PASS'},
+        ]
         status = cls.BLOCKED if errors else (cls.REVIEW if warnings else cls.READY)
         return {'ok': status != cls.BLOCKED, 'status': status, 'checks': checks, 'errors': errors, 'warnings': warnings, 'employee_count': employees.count()}
