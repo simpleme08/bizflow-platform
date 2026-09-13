@@ -13,6 +13,7 @@ class PayrollAdjustmentApprovalHardeningTests(TestCase):
     def setUp(self):
         User = get_user_model()
         self.user = User.objects.create_user(username='hr-adjustment', password='test-password')
+        self.employee_user = User.objects.create_user(username='employee-adjustment', password='test-password')
         self.organization = Organization.objects.create(name='Adjustment Test Org', slug='adjustment-test-org')
         OrganizationMembership.objects.create(
             user=self.user,
@@ -22,6 +23,7 @@ class PayrollAdjustmentApprovalHardeningTests(TestCase):
         )
         self.employee = Employee.objects.create(
             organization=self.organization,
+            user=self.employee_user,
             employee_number='EMP-ADJ-001',
             first_name='Test',
             last_name='Employee',
@@ -49,7 +51,7 @@ class PayrollAdjustmentApprovalHardeningTests(TestCase):
 
     def test_adjustment_cannot_be_created_as_approved(self):
         response = self.client.post(
-            reverse('payroll_adjustment', kwargs={'record_id': self.record.id}),
+            reverse('create-payroll-adjustment', kwargs={'record_id': self.record.id}),
             {
                 'kind': PayrollAdjustment.Kind.EARNING,
                 'description': 'Manual earning',
