@@ -10,7 +10,8 @@ from apps.organization.views import current_user
 from apps.organization.subscription_views import subscription_api
 from apps.organization.billing_views import billing_cancel, billing_change_plan, billing_checkout, billing_invoices, paymongo_webhook
 from apps.leave.views import leave_api, leave_decision, leave_page, my_leave_api
-from apps.payroll.views import apply_payroll_adjustments, approve_payroll, create_payroll_adjustment, mark_payroll_paid, my_payroll_api, payroll_api, payroll_page, payroll_preflight, process_payroll
+from apps.payroll.views import apply_payroll_adjustments, create_payroll_adjustment, my_payroll_api, payroll_api, payroll_page
+from apps.payroll.hardening_views import approve_payroll, mark_payroll_paid, payroll_preflight, process_payroll
 from apps.payroll.payslip_views import payslip
 from apps.payroll.loan_views import loans_api, payroll_loan_preview
 from apps.payroll.final_pay_views import final_pay_api
