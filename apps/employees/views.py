@@ -9,13 +9,13 @@ from django.utils import timezone
 
 from apps.core.models import AuditEvent
 from apps.organization.billing_service import activation_allowed
-from apps.organization.models import OrganizationMembership
+from apps.organization.context import current_membership
 
 from .models import Employee, EmployeeDocument, EmploymentHistory
 
 
-def _membership_for(user):
-    return OrganizationMembership.objects.filter(user=user, is_active=True, organization__is_active=True).select_related('organization').first()
+def _membership_for(request):
+    return current_membership(request)
 
 
 def _employee_payload(employee, private=False):
@@ -49,7 +49,7 @@ def _parse_date(value, field):
 def employee_directory(request):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
-    membership = _membership_for(request.user)
+    membership = _membership_for(request)
     if membership is None or not membership.has_permission('view_employees'):
         return JsonResponse({'detail': 'No active organization membership found.'}, status=403)
     employees = Employee.objects.filter(organization=membership.organization, is_active=True).select_related('department', 'position', 'employment_type', 'manager').prefetch_related('assignments__shift_template', 'assignments__client', 'assignments__client_site')
@@ -65,14 +65,11 @@ def employee_profile_api(request, employee_id):
         return JsonResponse({'detail': 'Employee not found.'}, status=404)
 
     is_self = employee.user_id == request.user.id
-    membership = _membership_for(request.user)
+    membership = _membership_for(request)
     if is_self:
-        # Self-service access is allowed without an OrganizationMembership, but
-        # the employee must belong to an active organization.
         if not employee.organization.is_active:
             return JsonResponse({'detail': 'Employee organization is inactive.'}, status=403)
     else:
-        # Do not reveal whether an employee ID exists in another organization.
         if membership is None or membership.organization_id != employee.organization_id:
             return JsonResponse({'detail': 'Employee not found.'}, status=404)
         if not membership.has_permission('view_employees'):
@@ -85,7 +82,7 @@ def employee_profile_api(request, employee_id):
 def employee_lifecycle_api(request, employee_id):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
-    membership = _membership_for(request.user)
+    membership = _membership_for(request)
     if membership is None or not membership.has_permission('manage_employees'):
         return JsonResponse({'detail': 'Permission denied.'}, status=403)
     if request.method != 'POST':
