@@ -15,6 +15,7 @@ from PIL import Image, UnidentifiedImageError
 from apps.core.services import record_audit
 from apps.employees.models import Employee
 from apps.organization.models import OrganizationMembership
+from apps.workforce.models import ShiftTemplate
 
 from .models import AttendanceRecord
 from .services import AttendanceCalculator
@@ -107,22 +108,31 @@ def clock_action(request):
     except ValueError as error: return JsonResponse({'detail':str(error)},status=400)
     now=timezone.now(); attendance_date=timezone.localdate()
     if action=='CLOCK_IN':
-        if employee.attendance_records.filter(attendance_date=attendance_date,time_in__isnull=False,time_out__isnull=True).exists(): return JsonResponse({'detail':'You are already clocked in.'},status=409)
+        existing=employee.attendance_records.filter(attendance_date=attendance_date).first()
+        if existing is not None:
+            if existing.time_in and existing.time_out: return JsonResponse({'detail':'An attendance record already exists for today. Multiple shift segments are not enabled yet; ask HR to reconcile the record.'},status=409)
+            if existing.time_in and existing.time_out is None: return JsonResponse({'detail':'You are already clocked in.'},status=409)
         assignment=employee.assignments.filter(start_date__lte=attendance_date).filter(Q(end_date__isnull=True)|Q(end_date__gte=attendance_date)).order_by('-is_primary','-start_date').select_related('shift_template').first()
-        if assignment is None:
-            requested_mode=request.POST.get('clock_in_mode','').upper()
-            if requested_mode not in (AttendanceRecord.ClockInMode.COVER, AttendanceRecord.ClockInMode.UNSCHEDULED):
-                return JsonResponse({'detail':'No scheduled shift is assigned. Confirm this is a cover or unscheduled work shift and try again.'},status=400)
-            mode=requested_mode
-        else: mode=AttendanceRecord.ClockInMode.SCHEDULED
-        record,_=AttendanceRecord.objects.update_or_create(employee=employee,attendance_date=attendance_date,defaults={'assignment':assignment,'clock_shift':assignment.shift_template if assignment else None,'clock_in_mode':mode,'time_in':now,'time_out':None,'clock_in_photo':photo,'clock_out_photo':None,'status':AttendanceRecord.Status.PRESENT,'remarks':'' if assignment else 'Cover/unscheduled clock-in; schedule reconciliation required before payroll approval.'})
-        record_audit(organization=employee.organization,actor=request.user,action='attendance.clocked_in',entity=record,details={'photo_required':True,'clock_in_mode':mode})
+        requested_mode=request.POST.get('clock_in_mode','').upper()
+        clock_shift=None
+        if requested_mode==AttendanceRecord.ClockInMode.COVER:
+            try: clock_shift=ShiftTemplate.objects.get(id=request.POST.get('shift_id'))
+            except (ShiftTemplate.DoesNotExist, ValueError, TypeError): return JsonResponse({'detail':'Select a valid shift to cover.'},status=400)
+            mode=AttendanceRecord.ClockInMode.COVER
+        elif assignment is None:
+            if requested_mode != AttendanceRecord.ClockInMode.UNSCHEDULED: return JsonResponse({'detail':'No scheduled shift is assigned. Confirm this is a cover or unscheduled work shift and try again.'},status=400)
+            mode=AttendanceRecord.ClockInMode.UNSCHEDULED
+        else:
+            mode=AttendanceRecord.ClockInMode.SCHEDULED
+            clock_shift=assignment.shift_template
+        record=AttendanceRecord.objects.create(employee=employee,assignment=assignment,clock_shift=clock_shift,clock_in_mode=mode,attendance_date=attendance_date,time_in=now,clock_in_photo=photo,status=AttendanceRecord.Status.PRESENT,remarks='' if mode==AttendanceRecord.ClockInMode.SCHEDULED else ('Cover shift clock-in; permanent assignment preserved. Payroll reconciliation required.' if mode==AttendanceRecord.ClockInMode.COVER else 'Unscheduled clock-in; schedule reconciliation required before payroll approval.'))
+        record_audit(organization=employee.organization,actor=request.user,action='attendance.clocked_in',entity=record,details={'photo_required':True,'clock_in_mode':mode,'covered_shift_id':str(clock_shift.id) if clock_shift and mode==AttendanceRecord.ClockInMode.COVER else None})
         return JsonResponse(_clock_state(employee))
     if action=='CLOCK_OUT':
         record=employee.attendance_records.filter(time_in__isnull=False,time_out__isnull=True).order_by('-attendance_date','-time_in').first()
         if record is None: return JsonResponse({'detail':'You are not currently clocked in.'},status=409)
         record.time_out=now; record.clock_out_photo=photo; record.full_clean(); record.save(update_fields=('time_out','clock_out_photo','updated_at')); AttendanceCalculator.update_record(record)
-        record_audit(organization=employee.organization,actor=request.user,action='attendance.clocked_out',entity=record,details={'photo_required':True})
+        record_audit(organization=employee.organization,actor=request.user,action='attendance.clocked_out',entity=record,details={'photo_required':True,'clock_in_mode':record.clock_in_mode})
         return JsonResponse(_clock_state(employee))
     return JsonResponse({'detail':'Action must be CLOCK_IN or CLOCK_OUT.'},status=400)
 
