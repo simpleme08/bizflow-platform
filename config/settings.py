@@ -15,7 +15,14 @@ if not SECRET_KEY:
         raise RuntimeError('DJANGO_SECRET_KEY must be set in production')
     SECRET_KEY = 'dev-only-key-change-this-before-production'
 
-ALLOWED_HOSTS = [host.strip() for host in os.getenv('DJANGO_ALLOWED_HOSTS', '127.0.0.1,localhost').split(',') if host.strip()]
+ALLOWED_HOSTS = [host.strip() for host in os.getenv('DJANGO_ALLOWED_HOSTS', '').split(',') if host.strip()]
+if not ALLOWED_HOSTS:
+    ALLOWED_HOSTS = ['127.0.0.1', 'localhost'] if ENVIRONMENT != 'production' else []
+if ENVIRONMENT == 'production':
+    if DEBUG:
+        raise RuntimeError('DJANGO_DEBUG must be False in production')
+    if not ALLOWED_HOSTS or '*' in ALLOWED_HOSTS or any(host in {'localhost', '127.0.0.1'} for host in ALLOWED_HOSTS):
+        raise RuntimeError('DJANGO_ALLOWED_HOSTS must contain real production hostnames')
 
 INSTALLED_APPS = [
     'django.contrib.admin', 'django.contrib.auth', 'django.contrib.contenttypes', 'django.contrib.sessions',
@@ -38,9 +45,12 @@ TEMPLATES = [{
 }]
 WSGI_APPLICATION = 'config.wsgi.application'
 
-if os.getenv('DB_ENGINE', 'sqlite').lower() == 'postgresql':
-    DATABASES = {'default': {'ENGINE': 'django.db.backends.postgresql', 'NAME': os.getenv('POSTGRES_DB', 'bizflow'), 'USER': os.getenv('POSTGRES_USER', 'postgres'), 'PASSWORD': os.getenv('POSTGRES_PASSWORD', ''), 'HOST': os.getenv('POSTGRES_HOST', 'localhost'), 'PORT': os.getenv('POSTGRES_PORT', '5432'), 'OPTIONS': {'sslmode': os.getenv('POSTGRES_SSLMODE', 'require')}}}
+DB_ENGINE = os.getenv('DB_ENGINE', 'sqlite').lower()
+if DB_ENGINE == 'postgresql':
+    DATABASES = {'default': {'ENGINE': 'django.db.backends.postgresql', 'NAME': os.getenv('POSTGRES_DB', 'bizflow'), 'USER': os.getenv('POSTGRES_USER', 'postgres'), 'PASSWORD': os.getenv('POSTGRES_PASSWORD', ''), 'HOST': os.getenv('POSTGRES_HOST', 'localhost'), 'PORT': os.getenv('POSTGRES_PORT', '5432'), 'CONN_MAX_AGE': int(os.getenv('POSTGRES_CONN_MAX_AGE', '60')), 'OPTIONS': {'sslmode': os.getenv('POSTGRES_SSLMODE', 'require')}}}
 else:
+    if ENVIRONMENT == 'production':
+        raise RuntimeError('PostgreSQL is required in production; set DB_ENGINE=postgresql')
     DATABASES = {'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': BASE_DIR / 'db.sqlite3'}}
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -80,6 +90,8 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
 SECURE_REFERRER_POLICY = 'same-origin'
 CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in os.getenv('DJANGO_CSRF_TRUSTED_ORIGINS', '').split(',') if origin.strip()]
+if ENVIRONMENT == 'production' and not CSRF_TRUSTED_ORIGINS:
+    raise RuntimeError('DJANGO_CSRF_TRUSTED_ORIGINS must be configured in production')
 
 LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/'
