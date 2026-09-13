@@ -53,8 +53,6 @@ class AttendanceRecord(BaseModel):
             raise ValidationError('The clock shift must belong to the employee organization.')
         if self.clock_in_mode == self.ClockInMode.SCHEDULED and not self.assignment_id:
             raise ValidationError('A scheduled clock-in requires an employee assignment.')
-        if self.clock_in_mode == self.ClockInMode.COVER and not self.clock_shift_id and not self.assignment_id:
-            raise ValidationError('A cover shift clock-in requires a shift.')
         if self.time_in and timezone.localtime(self.time_in).date() != self.attendance_date:
             raise ValidationError('Time in must use the attendance date in Asia/Manila.')
         if self.time_in and self.time_out and self.time_out <= self.time_in:
