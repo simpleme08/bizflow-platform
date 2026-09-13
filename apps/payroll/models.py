@@ -1,6 +1,7 @@
 import uuid
 from decimal import Decimal
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
@@ -101,6 +102,32 @@ class PayrollHoliday(BaseModel):
             raise ValidationError('A special working day cannot be a double holiday.')
 
 
+class PayrollRuleSet(BaseModel):
+    """Effective-dated registry for the payroll rules used by a calculation."""
+
+    organization = models.ForeignKey('organization.Organization', on_delete=models.CASCADE, null=True, blank=True, related_name='payroll_rule_sets')
+    version = models.CharField(max_length=80)
+    effective_from = models.DateField()
+    effective_to = models.DateField(null=True, blank=True)
+    source_name = models.CharField(max_length=200)
+    source_url = models.URLField(blank=True)
+    notes = models.TextField(blank=True)
+    rules = models.JSONField(default=dict)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ('-effective_from', '-created_at')
+        constraints = [
+            models.UniqueConstraint(fields=('organization', 'version'), name='unique_payroll_ruleset_org_version'),
+            models.CheckConstraint(condition=Q(effective_to__isnull=True) | Q(effective_to__gte=models.F('effective_from')), name='payroll_ruleset_valid_dates'),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.effective_to and self.effective_to < self.effective_from:
+            raise ValidationError('Rule-set end date cannot be before its effective date.')
+
+
 class PayrollPeriod(BaseModel):
     class Status(models.TextChoices):
         OPEN = 'OPEN', 'Open'
@@ -118,6 +145,12 @@ class PayrollPeriod(BaseModel):
     end_date = models.DateField()
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.OPEN)
     frequency = models.CharField(max_length=20, choices=Frequency.choices, default=Frequency.SEMI_MONTHLY)
+    processed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name='processed_payroll_periods')
+    approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name='approved_payroll_periods')
+    paid_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name='paid_payroll_periods')
+    confidence_status = models.CharField(max_length=10, choices=(('READY', 'Ready'), ('REVIEW', 'Review'), ('BLOCKED', 'Blocked')), default='REVIEW')
+    confidence_summary = models.JSONField(default=dict, blank=True)
+    rule_set = models.ForeignKey(PayrollRuleSet, on_delete=models.PROTECT, null=True, blank=True, related_name='payroll_periods')
 
     class Meta:
         constraints = [
@@ -171,6 +204,10 @@ class PayrollRecord(BaseModel):
     gross_pay = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     net_pay = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    calculation_rule_version = models.CharField(max_length=80, blank=True)
+    calculation_input_hash = models.CharField(max_length=64, blank=True)
+    calculation_output_hash = models.CharField(max_length=64, blank=True)
+    calculation_snapshot = models.JSONField(default=dict, blank=True)
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=('employee', 'payroll_period'), name='unique_employee_payroll_period')]
