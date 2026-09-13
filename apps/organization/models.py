@@ -107,8 +107,8 @@ class OrganizationMembership(BaseModel):
         SUPER_USER = 'SUPER_USER', 'Super User'
 
     ROLE_PERMISSIONS = {
-        'OWNER': {'view_employees', 'view_attendance', 'manage_organization', 'manage_users', 'manage_employees', 'manage_attendance', 'approve_leave', 'view_payroll', 'manage_payroll', 'view_reports', 'manage_recruiting', 'manage_performance', 'manage_benefits', 'manage_offboarding'},
-        'SUPER_USER': {'view_employees', 'view_attendance', 'manage_organization', 'manage_users', 'manage_employees', 'manage_attendance', 'approve_leave', 'view_payroll', 'manage_payroll', 'view_reports', 'manage_recruiting', 'manage_performance', 'manage_benefits', 'manage_offboarding'},
+        'OWNER': {'view_employees', 'view_attendance', 'manage_organization', 'manage_users', 'manage_employees', 'manage_attendance', 'approve_leave', 'view_payroll', 'manage_payroll', 'approve_payroll', 'disburse_payroll', 'view_reports', 'manage_recruiting', 'manage_performance', 'manage_benefits', 'manage_offboarding'},
+        'SUPER_USER': {'view_employees', 'view_attendance', 'manage_organization', 'manage_users', 'manage_employees', 'manage_attendance', 'approve_leave', 'view_payroll', 'manage_payroll', 'approve_payroll', 'disburse_payroll', 'view_reports', 'manage_recruiting', 'manage_performance', 'manage_benefits', 'manage_offboarding'},
         'CEO': {'view_employees', 'view_attendance', 'approve_leave', 'view_payroll', 'view_reports'},
         'HR': {'manage_users', 'manage_employees', 'manage_attendance', 'approve_leave', 'view_payroll', 'manage_payroll', 'view_reports', 'manage_recruiting', 'manage_performance', 'manage_benefits', 'manage_offboarding'},
         'ADMIN': {'manage_users', 'manage_employees', 'manage_attendance', 'approve_leave', 'view_reports', 'manage_recruiting', 'manage_performance', 'manage_benefits', 'manage_offboarding'},
