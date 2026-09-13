@@ -1,16 +1,13 @@
+from django.core.exceptions import ValidationError
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
-from django.views.decorators.csrf import csrf_exempt
-from django.utils import timezone
-from datetime import date, timedelta
-from decimal import Decimal
+from datetime import date
 import json
 
 from apps.organization.models import OrganizationMembership
 from apps.employees.models import Employee, EmployeeAssignment
 from apps.workforce.models import ShiftTemplate, Client, ClientSite
 from apps.core.services import record_audit
-
 
 INELIGIBLE_ASSIGNMENT_STATUSES = {
     Employee.Status.SUSPENDED,
@@ -35,6 +32,10 @@ def scheduling_page(request):
     return render(request, 'scheduling/schedule.html', {'workspace_url': workspace_url_for_user(request.user)})
 
 
+def _tenant_shift_queryset(organization):
+    return ShiftTemplate.objects.filter(organization=organization) | ShiftTemplate.objects.filter(organization__isnull=True)
+
+
 @require_http_methods(['GET'])
 def get_shifts(request):
     if not request.user.is_authenticated:
@@ -42,7 +43,7 @@ def get_shifts(request):
     membership = _membership_for(request.user)
     if membership is None or not membership.has_permission('manage_attendance'):
         return JsonResponse({'detail': 'Access denied.'}, status=403)
-    shifts = ShiftTemplate.objects.all().order_by('name')
+    shifts = _tenant_shift_queryset(membership.organization).order_by('name')
     return JsonResponse({'shifts': [{'id': str(shift.id), 'name': shift.name, 'start_time': shift.start_time.strftime('%H:%M'), 'end_time': shift.end_time.strftime('%H:%M')} for shift in shifts]})
 
 
@@ -53,8 +54,7 @@ def get_clients(request):
     membership = _membership_for(request.user)
     if membership is None:
         return JsonResponse({'detail': 'Access denied.'}, status=403)
-    organization = membership.organization
-    clients = Client.objects.filter(organization=organization, is_active=True).prefetch_related('sites').order_by('name')
+    clients = Client.objects.filter(organization=membership.organization, is_active=True).prefetch_related('sites').order_by('name')
     return JsonResponse({'clients': [{'id': str(client.id), 'name': client.name, 'code': client.code, 'sites': [{'id': str(site.id), 'name': site.name} for site in client.sites.filter(is_active=True).order_by('name')]} for client in clients]})
 
 
@@ -65,8 +65,7 @@ def get_assignable_employees(request):
     membership = _membership_for(request.user)
     if membership is None or not membership.has_permission('manage_attendance'):
         return JsonResponse({'detail': 'Access denied.'}, status=403)
-    organization = membership.organization
-    employees = Employee.objects.filter(organization=organization, is_active=True).exclude(status__in=INELIGIBLE_ASSIGNMENT_STATUSES).select_related('department', 'position', 'employment_type').order_by('last_name', 'first_name')
+    employees = Employee.objects.filter(organization=membership.organization, is_active=True).exclude(status__in=INELIGIBLE_ASSIGNMENT_STATUSES).select_related('department', 'position', 'employment_type').order_by('last_name', 'first_name')
     return JsonResponse({'employees': [{'id': str(employee.id), 'employee_number': employee.employee_number, 'name': f'{employee.first_name} {employee.last_name}', 'department': employee.department.name if employee.department else None, 'position': employee.position.title if employee.position else None} for employee in employees]})
 
 
@@ -88,11 +87,10 @@ def get_employee_schedule(request):
         end = date.fromisoformat(end_date)
     except (Employee.DoesNotExist, ValueError):
         return JsonResponse({'detail': 'Invalid parameters.'}, status=400)
-    assignments = EmployeeAssignment.objects.filter(employee=employee, start_date__lte=end).exclude(end_date__lt=start).select_related('shift_template', 'client')
+    assignments = EmployeeAssignment.objects.filter(employee=employee, start_date__lte=end).exclude(end_date__lt=start).filter(shift_template__organization__in=[membership.organization.id, None]).select_related('shift_template', 'client', 'client_site')
     return JsonResponse({'assignments': [{'id': str(assignment.id), 'shift': assignment.shift_template.name, 'shift_id': str(assignment.shift_template.id), 'client': assignment.client.name if assignment.client else None, 'client_id': str(assignment.client.id) if assignment.client else None, 'site': assignment.client_site.name if assignment.client_site else None, 'site_id': str(assignment.client_site.id) if assignment.client_site else None, 'start_date': assignment.start_date.isoformat(), 'end_date': assignment.end_date.isoformat() if assignment.end_date else None, 'is_primary': assignment.is_primary} for assignment in assignments]})
 
 
-@csrf_exempt
 @require_http_methods(['POST'])
 def assign_shift(request):
     if not request.user.is_authenticated:
@@ -118,7 +116,9 @@ def assign_shift(request):
         employee = Employee.objects.get(id=employee_id, organization=membership.organization)
         if employee.status in INELIGIBLE_ASSIGNMENT_STATUSES or not employee.is_active:
             return JsonResponse({'detail': 'This employee is not eligible for new shift assignments in their current lifecycle status.'}, status=409)
-        shift = ShiftTemplate.objects.get(id=shift_id)
+        shift = _tenant_shift_queryset(membership.organization).filter(id=shift_id).first()
+        if shift is None:
+            return JsonResponse({'detail': 'Shift template not found.'}, status=404)
         start_dt = date.fromisoformat(start_date)
         end_dt = date.fromisoformat(end_date) if end_date else None
         if end_dt and end_dt < start_dt:
@@ -129,13 +129,18 @@ def assign_shift(request):
         site = None
         if client_id:
             client = Client.objects.get(id=client_id, organization=membership.organization)
-        if site_id and client:
+        if site_id:
+            if not client:
+                return JsonResponse({'detail': 'A site requires a client.'}, status=400)
             site = ClientSite.objects.get(id=site_id, client=client)
-    except (Employee.DoesNotExist, ShiftTemplate.DoesNotExist, Client.DoesNotExist, ClientSite.DoesNotExist, ValueError):
+    except (Employee.DoesNotExist, Client.DoesNotExist, ClientSite.DoesNotExist, ValueError):
         return JsonResponse({'detail': 'Invalid parameters.'}, status=400)
-    if assignment_id:
-        try:
-            assignment = EmployeeAssignment.objects.get(id=assignment_id, employee__organization=membership.organization, employee=employee)
+    try:
+        if assignment_id:
+            try:
+                assignment = EmployeeAssignment.objects.get(id=assignment_id, employee__organization=membership.organization, employee=employee)
+            except EmployeeAssignment.DoesNotExist:
+                return JsonResponse({'detail': 'Assignment not found.'}, status=404)
             assignment.shift_template = shift
             assignment.client = client
             assignment.client_site = site
@@ -145,23 +150,18 @@ def assign_shift(request):
             assignment.full_clean()
             assignment.save()
             created = False
-        except EmployeeAssignment.DoesNotExist:
-            return JsonResponse({'detail': 'Assignment not found.'}, status=404)
-    else:
-        assignment, created = EmployeeAssignment.objects.get_or_create(employee=employee, shift_template=shift, start_date=start_dt, defaults={'client': client, 'client_site': site, 'end_date': end_dt, 'is_primary': is_primary})
-        if not created:
-            assignment.client = client
-            assignment.client_site = site
-            assignment.end_date = end_dt
-            assignment.is_primary = is_primary
+        else:
+            assignment = EmployeeAssignment(employee=employee, shift_template=shift, start_date=start_dt, client=client, client_site=site, end_date=end_dt, is_primary=is_primary)
             assignment.full_clean()
             assignment.save()
+            created = True
+    except ValidationError as exc:
+        return JsonResponse({'detail': 'Assignment violates a scheduling validation rule.', 'errors': exc.message_dict}, status=400)
     record_audit(organization=employee.organization, actor=request.user, action='scheduling.assign_shift', entity=assignment)
     return JsonResponse({'id': str(assignment.id), 'status': 'created' if created else 'updated', 'message': 'Shift assignment saved successfully.'})
 
 
 @require_http_methods(['DELETE'])
-@csrf_exempt
 def delete_assignment(request):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
