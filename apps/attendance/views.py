@@ -117,8 +117,12 @@ def clock_action(request):
         requested_mode=request.POST.get('clock_in_mode','').upper()
         clock_shift=None
         if requested_mode==AttendanceRecord.ClockInMode.COVER:
-            try: clock_shift=ShiftTemplate.objects.get(id=request.POST.get('shift_id'))
-            except (ShiftTemplate.DoesNotExist, ValueError, TypeError): return JsonResponse({'detail':'Select a valid shift to cover.'},status=400)
+            shift_id=request.POST.get('shift_id')
+            if shift_id:
+                try: clock_shift=ShiftTemplate.objects.get(id=shift_id)
+                except (ShiftTemplate.DoesNotExist, ValueError, TypeError): return JsonResponse({'detail':'Select a valid shift to cover.'},status=400)
+            elif assignment is not None:
+                clock_shift=assignment.shift_template
             mode=AttendanceRecord.ClockInMode.COVER
         elif assignment is None:
             if requested_mode != AttendanceRecord.ClockInMode.UNSCHEDULED: return JsonResponse({'detail':'No scheduled shift is assigned. Confirm this is a cover or unscheduled work shift and try again.'},status=400)
