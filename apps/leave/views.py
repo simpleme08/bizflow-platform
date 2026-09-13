@@ -8,7 +8,7 @@ from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
-from apps.organization.models import OrganizationMembership
+from apps.organization.context import current_membership
 from apps.core.services import record_audit
 from apps.employees.models import Employee
 
@@ -24,7 +24,7 @@ INELIGIBLE_LEAVE_STATUSES = {
 
 
 def _membership(request):
-    return OrganizationMembership.objects.filter(user=request.user, is_active=True, organization__is_active=True).select_related('organization').first()
+    return current_membership(request)
 
 
 def _eligible(employee, start_date=None):
@@ -132,7 +132,7 @@ def leave_decision(request, application_id):
             record_audit(organization=membership.organization, actor=request.user, action='leave.rejected', entity=application)
         else:
             return JsonResponse({'detail': 'Decision must be approve or reject.'}, status=400)
-    except (LeaveApplication.DoesNotExist, json.JSONDecodeError) as error:
+    except (LeaveApplication.DoesNotExist, json.JSONDecodeError):
         return JsonResponse({'detail': 'Leave application was not found.'}, status=404)
     except ValidationError as error:
         return JsonResponse({'detail': error.messages[0]}, status=400)
