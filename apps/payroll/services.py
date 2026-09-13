@@ -117,7 +117,6 @@ class PhilippineWithholdingTax:
     def calculate(cls, taxable_compensation, frequency='SEMI_MONTHLY', minimum_wage_earner=False):
         table = cls.MONTHLY if frequency == 'MONTHLY' else cls.SEMI_MONTHLY
         if minimum_wage_earner:
-            # Callers should pass only the taxable non-exempt portion for MWEs.
             taxable_compensation = max(Decimal(taxable_compensation), ZERO)
         return cls._calculate_table(taxable_compensation, table)
 
@@ -130,6 +129,9 @@ class PayrollCalculator:
     WORKING_DAYS = Decimal('22')
     WORKING_HOURS = Decimal('8')
     OVERTIME_MULTIPLIER = Decimal('1.25')
+    REGULAR_HOLIDAY_MULTIPLIER = Decimal('2.00')
+    SPECIAL_HOLIDAY_MULTIPLIER = Decimal('1.30')
+    HOLIDAY_OVERTIME_MULTIPLIER = Decimal('1.30')
 
     @classmethod
     def periods_per_month(cls, period):
@@ -173,10 +175,15 @@ class PayrollCalculator:
         return rates.filter(organization=employee.organization).first() or rates.filter(organization__isnull=True).first()
 
     @classmethod
-    def _holiday_premium(cls, attendance, daily_rate):
+    def _holiday_for_attendance(cls, attendance):
         holiday = PayrollHoliday.objects.filter(holiday_date=attendance.attendance_date, is_active=True, organization=attendance.employee.organization).first()
         if holiday is None:
             holiday = PayrollHoliday.objects.filter(holiday_date=attendance.attendance_date, organization__isnull=True, is_active=True).first()
+        return holiday
+
+    @classmethod
+    def _holiday_premium(cls, attendance, daily_rate):
+        holiday = cls._holiday_for_attendance(attendance)
         if holiday is None or holiday.kind == PayrollHoliday.Kind.SPECIAL_WORKING or not attendance.time_in or not attendance.time_out:
             return ZERO
         if holiday.kind == PayrollHoliday.Kind.REGULAR:
@@ -184,6 +191,19 @@ class PayrollCalculator:
         else:
             premium_multiplier = Decimal('0.50') if holiday.is_double else Decimal('0.30')
         return cls_money(daily_rate * premium_multiplier)
+
+    @classmethod
+    def _overtime_pay_for_attendance(cls, attendance, hourly_rate):
+        if not attendance.overtime_minutes:
+            return ZERO
+        holiday = cls._holiday_for_attendance(attendance)
+        if holiday is None or holiday.kind == PayrollHoliday.Kind.SPECIAL_WORKING:
+            multiplier = cls.OVERTIME_MULTIPLIER
+        elif holiday.kind == PayrollHoliday.Kind.REGULAR:
+            multiplier = cls.REGULAR_HOLIDAY_MULTIPLIER * cls.HOLIDAY_OVERTIME_MULTIPLIER
+        else:
+            multiplier = cls.SPECIAL_HOLIDAY_MULTIPLIER * cls.HOLIDAY_OVERTIME_MULTIPLIER
+        return cls_money(Decimal(attendance.overtime_minutes) / Decimal('60') * hourly_rate * multiplier)
 
     @classmethod
     def _unpaid_leave(cls, employee, period, daily_rate):
@@ -212,14 +232,13 @@ class PayrollCalculator:
         attendance = AttendanceRecord.objects.filter(employee=employee, employee__organization=period.organization, attendance_date__range=(period.start_date, period.end_date))
         late_minutes = sum((record.late_minutes for record in attendance), 0)
         undertime_minutes = sum((record.undertime_minutes for record in attendance), 0)
-        overtime_minutes = sum((record.overtime_minutes for record in attendance), 0)
         daily_rate = salary.basic_salary / cls.WORKING_DAYS
         hourly_rate = daily_rate / cls.WORKING_HOURS
         minute_rate = hourly_rate / Decimal('60')
         money = PhilippinePayrollRules.money
         periods = cls.periods_per_month(period)
         basic_pay = money(salary.basic_salary / Decimal(periods))
-        overtime_pay = money(Decimal(overtime_minutes) / Decimal('60') * hourly_rate * cls.OVERTIME_MULTIPLIER)
+        overtime_pay = money(sum((cls._overtime_pay_for_attendance(record, hourly_rate) for record in attendance), ZERO))
         late_deduction = money(Decimal(late_minutes) * minute_rate)
         undertime_deduction = money(Decimal(undertime_minutes) * minute_rate)
         leave_without_pay = cls._unpaid_leave(employee, period, daily_rate) if leave_without_pay is None else money(leave_without_pay)
