@@ -170,9 +170,6 @@ class PayrollRecord(BaseModel):
     other_deductions = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     gross_pay = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     net_pay = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
-    calculation_rule_version = models.CharField(max_length=30, blank=True, default='PH-2026.1')
-    calculation_hash = models.CharField(max_length=64, blank=True)
-    calculated_at = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
 
     class Meta:
