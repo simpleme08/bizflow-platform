@@ -8,7 +8,7 @@ from apps.organization.models import OrganizationMembership
 from .completion import settle_loans_for_record
 from .hardening import PayrollConfidence
 from .models import PayrollPeriod, PayrollRecord
-from .views import _membership, payroll_preflight as legacy_payroll_preflight
+from .views import _membership
 
 
 APPROVER_ROLES = {OrganizationMembership.Role.OWNER, OrganizationMembership.Role.SUPER_USER, OrganizationMembership.Role.CEO}
@@ -82,11 +82,12 @@ def approve_payroll(request, record_id):
             return JsonResponse({'detail': 'Only draft payroll records can be approved.'}, status=409)
         record.status = PayrollRecord.Status.APPROVED
         record.save(update_fields=('status', 'updated_at'))
-        period.approved_by = request.user
-        period.status = PayrollPeriod.Status.APPROVED
-        period.save(update_fields=('approved_by', 'status', 'updated_at'))
-    record_audit(organization=membership.organization, actor=request.user, action='payroll.approved', entity=record, details={'period_id': str(period.id)})
-    return JsonResponse({'id': str(record.id), 'status': record.status, 'period_status': period.status, 'approved_by': request.user.get_username()})
+        if not PayrollRecord.objects.filter(payroll_period=period).exclude(status=PayrollRecord.Status.APPROVED).exists():
+            period.approved_by = request.user
+            period.status = PayrollPeriod.Status.APPROVED
+            period.save(update_fields=('approved_by', 'status', 'updated_at'))
+    record_audit(organization=membership.organization, actor=request.user, action='payroll.approved', entity=record, details={'period_id': str(period.id), 'period_approved': period.status == PayrollPeriod.Status.APPROVED})
+    return JsonResponse({'id': str(record.id), 'status': record.status, 'period_status': period.status, 'approved_by': request.user.get_username() if period.approved_by_id else None})
 
 
 @require_http_methods(['POST'])
@@ -115,4 +116,4 @@ def mark_payroll_paid(request, record_id):
             period.paid_by = request.user
             period.save(update_fields=('status', 'paid_by', 'updated_at'))
     record_audit(organization=membership.organization, actor=request.user, action='payroll.paid', entity=record, details={'period_id': str(period.id), 'paid_by': request.user.get_username()})
-    return JsonResponse({'id': str(record.id), 'status': record.status, 'period_status': period.status, 'paid_by': request.user.get_username()})
+    return JsonResponse({'id': str(record.id), 'status': record.status, 'period_status': period.status, 'paid_by': request.user.get_username() if period.paid_by_id else None})
