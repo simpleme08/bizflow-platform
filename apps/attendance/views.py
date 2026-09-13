@@ -122,7 +122,7 @@ def clock_action(request):
                 try: clock_shift=ShiftTemplate.objects.get(id=shift_id)
                 except (ShiftTemplate.DoesNotExist, ValueError, TypeError): return JsonResponse({'detail':'Select a valid shift to cover.'},status=400)
             elif assignment is not None:
-                clock_shift=assignment.shift_template
+                return JsonResponse({'detail':'Select the shift you are covering.'},status=400)
             mode=AttendanceRecord.ClockInMode.COVER
         elif assignment is None:
             if requested_mode != AttendanceRecord.ClockInMode.UNSCHEDULED: return JsonResponse({'detail':'No scheduled shift is assigned. Confirm this is a cover or unscheduled work shift and try again.'},status=400)
@@ -130,7 +130,7 @@ def clock_action(request):
         else:
             mode=AttendanceRecord.ClockInMode.SCHEDULED
             clock_shift=assignment.shift_template
-        record=AttendanceRecord.objects.create(employee=employee,assignment=assignment,clock_shift=clock_shift,clock_in_mode=mode,attendance_date=attendance_date,time_in=now,clock_in_photo=photo,status=AttendanceRecord.Status.PRESENT,remarks='' if mode==AttendanceRecord.ClockInMode.SCHEDULED else ('Cover shift clock-in; permanent assignment preserved. Payroll reconciliation required.' if mode==AttendanceRecord.ClockInMode.COVER else 'Unscheduled clock-in; schedule reconciliation required before payroll approval.'))
+        record=AttendanceRecord.objects.create(employee=employee,assignment=assignment,clock_shift=clock_shift,clock_in_mode=mode,attendance_date=attendance_date,time_in=now,clock_in_photo=photo,status=AttendanceRecord.Status.PRESENT,remarks='' if mode==AttendanceRecord.ClockInMode.SCHEDULED else ('Cover shift clock-in; schedule reconciliation required before payroll approval.' if mode==AttendanceRecord.ClockInMode.COVER else 'Unscheduled clock-in; schedule reconciliation required before payroll approval.'))
         record_audit(organization=employee.organization,actor=request.user,action='attendance.clocked_in',entity=record,details={'photo_required':True,'clock_in_mode':mode,'covered_shift_id':str(clock_shift.id) if clock_shift and mode==AttendanceRecord.ClockInMode.COVER else None})
         return JsonResponse(_clock_state(employee))
     if action=='CLOCK_OUT':
