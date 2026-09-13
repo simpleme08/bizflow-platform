@@ -28,9 +28,9 @@ def loan_deduction_for_record(record):
 
 
 def settle_loans_for_record(record):
-    """Apply the already-deducted installment to active loans after payment."""
-    total = ZERO
+    """Apply the already-deducted installment to active loans atomically."""
     with transaction.atomic():
+        total = ZERO
         loans = EmployeeLoan.objects.select_for_update().filter(
             employee=record.employee,
             status=EmployeeLoan.Status.ACTIVE,
@@ -48,9 +48,9 @@ def settle_loans_for_record(record):
             loan.save(update_fields=('balance', 'status', 'updated_at'))
             remaining -= deduction
             total += deduction
-    if remaining > ZERO:
-        raise ValueError('Loan deductions exceed the active loan balances available for settlement.')
-    return money(total)
+        if remaining > ZERO:
+            raise ValueError('Loan deductions exceed the active loan balances available for settlement.')
+        return money(total)
 
 
 def apply_record_adjustments(record):
