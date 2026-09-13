@@ -42,6 +42,10 @@ class AttendanceRecord(BaseModel):
 
     @property
     def effective_shift(self):
+        # A cover punch deliberately uses the covered shift's rules while the
+        # permanent assignment remains intact for workforce planning.
+        if self.clock_in_mode == self.ClockInMode.COVER and self.clock_shift_id:
+            return self.clock_shift
         if self.assignment_id:
             return self.assignment.shift_template
         return self.clock_shift
@@ -49,11 +53,10 @@ class AttendanceRecord(BaseModel):
     def clean(self):
         if self.assignment_id and self.assignment.employee_id != self.employee_id:
             raise ValidationError('The assignment must belong to the selected employee.')
-        # ShiftTemplate is currently a global workforce template, so there is no
-        # organization_id to validate here. Tenant scoping is enforced when a
-        # future scheduling API chooses a template for an employee.
         if self.clock_in_mode == self.ClockInMode.SCHEDULED and not self.assignment_id:
             raise ValidationError('A scheduled clock-in requires an employee assignment.')
+        if self.clock_in_mode == self.ClockInMode.COVER and not self.clock_shift_id:
+            raise ValidationError('A cover clock-in requires the shift being covered.')
         if self.time_in and timezone.localtime(self.time_in).date() != self.attendance_date:
             raise ValidationError('Time in must use the attendance date in Asia/Manila.')
         if self.time_in and self.time_out and self.time_out <= self.time_in:
