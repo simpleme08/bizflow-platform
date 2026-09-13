@@ -9,6 +9,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
 from apps.organization.models import OrganizationMembership
+from apps.core.models import AuditEvent
 from apps.core.services import record_audit
 
 from .completion import apply_record_adjustments, settle_loans_for_record
@@ -149,7 +150,7 @@ def approve_payroll(request, record_id):
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
     membership = _membership(request, 'approve_payroll')
     if membership is None:
-        return JsonResponse({'detail': 'Payroll approval permission is required. Payroll preparation and approval are intentionally separated.'}, status=403)
+        return JsonResponse({'detail': 'Payroll approval permission is required.'}, status=403)
     with transaction.atomic():
         try:
             record = PayrollRecord.objects.select_for_update().select_related('payroll_period').get(id=record_id, employee__organization=membership.organization, payroll_period__organization=membership.organization)
@@ -159,6 +160,8 @@ def approve_payroll(request, record_id):
             return JsonResponse({'detail': 'Payroll must be calculated before records can be approved.'}, status=409)
         if record.status != PayrollRecord.Status.DRAFT:
             return JsonResponse({'detail': 'Only draft payroll records can be approved.'}, status=409)
+        if AuditEvent.objects.filter(organization=membership.organization, action='payroll.processed', entity_id=str(record.payroll_period_id), actor=request.user).exists():
+            return JsonResponse({'detail': 'Maker/checker control: the user who prepared this payroll cannot approve the same payroll period.'}, status=409)
         confidence = PayrollConfidenceEngine.preflight(record.payroll_period, membership.organization)
         if confidence['status'] != PayrollConfidenceEngine.READY:
             return JsonResponse({'detail': 'Payroll cannot be approved until confidence checks are READY.', 'confidence': confidence}, status=409)
@@ -182,6 +185,8 @@ def mark_payroll_paid(request, record_id):
             return JsonResponse({'detail': 'Payroll record was not found.'}, status=404)
         if record.status != PayrollRecord.Status.APPROVED:
             return JsonResponse({'detail': 'Only approved payroll records can be marked paid.'}, status=409)
+        if AuditEvent.objects.filter(organization=membership.organization, action='payroll.approved', entity_id=str(record.id), actor=request.user).exists():
+            return JsonResponse({'detail': 'Maker/checker control: the user who approved this payroll cannot disburse the same payroll record.'}, status=409)
         if record.loan_deductions:
             settle_loans_for_record(record)
         record.status = PayrollRecord.Status.PAID
@@ -209,13 +214,7 @@ def payslip(request, record_id):
     pdf.drawString(72, 740, 'BizFlow HRIS Payslip')
     pdf.drawString(72, 720, f'Employee: {record.employee.first_name} {record.employee.last_name} ({record.employee.employee_number})')
     pdf.drawString(72, 700, f'Payroll period: {record.payroll_period.name}')
-    lines = [
-        ('Basic Pay', record.basic_pay), ('Overtime Pay', record.overtime_pay), ('Holiday Pay', record.holiday_pay), ('Night Differential', record.night_differential),
-        ('Allowances', record.allowances), ('Commissions', record.commissions), ('Bonuses', record.bonuses), ('Gross Pay', record.gross_pay),
-        ('SSS', record.sss_employee), ('PhilHealth', record.philhealth_employee), ('Pag-IBIG', record.pagibig_employee), ('Withholding Tax', record.withholding_tax),
-        ('Late/Undertime', record.late_deduction + record.undertime_deduction), ('Leave Without Pay', record.leave_without_pay), ('Loans', record.loan_deductions), ('Other Deductions', record.other_deductions),
-        ('Total Deductions', record.total_deductions), ('Net Pay', record.net_pay),
-    ]
+    lines = [('Basic Pay', record.basic_pay), ('Overtime Pay', record.overtime_pay), ('Holiday Pay', record.holiday_pay), ('Night Differential', record.night_differential), ('Allowances', record.allowances), ('Commissions', record.commissions), ('Bonuses', record.bonuses), ('Gross Pay', record.gross_pay), ('SSS', record.sss_employee), ('PhilHealth', record.philhealth_employee), ('Pag-IBIG', record.pagibig_employee), ('Withholding Tax', record.withholding_tax), ('Late/Undertime', record.late_deduction + record.undertime_deduction), ('Leave Without Pay', record.leave_without_pay), ('Loans', record.loan_deductions), ('Other Deductions', record.other_deductions), ('Total Deductions', record.total_deductions), ('Net Pay', record.net_pay)]
     for index, (label, amount) in enumerate(lines):
         pdf.drawString(90, 660 - index * 22, label)
         pdf.drawRightString(420, 660 - index * 22, f'PHP {amount:,.2f}')
