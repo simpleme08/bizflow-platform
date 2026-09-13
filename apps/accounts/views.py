@@ -1,9 +1,22 @@
 from django.contrib.auth import authenticate, login
+from django.core.cache import cache
 from django.shortcuts import redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_http_methods
 
 from apps.organization.context import ACTIVE_ORGANIZATION_SESSION_KEY, current_membership
+
+LOGIN_FAILURE_LIMIT = 5
+LOGIN_FAILURE_WINDOW = 15 * 60
+
+
+def _client_ip(request):
+    return request.META.get('REMOTE_ADDR', 'unknown')
+
+
+def _login_throttle_key(request, username):
+    normalized = (username or '').strip().lower()[:150]
+    return f'bizflow:login-failures:{_client_ip(request)}:{normalized}'
 
 
 def _safe_next(request):
@@ -21,11 +34,22 @@ def login_page(request):
 
     next_url = request.GET.get('next') or request.POST.get('next')
     if request.method == 'POST':
-        user = authenticate(request, username=request.POST.get('username', ''), password=request.POST.get('password', ''))
+        username = request.POST.get('username', '')
+        throttle_key = _login_throttle_key(request, username)
+        if cache.get(throttle_key, 0) >= LOGIN_FAILURE_LIMIT:
+            return render(
+                request,
+                'registration/login.html',
+                {'error': 'Too many failed login attempts. Try again later.', 'next': next_url},
+                status=429,
+            )
+
+        user = authenticate(request, username=username, password=request.POST.get('password', ''))
         if user is not None and user.is_active:
             memberships = user.organization_memberships.filter(is_active=True, organization__is_active=True).select_related('organization').order_by('organization__name')
             if not memberships.exists():
                 return render(request, 'registration/login.html', {'error': 'No active organization membership found.', 'next': next_url}, status=401)
+            cache.delete(throttle_key)
             login(request, user)
             request.session.pop(ACTIVE_ORGANIZATION_SESSION_KEY, None)
             if memberships.count() > 1:
@@ -37,6 +61,9 @@ def login_page(request):
             if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
                 return redirect(next_url)
             return redirect_for_user(request)
+
+        failures = cache.get(throttle_key, 0) + 1
+        cache.set(throttle_key, failures, LOGIN_FAILURE_WINDOW)
         return render(request, 'registration/login.html', {'error': 'Invalid username or password.', 'next': next_url}, status=401)
     return render(request, 'registration/login.html', {'next': next_url})
 
