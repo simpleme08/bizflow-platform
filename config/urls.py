@@ -20,7 +20,7 @@ from apps.payroll.remittance_views import payroll_remittance_export
 from apps.payroll.summary import payroll_summary_api
 from apps.reports.views import reports_api, reports_page
 from apps.ess.views import ess_api, ess_page
-from apps.accounts.views import employee_login, login_page
+from apps.accounts.views import employee_login, login_page, organization_select
 from apps.core.views import health, readiness, website
 from apps.core.client_views import client_site
 from apps.scheduling.views import scheduling_page, get_shifts, get_clients, get_assignable_employees, get_employee_schedule, assign_shift, delete_assignment
@@ -33,7 +33,7 @@ urlpatterns = [
     path('health/', health, name='health'), path('ready/', readiness, name='readiness'),
     path('admin/', admin.site.urls), path('', website, name='website'), path('client/<slug:slug>/', client_site, name='client-site'), path('workspace/', dashboard_page, name='workspace'),
     path('employees/', employee_directory_page, name='employees-page'), path('attendance/', attendance_page, name='attendance-page'), path('clock/', clock_page, name='clock-page'),
-    path('clock/login/', clock_login, name='clock-login'), path('clock/action/', clock_action, name='clock-action'), path('login/', login_page, name='login'), path('employee-login/', employee_login, name='employee-login'), path('logout/', auth_views.LogoutView.as_view(), name='logout'),
+    path('clock/login/', clock_login, name='clock-login'), path('clock/action/', clock_action, name='clock-action'), path('login/', login_page, name='login'), path('select-organization/', organization_select, name='organization-select'), path('employee-login/', employee_login, name='employee-login'), path('logout/', auth_views.LogoutView.as_view(), name='logout'),
     path('scheduling/', scheduling_page, name='scheduling-page'), path('api/dashboard/', dashboard, name='dashboard'), path('api/employees/', employee_directory, name='employee-directory'), path('api/employees/<uuid:employee_id>/', employee_profile_api, name='employee-profile-api'), path('api/employees/<uuid:employee_id>/lifecycle/', employee_lifecycle_api, name='employee-lifecycle-api'), path('api/attendance/', record_attendance, name='record-attendance'),
     path('api/attendance/import/', import_timekeeping, name='import-timekeeping'), path('api/attendance/template/', timekeeping_template, name='timekeeping-template'), path('api/attendance/<uuid:record_id>/proof/<str:proof_type>/', attendance_proof, name='attendance-proof'), path('api/employee-documents/<uuid:document_id>/file/', employee_document_file, name='employee-document-file'), path('api/me/', current_user, name='current-user'), path('api/subscription/', subscription_api, name='subscription-api'),
     path('api/billing/checkout/', billing_checkout, name='billing-checkout'), path('api/billing/change-plan/', billing_change_plan, name='billing-change-plan'), path('api/billing/cancel/', billing_cancel, name='billing-cancel'), path('api/billing/invoices/', billing_invoices, name='billing-invoices'), path('api/billing/webhook/paymongo/', paymongo_webhook, name='paymongo-webhook'),
