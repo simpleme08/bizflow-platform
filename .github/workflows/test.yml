@@ -19,11 +19,21 @@ jobs:
         run: pip install -r requirements.txt
       - name: Run migrations
         env:
+          DJANGO_ENV: development
           DJANGO_SECRET_KEY: ci-test-secret
           DJANGO_DEBUG: '1'
         run: python manage.py migrate --noinput
       - name: Run tests
         env:
+          DJANGO_ENV: development
           DJANGO_SECRET_KEY: ci-test-secret
           DJANGO_DEBUG: '1'
         run: python manage.py test
+      - name: Run production deployment checks
+        env:
+          DJANGO_ENV: production
+          DJANGO_SECRET_KEY: ci-production-check-secret
+          DJANGO_DEBUG: '0'
+          DJANGO_ALLOWED_HOSTS: localhost
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://localhost
+        run: python manage.py check --deploy

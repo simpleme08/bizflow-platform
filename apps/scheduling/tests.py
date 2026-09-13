@@ -25,12 +25,20 @@ class ShiftSchedulingTests(TestCase):
         response = self.client.get('/scheduling/')
         self.assertEqual(response.status_code, 401)
 
-    def test_get_shifts_returns_all_templates(self):
+    def test_get_shifts_returns_global_templates(self):
         response = self.client.get('/api/scheduling/shifts/')
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(len(data['shifts']), 2)
         self.assertEqual(data['shifts'][0]['name'], 'Day Shift')
+
+    def test_get_shifts_does_not_expose_other_organization_templates(self):
+        other_org = Organization.objects.create(slug='other-org', name='Other Organization')
+        other_shift = ShiftTemplate.objects.create(organization=other_org, name='Other Tenant Shift', start_time='09:00', end_time='18:00')
+        response = self.client.get('/api/scheduling/shifts/')
+        self.assertEqual(response.status_code, 200)
+        shift_ids = {item['id'] for item in response.json()['shifts']}
+        self.assertNotIn(str(other_shift.id), shift_ids)
 
     def test_get_employees_returns_active_only(self):
         Employee.objects.create(employee_number='EMP-002', user=User.objects.create_user(username='emp2', password='EmpPass123!'), organization=self.organization, first_name='Jane', last_name='Smith', is_active=False, status=Employee.Status.SEPARATED)
@@ -50,11 +58,24 @@ class ShiftSchedulingTests(TestCase):
         self.assertEqual(assignment.client, self.client_obj)
         self.assertTrue(assignment.is_primary)
 
+    def test_cross_organization_shift_cannot_be_assigned(self):
+        other_org = Organization.objects.create(slug='other-org', name='Other Organization')
+        other_shift = ShiftTemplate.objects.create(organization=other_org, name='Other Tenant Shift', start_time='09:00', end_time='18:00')
+        response = self.client.post('/api/scheduling/assign/', content_type='application/json', data={'employee_id': str(self.employee.id), 'shift_id': str(other_shift.id), 'start_date': '2026-09-01'})
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(EmployeeAssignment.objects.filter(employee=self.employee).exists())
+
     def test_delete_assignment_removes_shift(self):
         assignment = EmployeeAssignment.objects.create(employee=self.employee, shift_template=self.shift_day, client=self.client_obj, start_date=date(2026, 9, 1))
         response = self.client.delete('/api/scheduling/delete/', content_type='application/json', data={'assignment_id': str(assignment.id)})
         self.assertEqual(response.status_code, 200)
         self.assertFalse(EmployeeAssignment.objects.filter(id=assignment.id).exists())
+
+    def test_scheduling_mutations_require_csrf(self):
+        csrf_client = TestClient(enforce_csrf_checks=True)
+        self.assertTrue(csrf_client.login(username='manager', password='TestPass123!'))
+        response = csrf_client.post('/api/scheduling/assign/', content_type='application/json', data={'employee_id': str(self.employee.id), 'shift_id': str(self.shift_day.id), 'start_date': '2026-09-01'})
+        self.assertEqual(response.status_code, 403)
 
     def test_non_manager_cannot_assign_shifts(self):
         employee_user = User.objects.create_user(username='emp3', password='EmpPass123!')
