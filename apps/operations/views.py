@@ -58,6 +58,10 @@ def employee_hub_api(request):
         employee = request.user.employee_profile
     except AttributeError:
         return JsonResponse({'detail': 'No employee profile is linked to this account.'}, status=404)
+    # A user may have memberships in multiple organizations. The employee profile
+    # is the authoritative tenant boundary for self-service data and mutations.
+    if employee.organization_id != membership.organization_id or not employee.organization.is_active:
+        return JsonResponse({'detail': 'Employee organization access is not available.'}, status=403)
     if request.method == 'GET':
         today = timezone.localdate()
         docs = EmployeeDocument.objects.filter(organization=membership.organization, status=EmployeeDocument.Status.PUBLISHED).filter(Q(expires_on__isnull=True) | Q(expires_on__gte=today)).order_by('title')
