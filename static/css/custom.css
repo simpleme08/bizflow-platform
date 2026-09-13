@@ -1,27 +1,175 @@
-/* BizFlow workspace theme — HSIS-inspired first-client visual system. */
-:root { --hsis-blue: #0876e8; --hsis-cyan: #18c9ef; --hsis-navy: #062a63; --hsis-surface: #eef7ff; --hsis-red: #ef1724; --hsis-yellow: #ffbd12; --hsis-green: #55c51b; --hsis-pink: #e50083; --hsis-teal: #18b9bc; }
-body { font-size: 14px; background: #f4f8fc !important; color: #102a5c; }
-.main-header, .main-sidebar, header { background: var(--hsis-navy) !important; border: 0 !important; box-shadow: 0 3px 12px rgba(6,42,99,.18); }
-header .brand, header .header-link, .brand-link { color: #fff !important; }
-header .header-content { max-width: 1140px; }
-main { max-width: 1140px !important; }
-h1, h2, h3 { color: #102a5c; font-family: inherit !important; font-weight: 700 !important; }
-.intro, .subtitle { color: #617391 !important; }
-.card, .panel, .table-wrap, .box { border: 1px solid #dbe7f5 !important; border-radius: .75rem; box-shadow: 0 5px 20px rgba(20,57,100,.07); }
-button, .btn-primary { background: var(--hsis-blue) !important; border-color: var(--hsis-blue) !important; border-radius: .55rem !important; }
-button:hover, .btn-primary:hover { background: #005dc1 !important; border-color: #005dc1 !important; }
-input, select, textarea { border-radius: .55rem !important; border-color: #cbd8e8 !important; }
-input:focus, select:focus, textarea:focus { border-color: var(--hsis-blue) !important; box-shadow: 0 0 0 .2rem rgba(8,118,232,.12) !important; }
-table { background: #fff; }
-th { background: var(--hsis-surface); color: #365277 !important; }
-.content-header { padding: 15px; }
-.small-box, .info-box { border-radius: .75rem !important; box-shadow: 0 5px 20px rgba(20,57,100,.07) !important; }
-.sidebar .nav-link.active, .sidebar .nav-link:hover { background: rgba(8,118,232,.18) !important; color: #fff !important; }
-.badge-primary, .bg-primary { background: var(--hsis-blue) !important; }
+/* BizFlow global product system: futuristic, premium, enterprise SaaS. */
+:root {
+  --biz-ink: #0a1424;
+  --biz-muted: #68788d;
+  --biz-night: #07101d;
+  --biz-night-2: #0c1a2b;
+  --biz-accent: #3da9e8;
+  --biz-accent-soft: #eaf6ff;
+  --biz-line: #dbe5ee;
+  --biz-surface: #ffffff;
+  --biz-bg: #f4f7fa;
+  --biz-radius: 14px;
+  --biz-shadow: 0 14px 45px rgba(8, 24, 42, .08);
+}
 
-/* The public time clock is deliberately not part of the HRIS workspace navigation. */
+body {
+  font-size: 14px;
+  background: var(--biz-bg) !important;
+  color: var(--biz-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+.main-header,
+.main-sidebar,
+header {
+  background: linear-gradient(135deg, var(--biz-night), var(--biz-night-2)) !important;
+  border: 0 !important;
+  box-shadow: 0 8px 28px rgba(3, 13, 25, .16);
+}
+
+header .brand,
+header .header-link,
+.brand-link {
+  color: #fff !important;
+  font-weight: 850;
+  letter-spacing: -.025em;
+}
+
+header .header-content,
+main {
+  max-width: 1180px !important;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  color: var(--biz-ink);
+  font-weight: 800 !important;
+  letter-spacing: -.025em;
+}
+
+.intro,
+.subtitle,
+.help-text {
+  color: var(--biz-muted) !important;
+}
+
+.card,
+.panel,
+.table-wrap,
+.box,
+.small-box,
+.info-box {
+  border: 1px solid var(--biz-line) !important;
+  border-radius: var(--biz-radius) !important;
+  box-shadow: var(--biz-shadow) !important;
+  background: var(--biz-surface);
+}
+
+button,
+.btn-primary,
+input[type="submit"] {
+  background: linear-gradient(135deg, #167dc1, var(--biz-accent)) !important;
+  border-color: var(--biz-accent) !important;
+  border-radius: 9px !important;
+  font-weight: 800;
+  box-shadow: 0 8px 20px rgba(24, 126, 190, .16);
+}
+
+button:hover,
+.btn-primary:hover,
+input[type="submit"]:hover {
+  filter: brightness(.96);
+  transform: translateY(-1px);
+}
+
+input,
+select,
+textarea {
+  border-radius: 9px !important;
+  border-color: #cbd8e4 !important;
+  background: #fff;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--biz-accent) !important;
+  box-shadow: 0 0 0 .2rem rgba(61, 169, 232, .13) !important;
+  outline: none;
+}
+
+table {
+  background: #fff;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+th {
+  background: #eef4f8;
+  color: #344d67 !important;
+  font-weight: 850;
+}
+
+.content-header {
+  padding: 18px;
+}
+
+.sidebar .nav-link {
+  border-radius: 9px;
+  margin: 2px 7px;
+  transition: .2s ease;
+}
+
+.sidebar .nav-link.active,
+.sidebar .nav-link:hover {
+  background: rgba(72, 183, 238, .13) !important;
+  color: #fff !important;
+}
+
+.badge-primary,
+.bg-primary {
+  background: var(--biz-accent) !important;
+}
+
+/* Product surfaces should feel deliberate, layered, and enterprise-grade. */
+.module-card,
+.dashboard-card,
+.stat-card {
+  border: 1px solid var(--biz-line);
+  border-radius: var(--biz-radius);
+  box-shadow: var(--biz-shadow);
+  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+}
+
+.module-card:hover,
+.dashboard-card:hover,
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 55px rgba(8, 24, 42, .11);
+  border-color: #c5d7e5;
+}
+
+/* The public time clock is deliberately not part of workspace navigation. */
 main .clock-link,
 main .footer-links,
 main > .clock,
-main > p a[href="/clock/"] { display: none !important; }
-.module-card[data-href="/clock/"] .module-link { display: none !important; }
+main > p a[href="/clock/"] {
+  display: none !important;
+}
+
+.module-card[data-href="/clock/"] .module-link {
+  display: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .module-card,
+  .dashboard-card,
+  .stat-card,
+  button,
+  .btn-primary {
+    transition: none;
+  }
+}
