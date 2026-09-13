@@ -1,404 +1,56 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <link rel="stylesheet" href="/static/adminlte/plugins/fontawesome-free/css/all.min.css"><link rel="stylesheet" href="/static/adminlte/dist/css/adminlte.min.css"><link rel="stylesheet" href="/static/css/custom.css">
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Shift Scheduling | BizFlow HRIS</title>
-	<style>
-		* { margin: 0; padding: 0; box-sizing: border-box; }
-		body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif; background: #f5f5f5; color: #333; line-height: 1.6; }
-		main { display: flex; flex-direction: column; min-height: 100vh; background: #f5f5f5; }
-		banner { background: white; border-bottom: 1px solid #e0e0e0; padding: 1.5rem; display: flex; justify-content: space-between; align-items: center; }
-		banner > * { display: flex; align-items: center; }
-		banner strong { font-size: 1.2rem; }
-		banner small { color: #666; margin-left: 0.5rem; }
-		main > * { padding: 2rem; max-width: 1400px; margin: 0 auto; width: 100%; }
-		main > a { align-self: flex-start; color: #007bff; text-decoration: none; margin-top: -1rem; font-size: 0.9rem; }
-		main > a:hover { text-decoration: underline; }
-		h1 { font-size: 2rem; margin-bottom: 0.5rem; }
-		h2 { font-size: 1.3rem; margin-top: 2rem; margin-bottom: 1rem; border-bottom: 2px solid #007bff; padding-bottom: 0.5rem; }
-		p { color: #666; margin-bottom: 1.5rem; }
-		.form-group { margin-bottom: 1.5rem; }
-		label { display: block; font-weight: 600; margin-bottom: 0.5rem; }
-		input, select, textarea { width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.95rem; }
-		input:focus, select:focus, textarea:focus { outline: none; border-color: #007bff; box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1); }
-		button { padding: 0.75rem 1.5rem; border: none; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 0.95rem; }
-		.btn-primary { background: #007bff; color: white; }
-		.btn-primary:hover { background: #0056b3; }
-		.btn-danger { background: #dc3545; color: white; }
-		.btn-danger:hover { background: #c82333; }
-		.btn-secondary { background: #6c757d; color: white; }
-		.btn-secondary:hover { background: #5a6268; }
-		.btn-success { background: #28a745; color: white; }
-		.btn-success:hover { background: #218838; }
-		.schedule-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
-		@media (max-width: 1200px) { .schedule-grid { grid-template-columns: 1fr; } }
-		.assignment-card { background: white; border: 1px solid #ddd; border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; }
-		.assignment-card h3 { margin-bottom: 0.5rem; }
-		.assignment-card p { margin: 0.25rem 0; font-size: 0.9rem; }
-		.assignment-card .badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.8rem; font-weight: 600; margin-right: 0.5rem; }
-		.badge-primary { background: #007bff; color: white; }
-		.badge-success { background: #28a745; color: white; }
-		.badge-info { background: #17a2b8; color: white; }
-		.assignment-actions { margin-top: 1rem; display: flex; gap: 0.5rem; }
-		.assignment-actions button { padding: 0.5rem 1rem; font-size: 0.85rem; }
-		table { width: 100%; border-collapse: collapse; background: white; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; }
-		thead { background: #f8f9fa; font-weight: 600; }
-		th, td { padding: 1rem; text-align: left; border-bottom: 1px solid #ddd; }
-		th { background: #f8f9fa; font-weight: 600; }
-		tr:hover { background: #f9f9f9; }
-		.empty { text-align: center; color: #999; padding: 2rem; }
-		.alert { padding: 1rem; border-radius: 4px; margin-bottom: 1rem; }
-		.alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-		.alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-		.alert-info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
-		.loader { display: none; text-align: center; padding: 2rem; }
-		.loader.active { display: block; }
-		.spinner { border: 4px solid #f3f3f3; border-top: 4px solid #007bff; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto; }
-		@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-	</style>
+  {% csrf_token %}
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scheduling | BizFlow HRIS</title>
+  <link rel="stylesheet" href="/static/css/custom.css">
+  <style>
+    :root{--bg:#07111f;--panel:#0d1b2e;--line:#20334d;--text:#edf5ff;--muted:#8ea4bd;--accent:#67d8ff;--accent2:#9b7cff;--danger:#ff6b7a}
+    *{box-sizing:border-box} body{margin:0;background:radial-gradient(circle at 15% 0%,#142a47 0,transparent 35%),var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    main{max-width:1380px;margin:auto;padding:28px}.top{display:flex;justify-content:space-between;gap:20px;align-items:center;margin-bottom:26px}.eyebrow{color:var(--accent);font-size:.78rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase}.title{font-size:clamp(1.8rem,4vw,3rem);margin:.25rem 0}.sub{color:var(--muted);margin:0}.back{color:var(--accent);text-decoration:none}
+    .grid{display:grid;grid-template-columns:minmax(320px,.8fr) minmax(420px,1.2fr);gap:20px}.panel{background:linear-gradient(145deg,rgba(18,37,61,.94),rgba(9,21,37,.94));border:1px solid var(--line);border-radius:20px;padding:22px;box-shadow:0 18px 60px rgba(0,0,0,.25)}
+    h2{margin-top:0}label{display:block;color:#c7d8ea;font-size:.85rem;font-weight:650;margin:14px 0 7px}input,select{width:100%;padding:12px;border-radius:10px;border:1px solid #2a405c;background:#081525;color:var(--text)}.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}.check{display:flex;gap:8px;align-items:center;margin:15px 0;color:var(--muted)}.check input{width:auto}
+    button{border:0;border-radius:10px;padding:12px 16px;font-weight:700;cursor:pointer}.primary{width:100%;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#06101d}.danger{background:transparent;border:1px solid #65303a;color:#ff9da7}.muted{color:var(--muted)}.alert{padding:12px;border-radius:10px;margin-bottom:16px;display:none}.ok{background:#103b31;color:#a9f3d8}.err{background:#431f2a;color:#ffb5bf}.card{border:1px solid var(--line);border-radius:14px;padding:15px;margin:10px 0;background:rgba(4,13,25,.55)}.card-head{display:flex;justify-content:space-between;gap:12px}.badge{font-size:.72rem;padding:4px 8px;border-radius:999px;background:#17324f;color:#9edfff}.actions{display:flex;gap:8px;margin-top:12px}.empty{padding:30px;text-align:center;color:var(--muted)}
+    @media(max-width:900px){.grid{grid-template-columns:1fr}.row{grid-template-columns:1fr}.top{align-items:flex-start;flex-direction:column}}
+  </style>
 </head>
 <body>
 <main>
-	<banner>
-		<strong>BizFlow HRIS</strong>
-		<div><span id="userRole">Manager</span> · <small id="orgName">Organization</small></div>
-	</banner>
-	
-	<a href="{{ workspace_url }}">← Back to workspace</a>
-	
-	<h1>Shift Scheduling</h1>
-	<p>Create and manage shift assignments for your team. Select an employee, choose dates and shifts, then assign them to projects.</p>
-	
-	<div id="alert" class="alert" style="display:none;"></div>
-	
-	<div class="schedule-grid">
-		<div>
-			<h2>Assign a Shift</h2>
-			<form id="assignForm">
-				<div class="form-group">
-					<label for="employeeSelect">Select Employee</label>
-					<select id="employeeSelect" required>
-						<option value="">-- Choose an employee --</option>
-					</select>
-				</div>
-				
-				<div class="form-group">
-					<label for="shiftSelect">Select Shift</label>
-					<select id="shiftSelect" required>
-						<option value="">-- Choose a shift --</option>
-					</select>
-				</div>
-				
-				<div class="form-group">
-					<label for="clientSelect">Client (Optional)</label>
-					<select id="clientSelect">
-						<option value="">-- No specific client --</option>
-					</select>
-				</div>
-				
-				<div class="form-group">
-					<label for="siteSelect">Site (Optional)</label>
-					<select id="siteSelect">
-						<option value="">-- No specific site --</option>
-					</select>
-				</div>
-				
-				<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-					<div class="form-group">
-						<label for="startDate">Start Date</label>
-						<input type="date" id="startDate" required>
-					</div>
-					
-					<div class="form-group">
-						<label for="endDate">End Date (Optional)</label>
-						<input type="date" id="endDate">
-					</div>
-				</div>
-				
-				<div class="form-group" style="display: flex; align-items: center;">
-					<input type="checkbox" id="isPrimary" style="width: auto; margin-right: 0.5rem;">
-					<label for="isPrimary" style="margin: 0;">Set as primary assignment</label>
-				</div>
-				
-				<button type="submit" class="btn-primary" style="width: 100%;">Assign Shift</button>
-			</form>
-		</div>
-		
-		<div>
-			<h2>Current Assignments</h2>
-			<div class="loader" id="loader">
-				<div class="spinner"></div>
-				<p>Loading assignments...</p>
-			</div>
-			<div id="assignmentsList" style="max-height: 600px; overflow-y: auto;"></div>
-		</div>
-	</div>
+  <div class="top"><div><div class="eyebrow">Workforce command center</div><h1 class="title">Shift scheduling</h1><p class="sub">Manage effective-dated assignments without weakening payroll or attendance controls.</p></div><a class="back" href="{{ workspace_url }}">← Workspace</a></div>
+  <div id="alert" class="alert"></div>
+  <div class="grid">
+    <section class="panel">
+      <h2>Assign a shift</h2>
+      <form id="assignForm">
+        <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+        <label>Employee<select id="employeeSelect" required><option value="">Choose employee</option></select></label>
+        <label>Shift<select id="shiftSelect" required><option value="">Choose shift</option></select></label>
+        <label>Client<select id="clientSelect"><option value="">No specific client</option></select></label>
+        <label>Site<select id="siteSelect"><option value="">No specific site</option></select></label>
+        <div class="row"><label>Start date<input type="date" id="startDate" required></label><label>End date<input type="date" id="endDate"></label></div>
+        <label class="check"><input type="checkbox" id="isPrimary"> Set as primary assignment</label>
+        <button class="primary" type="submit">Save assignment</button>
+      </form>
+    </section>
+    <section class="panel"><h2>Current assignments</h2><div id="assignmentsList"><div class="empty">Select an employee.</div></div></section>
+  </div>
 </main>
-
 <script>
-const API_BASE = '/api/scheduling';
-let allEmployees = [];
-let allShifts = [];
-let allClients = [];
-let currentAssignments = [];
-
-async function showAlert(message, type = 'info') {
-	const alert = document.getElementById('alert');
-	alert.textContent = message;
-	alert.className = `alert alert-${type}`;
-	alert.style.display = 'block';
-	setTimeout(() => alert.style.display = 'none', 5000);
-}
-
-async function loadShifts() {
-	try {
-		const res = await fetch(`${API_BASE}/shifts/`);
-		if (!res.ok) throw new Error('Failed to load shifts');
-		const data = await res.json();
-		allShifts = data.shifts;
-		
-		const select = document.getElementById('shiftSelect');
-		select.innerHTML = '<option value="">-- Choose a shift --</option>';
-		data.shifts.forEach(shift => {
-			const option = document.createElement('option');
-			option.value = shift.id;
-			option.textContent = `${shift.name} (${shift.start_time} - ${shift.end_time})`;
-			select.appendChild(option);
-		});
-	} catch (error) {
-		showAlert(`Error loading shifts: ${error.message}`, 'error');
-	}
-}
-
-async function loadEmployees() {
-	try {
-		const res = await fetch(`${API_BASE}/employees/`);
-		if (!res.ok) throw new Error('Failed to load employees');
-		const data = await res.json();
-		allEmployees = data.employees;
-		
-		const select = document.getElementById('employeeSelect');
-		select.innerHTML = '<option value="">-- Choose an employee --</option>';
-		data.employees.forEach(emp => {
-			const option = document.createElement('option');
-			option.value = emp.id;
-			option.textContent = `${emp.name} (${emp.employee_number}) - ${emp.department || 'No Dept'}`;
-			select.appendChild(option);
-		});
-	} catch (error) {
-		showAlert(`Error loading employees: ${error.message}`, 'error');
-	}
-}
-
-async function loadClients() {
-	try {
-		const res = await fetch(`${API_BASE}/clients/`);
-		if (!res.ok) throw new Error('Failed to load clients');
-		const data = await res.json();
-		allClients = data.clients;
-		
-		const select = document.getElementById('clientSelect');
-		select.innerHTML = '<option value="">-- No specific client --</option>';
-		data.clients.forEach(client => {
-			const option = document.createElement('option');
-			option.value = client.id;
-			option.textContent = client.name;
-			select.appendChild(option);
-		});
-	} catch (error) {
-		showAlert(`Error loading clients: ${error.message}`, 'error');
-	}
-}
-
-function updateSites() {
-	const clientId = document.getElementById('clientSelect').value;
-	const siteSelect = document.getElementById('siteSelect');
-	siteSelect.innerHTML = '<option value="">-- No specific site --</option>';
-	
-	if (clientId) {
-		const client = allClients.find(c => c.id === clientId);
-		if (client && client.sites.length > 0) {
-			client.sites.forEach(site => {
-				const option = document.createElement('option');
-				option.value = site.id;
-				option.textContent = site.name;
-				siteSelect.appendChild(option);
-			});
-		}
-	}
-}
-
-async function loadAssignments() {
-	const employeeId = document.getElementById('employeeSelect').value;
-	if (!employeeId) {
-		document.getElementById('assignmentsList').innerHTML = '<div class="empty">Select an employee to view their current shifts</div>';
-		return;
-	}
-	
-	const today = new Date();
-	const startDate = new Date(today);
-	startDate.setDate(today.getDate() - 30);
-	const endDate = new Date(today);
-	endDate.setDate(today.getDate() + 90);
-	
-	const loader = document.getElementById('loader');
-	loader.classList.add('active');
-	
-	try {
-		const res = await fetch(`${API_BASE}/employee-schedule/?employee_id=${employeeId}&start_date=${startDate.toISOString().split('T')[0]}&end_date=${endDate.toISOString().split('T')[0]}`);
-		if (!res.ok) throw new Error('Failed to load assignments');
-		const data = await res.json();
-		currentAssignments = data.assignments;
-		renderAssignments(data.assignments);
-	} catch (error) {
-		showAlert(`Error loading assignments: ${error.message}`, 'error');
-	} finally {
-		loader.classList.remove('active');
-	}
-}
-
-function renderAssignments(assignments) {
-	const container = document.getElementById('assignmentsList');
-	if (!assignments || assignments.length === 0) {
-		container.innerHTML = '<div class="empty">No shift assignments for this employee in the selected period.</div>';
-		return;
-	}
-	
-	container.innerHTML = assignments.map(assignment => `
-		<div class="assignment-card">
-			<h3>${assignment.shift} <span class="badge badge-primary">${new Date(assignment.start_date).toLocaleDateString()}</span></h3>
-			<p><strong>Duration:</strong> ${assignment.start_date} ${assignment.end_date ? `to ${assignment.end_date}` : '(ongoing)'}</p>
-			${assignment.client ? `<p><strong>Client:</strong> ${assignment.client}</p>` : ''}
-			${assignment.site ? `<p><strong>Site:</strong> ${assignment.site}</p>` : ''}
-			${assignment.is_primary ? '<span class="badge badge-success">Primary</span>' : ''}
-			<div class="assignment-actions">
-				<button class="btn-secondary" onclick="editAssignment('${assignment.id}')">Edit</button>
-				<button class="btn-danger" onclick="deleteAssignment('${assignment.id}')">Delete</button>
-			</div>
-		</div>
-	`).join('');
-}
-
-async function deleteAssignment(assignmentId) {
-	if (!confirm('Are you sure you want to delete this shift assignment?')) return;
-	
-	try {
-		const res = await fetch(`${API_BASE}/delete/`, {
-			method: 'DELETE',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ assignment_id: assignmentId })
-		});
-		if (!res.ok) throw new Error('Failed to delete assignment');
-		showAlert('Shift assignment deleted successfully.', 'success');
-		loadAssignments();
-	} catch (error) {
-		showAlert(`Error deleting assignment: ${error.message}`, 'error');
-	}
-}
-
-function editAssignment(assignmentId) {
-	const assignment = currentAssignments.find(a => a.id === assignmentId);
-	if (!assignment) return;
-	
-	document.getElementById('shiftSelect').value = assignment.shift_id;
-	document.getElementById('clientSelect').value = assignment.client_id || '';
-	updateSites();
-	if (assignment.site_id) {
-		document.getElementById('siteSelect').value = assignment.site_id;
-	}
-	document.getElementById('startDate').value = assignment.start_date;
-	document.getElementById('endDate').value = assignment.end_date || '';
-	document.getElementById('isPrimary').checked = assignment.is_primary;
-	
-	// Add hidden field for update
-	let input = document.getElementById('assignmentId');
-	if (!input) {
-		input = document.createElement('input');
-		input.type = 'hidden';
-		input.id = 'assignmentId';
-		document.getElementById('assignForm').appendChild(input);
-	}
-	input.value = assignmentId;
-	
-	document.querySelector('#assignForm button').textContent = 'Update Shift';
-	document.querySelector('#assignForm button').scrollIntoView({ behavior: 'smooth' });
-}
-
-document.getElementById('clientSelect').addEventListener('change', updateSites);
-
-document.getElementById('employeeSelect').addEventListener('change', () => {
-	loadAssignments();
-	// Reset form when employee changes
-	document.getElementById('assignForm').reset();
-	const input = document.getElementById('assignmentId');
-	if (input) input.value = '';
-	document.querySelector('#assignForm button').textContent = 'Assign Shift';
-});
-
-document.getElementById('assignForm').addEventListener('submit', async (e) => {
-	e.preventDefault();
-	
-	const employeeId = document.getElementById('employeeSelect').value;
-	const shiftId = document.getElementById('shiftSelect').value;
-	const clientId = document.getElementById('clientSelect').value || null;
-	const siteId = document.getElementById('siteSelect').value || null;
-	const startDate = document.getElementById('startDate').value;
-	const endDate = document.getElementById('endDate').value || null;
-	const isPrimary = document.getElementById('isPrimary').checked;
-	const assignmentId = document.getElementById('assignmentId')?.value || null;
-	
-	if (!employeeId || !shiftId || !startDate) {
-		showAlert('Please fill in all required fields.', 'error');
-		return;
-	}
-	
-	try {
-		const res = await fetch(`${API_BASE}/assign/`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				employee_id: employeeId,
-				shift_id: shiftId,
-				client_id: clientId,
-				site_id: siteId,
-				start_date: startDate,
-				end_date: endDate,
-				is_primary: isPrimary,
-				assignment_id: assignmentId,
-			})
-		});
-		if (!res.ok) {
-			const error = await res.json();
-			throw new Error(error.detail || 'Failed to save assignment');
-		}
-		const data = await res.json();
-		showAlert(`Shift ${data.status === 'created' ? 'assigned' : 'updated'} successfully!`, 'success');
-		document.getElementById('assignForm').reset();
-		const input = document.getElementById('assignmentId');
-		if (input) input.value = '';
-		document.querySelector('#assignForm button').textContent = 'Assign Shift';
-		loadAssignments();
-	} catch (error) {
-		showAlert(`Error saving assignment: ${error.message}`, 'error');
-	}
-});
-
-// Initialize
-async function init() {
-	// Set today's date as default
-	const today = new Date().toISOString().split('T')[0];
-	document.getElementById('startDate').value = today;
-	
-	await loadShifts();
-	await loadEmployees();
-	await loadClients();
-	
-	showAlert('Shift scheduling interface loaded. Select an employee to begin.', 'info');
-}
-
-init();
+const API='/api/scheduling';
+const csrf=()=>document.querySelector('[name=csrfmiddlewaretoken]').value;
+const alertBox=document.getElementById('alert');
+function show(message,error=false){alertBox.textContent=message;alertBox.className='alert '+(error?'err':'ok');alertBox.style.display='block';setTimeout(()=>alertBox.style.display='none',4500)}
+async function get(path){const r=await fetch(API+path,{headers:{Accept:'application/json'}});const d=await r.json();if(!r.ok)throw new Error(d.detail||'Request failed');return d}
+async function load(){try{const [e,s,c]=await Promise.all([get('/employees/'),get('/shifts/'),get('/clients/')]);const es=document.getElementById('employeeSelect'),ss=document.getElementById('shiftSelect'),cs=document.getElementById('clientSelect');e.employees.forEach(x=>{es.add(new Option(`${x.name} (${x.employee_number})`,x.id))});s.shifts.forEach(x=>{ss.add(new Option(`${x.name} · ${x.start_time}–${x.end_time}`,x.id))});window.clients=c.clients;c.clients.forEach(x=>cs.add(new Option(x.name,x.id)));}catch(e){show(e.message,true)}}
+document.getElementById('clientSelect').addEventListener('change',e=>{const s=document.getElementById('siteSelect');s.innerHTML='<option value="">No specific site</option>';const c=(window.clients||[]).find(x=>x.id===e.target.value);(c?.sites||[]).forEach(x=>s.add(new Option(x.name,x.id)))})
+document.getElementById('employeeSelect').addEventListener('change',async()=>{const id=document.getElementById('employeeSelect').value;if(!id)return;const d=new Date(),start=new Date(d),end=new Date(d);start.setDate(d.getDate()-30);end.setDate(d.getDate()+90);try{const x=await get(`/employee-schedule/?employee_id=${id}&start_date=${start.toISOString().slice(0,10)}&end_date=${end.toISOString().slice(0,10)}`);render(x.assignments)}catch(e){show(e.message,true)}})
+function render(items){const box=document.getElementById('assignmentsList');if(!items.length){box.innerHTML='<div class="empty">No assignments in the selected window.</div>';return}box.innerHTML=items.map(a=>`<div class="card"><div class="card-head"><strong>${a.shift}</strong>${a.is_primary?'<span class="badge">Primary</span>':''}</div><div class="muted">${a.start_date} → ${a.end_date||'ongoing'}</div>${a.client?`<div class="muted">Client: ${a.client}${a.site?' · '+a.site:''}</div>`:''}<div class="actions"><button type="button" onclick="editAssignment('${a.id}')">Edit</button><button class="danger" type="button" onclick="deleteAssignment('${a.id}')">Delete</button></div></div>`).join('')}
+window.editAssignment=async id=>{try{const e=document.getElementById('employeeSelect').value;const d=await get(`/employee-schedule/?employee_id=${e}&start_date=2000-01-01&end_date=2099-12-31`);const a=d.assignments.find(x=>x.id===id);if(!a)return;document.getElementById('shiftSelect').value=a.shift_id;document.getElementById('clientSelect').value=a.client_id||'';document.getElementById('clientSelect').dispatchEvent(new Event('change'));document.getElementById('siteSelect').value=a.site_id||'';document.getElementById('startDate').value=a.start_date;document.getElementById('endDate').value=a.end_date||'';document.getElementById('isPrimary').checked=!!a.is_primary;document.getElementById('assignForm').dataset.assignmentId=id}catch(e){show(e.message,true)}};
+window.deleteAssignment=async id=>{if(!confirm('Delete this shift assignment?'))return;try{const r=await fetch(API+'/assign/',{method:'DELETE',headers:{'Content-Type':'application/json','X-CSRFToken':csrf(),Accept:'application/json'},body:JSON.stringify({assignment_id:id})});const d=await r.json();if(!r.ok)throw new Error(d.detail||'Delete failed');show(d.message);document.getElementById('employeeSelect').dispatchEvent(new Event('change'))}catch(e){show(e.message,true)}};
+document.getElementById('assignForm').addEventListener('submit',async e=>{e.preventDefault();const p={employee_id:document.getElementById('employeeSelect').value,shift_id:document.getElementById('shiftSelect').value,client_id:document.getElementById('clientSelect').value||null,site_id:document.getElementById('siteSelect').value||null,start_date:document.getElementById('startDate').value,end_date:document.getElementById('endDate').value||null,is_primary:document.getElementById('isPrimary').checked};const id=e.target.dataset.assignmentId;if(id)p.assignment_id=id;try{const r=await fetch(API+'/assign/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf(),Accept:'application/json'},body:JSON.stringify(p)});const d=await r.json();if(!r.ok)throw new Error(d.detail||'Save failed');show(d.message);delete e.target.dataset.assignmentId;document.getElementById('employeeSelect').dispatchEvent(new Event('change'))}catch(x){show(x.message,true)}});
+load();
 </script>
 </body>
 </html>
