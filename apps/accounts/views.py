@@ -8,14 +8,9 @@ from apps.organization.context import ACTIVE_ORGANIZATION_SESSION_KEY, current_m
 def login_page(request):
     if request.user.is_authenticated:
         return redirect_for_user(request)
-
     next_url = request.GET.get('next') or request.POST.get('next')
     if request.method == 'POST':
-        user = authenticate(
-            request,
-            username=request.POST.get('username', '').strip(),
-            password=request.POST.get('password', ''),
-        )
+        user = authenticate(request, username=request.POST.get('username', ''), password=request.POST.get('password', ''))
         if user is not None and user.is_active:
             memberships = user.organization_memberships.filter(
                 is_active=True,
@@ -23,42 +18,25 @@ def login_page(request):
             ).select_related('organization').order_by('organization__name')
             selected_id = request.POST.get('organization_id', '').strip()
             if not memberships.exists():
-                return render(
-                    request,
-                    'registration/login.html',
-                    {'error': 'Your account is inactive or has no active organization access.', 'next': next_url},
-                    status=401,
-                )
+                return render(request, 'registration/login.html', {'error': 'No active organization membership found.', 'next': next_url}, status=401)
             if memberships.count() > 1 and not selected_id:
-                return render(
-                    request,
-                    'registration/login.html',
-                    {
-                        'error': 'Select the organization you want to access.',
-                        'next': next_url,
-                        'organizations': memberships,
-                        'organization_selection': True,
-                        'username': request.POST.get('username', '').strip(),
-                    },
-                    status=200,
-                )
+                login(request, user)
+                request.session.pop(ACTIVE_ORGANIZATION_SESSION_KEY, None)
+                return render(request, 'registration/login.html', {
+                    'error': 'Select the organization you want to access.',
+                    'next': next_url,
+                    'organizations': memberships,
+                    'organization_selection': True,
+                    'username': request.POST.get('username', '').strip(),
+                }, status=200)
             membership = memberships.filter(organization_id=selected_id).first() if selected_id else memberships.first()
             if membership is not None:
                 login(request, user)
                 request.session[ACTIVE_ORGANIZATION_SESSION_KEY] = str(membership.organization_id)
-                if next_url and url_has_allowed_host_and_scheme(
-                    next_url,
-                    {request.get_host()},
-                    require_https=request.is_secure(),
-                ):
+                if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
                     return redirect(next_url)
                 return redirect_for_user(request)
-        return render(
-            request,
-            'registration/login.html',
-            {'error': 'Invalid username or password.', 'next': next_url},
-            status=401,
-        )
+        return render(request, 'registration/login.html', {'error': 'Invalid username or password.', 'next': next_url}, status=401)
     return render(request, 'registration/login.html', {'next': next_url})
 
 
