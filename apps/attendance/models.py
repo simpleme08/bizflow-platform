@@ -49,8 +49,9 @@ class AttendanceRecord(BaseModel):
     def clean(self):
         if self.assignment_id and self.assignment.employee_id != self.employee_id:
             raise ValidationError('The assignment must belong to the selected employee.')
-        if self.clock_shift_id and self.clock_shift.organization_id != self.employee.organization_id:
-            raise ValidationError('The clock shift must belong to the employee organization.')
+        # ShiftTemplate is currently a global workforce template, so there is no
+        # organization_id to validate here. Tenant scoping is enforced when a
+        # future scheduling API chooses a template for an employee.
         if self.clock_in_mode == self.ClockInMode.SCHEDULED and not self.assignment_id:
             raise ValidationError('A scheduled clock-in requires an employee assignment.')
         if self.time_in and timezone.localtime(self.time_in).date() != self.attendance_date:
