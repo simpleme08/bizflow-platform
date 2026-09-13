@@ -7,11 +7,12 @@ import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-DEBUG = os.getenv('DJANGO_DEBUG', 'True').lower() in ('1', 'true', 'yes')
+ENVIRONMENT = os.getenv('DJANGO_ENV', 'development').lower()
+DEBUG = os.getenv('DJANGO_DEBUG', 'False').lower() in ('1', 'true', 'yes')
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', '')
-if not DEBUG and not SECRET_KEY:
-    raise RuntimeError('DJANGO_SECRET_KEY must be set when DJANGO_DEBUG=False')
-if DEBUG and not SECRET_KEY:
+if not SECRET_KEY:
+    if ENVIRONMENT == 'production':
+        raise RuntimeError('DJANGO_SECRET_KEY must be set in production')
     SECRET_KEY = 'dev-only-key-change-this-before-production'
 
 ALLOWED_HOSTS = [host.strip() for host in os.getenv('DJANGO_ALLOWED_HOSTS', '127.0.0.1,localhost').split(',') if host.strip()]
@@ -64,12 +65,17 @@ STORAGES = {
     'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'},
 }
 
-SECURE_SSL_REDIRECT = not DEBUG
-SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
-SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
-SECURE_HSTS_PRELOAD = not DEBUG
-SESSION_COOKIE_SECURE = not DEBUG
-CSRF_COOKIE_SECURE = not DEBUG
+SECURE_SSL_REDIRECT = ENVIRONMENT == 'production'
+SECURE_HSTS_SECONDS = 31536000 if ENVIRONMENT == 'production' else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = ENVIRONMENT == 'production'
+SECURE_HSTS_PRELOAD = ENVIRONMENT == 'production'
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https') if ENVIRONMENT == 'production' else None
+SESSION_COOKIE_SECURE = ENVIRONMENT == 'production'
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SECURE = ENVIRONMENT == 'production'
+CSRF_COOKIE_HTTPONLY = False
+CSRF_COOKIE_SAMESITE = 'Lax'
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
 SECURE_REFERRER_POLICY = 'same-origin'
