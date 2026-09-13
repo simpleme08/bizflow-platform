@@ -1,9 +1,7 @@
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
-from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
-from datetime import date, timedelta
-from decimal import Decimal
+from datetime import date
 import json
 
 from apps.organization.models import OrganizationMembership
@@ -88,11 +86,10 @@ def get_employee_schedule(request):
         end = date.fromisoformat(end_date)
     except (Employee.DoesNotExist, ValueError):
         return JsonResponse({'detail': 'Invalid parameters.'}, status=400)
-    assignments = EmployeeAssignment.objects.filter(employee=employee, start_date__lte=end).exclude(end_date__lt=start).select_related('shift_template', 'client')
+    assignments = EmployeeAssignment.objects.filter(employee=employee, start_date__lte=end).exclude(end_date__lt=start).select_related('shift_template', 'client', 'client_site')
     return JsonResponse({'assignments': [{'id': str(assignment.id), 'shift': assignment.shift_template.name, 'shift_id': str(assignment.shift_template.id), 'client': assignment.client.name if assignment.client else None, 'client_id': str(assignment.client.id) if assignment.client else None, 'site': assignment.client_site.name if assignment.client_site else None, 'site_id': str(assignment.client_site.id) if assignment.client_site else None, 'start_date': assignment.start_date.isoformat(), 'end_date': assignment.end_date.isoformat() if assignment.end_date else None, 'is_primary': assignment.is_primary} for assignment in assignments]})
 
 
-@csrf_exempt
 @require_http_methods(['POST'])
 def assign_shift(request):
     if not request.user.is_authenticated:
@@ -161,7 +158,6 @@ def assign_shift(request):
 
 
 @require_http_methods(['DELETE'])
-@csrf_exempt
 def delete_assignment(request):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
