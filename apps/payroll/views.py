@@ -12,6 +12,7 @@ from apps.organization.models import OrganizationMembership
 from apps.core.services import record_audit
 
 from .completion import apply_record_adjustments, settle_loans_for_record
+from .confidence import PayrollConfidenceEngine
 from .models import PayrollAdjustment, PayrollPeriod, PayrollRecord
 from .services import PayrollCalculator
 
@@ -69,7 +70,7 @@ def payroll_preflight(request):
         period = PayrollPeriod.objects.get(id=request.POST.get('period_id'), organization=membership.organization)
     except PayrollPeriod.DoesNotExist:
         return JsonResponse({'detail': 'Payroll period was not found.'}, status=404)
-    return JsonResponse(PayrollCalculator.preflight(period, membership.organization))
+    return JsonResponse(PayrollConfidenceEngine.preflight(period, membership.organization))
 
 
 @require_http_methods(['POST'])
@@ -85,12 +86,15 @@ def process_payroll(request):
         return JsonResponse({'detail': 'Payroll period was not found.'}, status=404)
     if PayrollRecord.objects.filter(payroll_period=period).exclude(status=PayrollRecord.Status.DRAFT).exists():
         return JsonResponse({'detail': 'Payroll contains approved or paid records and cannot be recalculated.'}, status=409)
+    confidence = PayrollConfidenceEngine.preflight(period, membership.organization)
+    if confidence['status'] == PayrollConfidenceEngine.BLOCKED:
+        return JsonResponse({'detail': 'Payroll is blocked by preflight checks.', 'confidence': confidence}, status=409)
     try:
         processed = PayrollCalculator.process_period(period, membership.organization)
     except ValueError as exc:
         return JsonResponse({'detail': str(exc)}, status=409)
-    record_audit(organization=membership.organization, actor=request.user, action='payroll.processed', entity=period, details={'processed': processed})
-    return JsonResponse({'period': period.name, 'processed': processed, 'status': period.status})
+    record_audit(organization=membership.organization, actor=request.user, action='payroll.processed', entity=period, details={'processed': processed, 'confidence': confidence['status']})
+    return JsonResponse({'period': period.name, 'processed': processed, 'status': period.status, 'confidence': confidence})
 
 
 @require_http_methods(['POST'])
@@ -143,9 +147,9 @@ def apply_payroll_adjustments(request, record_id):
 def approve_payroll(request, record_id):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
-    membership = _membership(request, 'manage_payroll')
+    membership = _membership(request, 'approve_payroll')
     if membership is None:
-        return JsonResponse({'detail': 'Payroll management permission is required.'}, status=403)
+        return JsonResponse({'detail': 'Payroll approval permission is required. Payroll preparation and approval are intentionally separated.'}, status=403)
     with transaction.atomic():
         try:
             record = PayrollRecord.objects.select_for_update().select_related('payroll_period').get(id=record_id, employee__organization=membership.organization, payroll_period__organization=membership.organization)
@@ -155,19 +159,22 @@ def approve_payroll(request, record_id):
             return JsonResponse({'detail': 'Payroll must be calculated before records can be approved.'}, status=409)
         if record.status != PayrollRecord.Status.DRAFT:
             return JsonResponse({'detail': 'Only draft payroll records can be approved.'}, status=409)
+        confidence = PayrollConfidenceEngine.preflight(record.payroll_period, membership.organization)
+        if confidence['status'] != PayrollConfidenceEngine.READY:
+            return JsonResponse({'detail': 'Payroll cannot be approved until confidence checks are READY.', 'confidence': confidence}, status=409)
         record.status = PayrollRecord.Status.APPROVED
         record.save(update_fields=('status', 'updated_at'))
-    record_audit(organization=membership.organization, actor=request.user, action='payroll.approved', entity=record)
-    return JsonResponse({'id': str(record.id), 'status': record.status})
+    record_audit(organization=membership.organization, actor=request.user, action='payroll.approved', entity=record, details={'confidence': confidence['status']})
+    return JsonResponse({'id': str(record.id), 'status': record.status, 'confidence': confidence})
 
 
 @require_http_methods(['POST'])
 def mark_payroll_paid(request, record_id):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
-    membership = _membership(request, 'manage_payroll')
+    membership = _membership(request, 'disburse_payroll')
     if membership is None:
-        return JsonResponse({'detail': 'Payroll management permission is required.'}, status=403)
+        return JsonResponse({'detail': 'Payroll disbursement permission is required.'}, status=403)
     with transaction.atomic():
         try:
             record = PayrollRecord.objects.select_for_update().select_related('payroll_period').get(id=record_id, employee__organization=membership.organization, payroll_period__organization=membership.organization)
