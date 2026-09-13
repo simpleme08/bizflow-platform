@@ -1,6 +1,5 @@
 from decimal import Decimal, InvalidOperation
 
-from django.db import transaction
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
@@ -11,7 +10,7 @@ from reportlab.pdfgen import canvas
 from apps.organization.context import current_membership
 from apps.core.services import record_audit
 
-from .completion import apply_record_adjustments, settle_loans_for_record
+from .completion import apply_record_adjustments
 from .models import PayrollAdjustment, PayrollPeriod, PayrollRecord
 from .services import PayrollCalculator
 
@@ -112,15 +111,18 @@ def create_payroll_adjustment(request, record_id):
     if record.status != PayrollRecord.Status.DRAFT:
         return JsonResponse({'detail': 'Only draft payroll records can receive adjustments.'}, status=409)
     try:
+        amount = Decimal(request.POST.get('amount', '0'))
+        if amount <= 0:
+            raise ValueError('Adjustment amount must be greater than zero.')
         adjustment = PayrollAdjustment.objects.create(
             payroll_record=record,
             kind=request.POST.get('kind', PayrollAdjustment.Kind.EARNING),
             description=request.POST.get('description', '').strip(),
-            amount=Decimal(request.POST.get('amount', '0')),
+            amount=amount,
             taxable=request.POST.get('taxable', 'true').lower() == 'true',
-            approved=request.POST.get('approved', 'false').lower() == 'true',
+            approved=False,
         )
-    except Exception as exc:
+    except (InvalidOperation, ValueError, TypeError) as exc:
         return JsonResponse({'detail': str(exc)}, status=400)
     return JsonResponse({'id': str(adjustment.id), 'kind': adjustment.kind, 'description': adjustment.description, 'amount': str(adjustment.amount), 'approved': adjustment.approved}, status=201)
 
@@ -128,7 +130,7 @@ def create_payroll_adjustment(request, record_id):
 @require_http_methods(['POST'])
 def apply_payroll_adjustments(request, record_id):
     if not request.user.is_authenticated:
-        return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
+        return JsonResponse({'detail': 'Payroll management permission is required.'}, status=403)
     membership = _membership(request, 'manage_payroll')
     if membership is None:
         return JsonResponse({'detail': 'Payroll management permission is required.'}, status=403)
