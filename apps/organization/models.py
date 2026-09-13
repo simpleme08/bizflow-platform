@@ -32,6 +32,11 @@ class Organization(BaseModel):
             models.CheckConstraint(condition=models.Q(overage_rate__gte=0), name='organization_overage_rate_nonnegative'),
         ]
 
+    @property
+    def organization_memberships(self):
+        """Backward-compatible alias for the organization's membership manager."""
+        return self.memberships
+
     def __str__(self):
         return self.name
 
