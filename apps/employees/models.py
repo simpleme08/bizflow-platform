@@ -74,8 +74,19 @@ class EmployeeAssignment(BaseModel):
         super().clean()
         if self.end_date and self.end_date < self.start_date:
             raise ValidationError('Assignment end date cannot be before its start date.')
-        if self.employee_id and self.shift_template_id and self.shift_template.organization_id != self.employee.organization_id:
-            raise ValidationError('Assignment shift must belong to the employee organization.')
+        if self.employee_id and self.shift_template_id:
+            shift_org_id = self.shift_template.organization_id
+            if shift_org_id is not None and shift_org_id != self.employee.organization_id:
+                raise ValidationError('Assignment shift must belong to the employee organization.')
+        if self.client_id and self.client.organization_id != self.employee.organization_id:
+            raise ValidationError('Assignment client must belong to the employee organization.')
+        if self.client_site_id:
+            if not self.client_id or self.client_site.client_id != self.client_id:
+                raise ValidationError('Assignment site must belong to the selected client.')
+            if self.client_site.client.organization_id != self.employee.organization_id:
+                raise ValidationError('Assignment site must belong to the employee organization.')
+        if self.cost_center_id and self.cost_center.organization_id != self.employee.organization_id:
+            raise ValidationError('Assignment cost center must belong to the employee organization.')
 
 
 class EmploymentHistory(BaseModel):
