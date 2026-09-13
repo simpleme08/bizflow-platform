@@ -7,54 +7,54 @@ from apps.organization.models import OrganizationMembership
 
 
 class EmployeeLoginTests(TestCase):
-	def test_public_website_is_available(self):
-		response = self.client.get('/')
+    def test_public_website_is_available(self):
+        response = self.client.get('/')
 
-		self.assertEqual(response.status_code, 200)
-		self.assertContains(response, 'People Operations, Made Clear')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Run your people. Run your business.')
 
-	def setUp(self):
-		self.user = get_user_model().objects.create_user(username='employee', password='password')
-		organization = Organization.objects.create(name='Acme', slug='acme')
-		OrganizationMembership.objects.create(organization=organization, user=self.user, role=OrganizationMembership.Role.EMPLOYEE)
-		Employee.objects.create(employee_number='EMP-LOGIN', user=self.user, organization=organization, first_name='Ana', last_name='Reyes')
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='employee', password='password')
+        organization = Organization.objects.create(name='Acme', slug='acme')
+        OrganizationMembership.objects.create(organization=organization, user=self.user, role=OrganizationMembership.Role.EMPLOYEE)
+        Employee.objects.create(employee_number='EMP-LOGIN', user=self.user, organization=organization, first_name='Ana', last_name='Reyes')
 
-	def test_legacy_employee_login_redirects_to_unified_login(self):
-		response = self.client.post('/employee-login/', {'username': 'employee', 'password': 'password'})
+    def test_legacy_employee_login_redirects_to_unified_login(self):
+        response = self.client.post('/employee-login/', {'username': 'employee', 'password': 'password'})
 
-		self.assertRedirects(response, '/login/')
+        self.assertRedirects(response, '/login/')
 
-	def test_single_login_redirects_employee_to_ess(self):
-		response = self.client.post('/login/', {'username': 'employee', 'password': 'password'})
+    def test_single_login_redirects_employee_to_ess(self):
+        response = self.client.post('/login/', {'username': 'employee', 'password': 'password'})
 
-		self.assertRedirects(response, '/ess/')
+        self.assertRedirects(response, '/ess/')
 
-	def test_back_to_workspace_link_uses_logged_in_user_role(self):
-		manager = get_user_model().objects.create_user(username='manager', password='password')
-		organization = Organization.objects.create(name='Branch Ops', slug='branch-ops')
-		OrganizationMembership.objects.create(organization=organization, user=manager, role=OrganizationMembership.Role.MANAGER)
-		self.client.force_login(manager)
-		manager_response = self.client.get('/employees/')
-		self.assertContains(manager_response, 'href="/workspace/"')
+    def test_back_to_workspace_link_uses_logged_in_user_role(self):
+        manager = get_user_model().objects.create_user(username='manager', password='password')
+        organization = Organization.objects.create(name='Branch Ops', slug='branch-ops')
+        OrganizationMembership.objects.create(organization=organization, user=manager, role=OrganizationMembership.Role.MANAGER)
+        self.client.force_login(manager)
+        manager_response = self.client.get('/employees/')
+        self.assertContains(manager_response, 'href="/workspace/"')
 
-		self.client.logout()
-		self.client.force_login(self.user)
-		employee_response = self.client.get('/ess/')
-		self.assertNotContains(employee_response, 'Back to workspace')
+        self.client.logout()
+        self.client.force_login(self.user)
+        employee_response = self.client.get('/ess/')
+        self.assertNotContains(employee_response, 'Back to workspace')
 
-	def test_dashboard_redirects_employees_to_ess(self):
-		self.client.force_login(self.user)
-		response = self.client.get('/workspace/')
-		self.assertRedirects(response, '/ess/')
+    def test_dashboard_redirects_employees_to_ess(self):
+        self.client.force_login(self.user)
+        response = self.client.get('/workspace/')
+        self.assertRedirects(response, '/ess/')
 
-	def test_ess_page_hides_back_to_workspace_link(self):
-		self.client.force_login(self.user)
-		response = self.client.get('/ess/')
-		self.assertNotContains(response, 'Back to workspace')
+    def test_ess_page_hides_back_to_workspace_link(self):
+        self.client.force_login(self.user)
+        response = self.client.get('/ess/')
+        self.assertNotContains(response, 'Back to workspace')
 
-	def test_unified_login_rejects_account_without_organization_access(self):
-		get_user_model().objects.create_user(username='admin-only', password='password')
+    def test_unified_login_rejects_account_without_organization_access(self):
+        get_user_model().objects.create_user(username='admin-only', password='password')
 
-		response = self.client.post('/login/', {'username': 'admin-only', 'password': 'password'})
+        response = self.client.post('/login/', {'username': 'admin-only', 'password': 'password'})
 
-		self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.status_code, 401)
