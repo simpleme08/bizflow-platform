@@ -8,7 +8,7 @@ from django.views.decorators.http import require_http_methods
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
-from apps.organization.models import OrganizationMembership
+from apps.organization.context import current_membership
 from apps.core.services import record_audit
 
 from .completion import apply_record_adjustments, settle_loans_for_record
@@ -17,7 +17,7 @@ from .services import PayrollCalculator
 
 
 def _membership(request, permission=None):
-    membership = OrganizationMembership.objects.filter(user=request.user, is_active=True, organization__is_active=True).first()
+    membership = current_membership(request)
     if membership is None or (permission and not membership.has_permission(permission)):
         return None
     return membership
