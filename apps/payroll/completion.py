@@ -99,17 +99,24 @@ def apply_record_adjustments(record):
     return record
 
 
-def final_pay_preview(employee, separation_date, basic_salary, thirteenth_month=ZERO, accrued_leave_pay=ZERO, other_earnings=ZERO, other_deductions=ZERO, loan_balance=ZERO):
-    """Calculate a transparent final-pay preview; does not mutate employee/payroll data."""
+def final_pay_preview(employee, separation_date, basic_salary, worked_days, thirteenth_month=ZERO, accrued_leave_pay=ZERO, other_earnings=ZERO, other_deductions=ZERO, loan_balance=ZERO):
+    """Calculate a transparent final-pay preview using explicitly supplied worked days.
+
+    The function deliberately does not infer payable days from the separation date.
+    Final-pay proration depends on the employer's payroll calendar and actual payable
+    days, so the caller must provide the validated number of worked/payable days.
+    """
     salary = Decimal(basic_salary)
+    payable_days = Decimal(worked_days)
     if salary < ZERO:
         raise ValueError('Basic salary cannot be negative.')
+    if payable_days < ZERO or payable_days > Decimal('31'):
+        raise ValueError('Worked days must be between 0 and 31.')
     values = [thirteenth_month, accrued_leave_pay, other_earnings, other_deductions, loan_balance]
     if any(Decimal(value) < ZERO for value in values):
         raise ValueError('Final-pay amounts cannot be negative.')
     day_rate = salary / Decimal('22')
-    days_in_period = Decimal(separation_date.day)
-    prorated_salary = money(day_rate * days_in_period)
+    prorated_salary = money(day_rate * payable_days)
     thirteenth = money(thirteenth_month)
     earnings = money(prorated_salary + Decimal(accrued_leave_pay) + Decimal(other_earnings) + thirteenth)
     deductions = money(Decimal(other_deductions) + Decimal(loan_balance))
@@ -117,6 +124,7 @@ def final_pay_preview(employee, separation_date, basic_salary, thirteenth_month=
     if net < ZERO:
         raise ValueError('Final pay would result in negative net pay.')
     return {
+        'worked_days': payable_days,
         'prorated_salary': prorated_salary,
         'accrued_leave_pay': money(accrued_leave_pay),
         'other_earnings': money(other_earnings),
