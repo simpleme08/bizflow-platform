@@ -55,10 +55,11 @@ def settle_loans_for_record(record):
 
 def apply_record_adjustments(record):
     """Apply approved, unapplied draft adjustments exactly once."""
-    if record.status != PayrollRecord.Status.DRAFT:
-        raise ValueError('Only draft payroll records can be adjusted.')
-
     with transaction.atomic():
+        record = PayrollRecord.objects.select_for_update().select_related('employee', 'payroll_period').get(pk=record.pk)
+        if record.status != PayrollRecord.Status.DRAFT:
+            raise ValueError('Only draft payroll records can be adjusted.')
+
         adjustments = list(record.adjustments.select_for_update().filter(approved=True, applied=False))
         if not adjustments:
             record.loan_deductions = loan_deduction_for_record(record)
