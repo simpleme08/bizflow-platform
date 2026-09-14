@@ -4,6 +4,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
+from apps.core.models import BaseModel
 from apps.employees.models import Employee, EmployeeAssignment
 from apps.workforce.models import ShiftTemplate
 
