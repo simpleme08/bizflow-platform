@@ -8,8 +8,9 @@ from django.urls import reverse
 from apps.employees.models import Employee
 from apps.organization.models import Organization, OrganizationMembership
 
-from .completion import final_pay_preview
-from .models import EmployeeSalary
+from .completion import final_pay_preview, settle_loans_for_record
+from .loan_models import EmployeeLoan
+from .models import EmployeeSalary, PayrollPeriod, PayrollRecord
 
 
 class FinalPayHardeningTests(TestCase):
@@ -82,3 +83,52 @@ class FinalPayHardeningTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['worked_days'], '10')
         self.assertEqual(response.json()['prorated_salary'], '10000.00')
+
+    def _payroll_record(self):
+        period = PayrollPeriod.objects.create(
+            organization=self.organization,
+            name='August 2026',
+            start_date=date(2026, 8, 16),
+            end_date=date(2026, 8, 31),
+            frequency=PayrollPeriod.Frequency.SEMI_MONTHLY,
+        )
+        return PayrollRecord.objects.create(
+            employee=self.employee,
+            payroll_period=period,
+            loan_deductions=Decimal('175.00'),
+        )
+
+    def test_loan_settlement_rolls_back_all_changes_when_balance_is_insufficient(self):
+        record = self._payroll_record()
+        first = EmployeeLoan.objects.create(
+            employee=self.employee,
+            lender='Test Lender',
+            loan_type='Salary Loan',
+            principal=Decimal('100.00'),
+            interest=Decimal('0.00'),
+            installment_amount=Decimal('100.00'),
+            start_date=date(2026, 8, 1),
+            end_date=date(2026, 8, 31),
+            balance=Decimal('100.00'),
+        )
+        second = EmployeeLoan.objects.create(
+            employee=self.employee,
+            lender='Test Lender',
+            loan_type='Salary Loan',
+            principal=Decimal('50.00'),
+            interest=Decimal('0.00'),
+            installment_amount=Decimal('50.00'),
+            start_date=date(2026, 8, 1),
+            end_date=date(2026, 8, 31),
+            balance=Decimal('50.00'),
+        )
+
+        with self.assertRaises(ValueError):
+            settle_loans_for_record(record)
+
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual(first.balance, Decimal('100.00'))
+        self.assertEqual(second.balance, Decimal('50.00'))
+        self.assertEqual(first.status, EmployeeLoan.Status.ACTIVE)
+        self.assertEqual(second.status, EmployeeLoan.Status.ACTIVE)
