@@ -4,7 +4,6 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
-from apps.core.models import BaseModel
 from apps.employees.models import Employee, EmployeeAssignment
 from apps.workforce.models import ShiftTemplate
 
@@ -49,9 +48,14 @@ class AttendanceRecord(BaseModel):
     def clean(self):
         if self.assignment_id and self.assignment.employee_id != self.employee_id:
             raise ValidationError('The assignment must belong to the selected employee.')
-        # ShiftTemplate is currently a global workforce template, so there is no
-        # organization_id to validate here. Tenant scoping is enforced when a
-        # future scheduling API chooses a template for an employee.
+        if self.clock_shift_id:
+            shift_organization_id = self.clock_shift.organization_id
+            if shift_organization_id is not None and shift_organization_id != self.employee.organization_id:
+                raise ValidationError('The clock shift must belong to the same organization as the employee.')
+        if self.assignment_id and self.assignment.shift_template_id:
+            assignment_shift_organization_id = self.assignment.shift_template.organization_id
+            if assignment_shift_organization_id is not None and assignment_shift_organization_id != self.employee.organization_id:
+                raise ValidationError('The assigned shift must belong to the same organization as the employee.')
         if self.clock_in_mode == self.ClockInMode.SCHEDULED and not self.assignment_id:
             raise ValidationError('A scheduled clock-in requires an employee assignment.')
         if self.time_in and timezone.localtime(self.time_in).date() != self.attendance_date:
