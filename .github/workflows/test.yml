@@ -78,6 +78,12 @@ jobs:
           POSTGRES_HOST: localhost
           POSTGRES_SSLMODE: disable
           REDIS_URL: redis://localhost:6379/0
+          DJANGO_STORAGE: s3
+          BIZFLOW_STORAGE_KEY: ci-storage-key
+          BIZFLOW_STORAGE_SECRET: ci-storage-secret
+          BIZFLOW_STORAGE_BUCKET: bizflow-ci
+          BIZFLOW_STORAGE_ENDPOINT: https://storage.example.com
+          BIZFLOW_STORAGE_REGION: ap-southeast-1
         run: python manage.py check --deploy
       - name: Verify production cache connectivity
         env:
@@ -93,4 +99,10 @@ jobs:
           POSTGRES_HOST: localhost
           POSTGRES_SSLMODE: disable
           REDIS_URL: redis://localhost:6379/0
+          DJANGO_STORAGE: s3
+          BIZFLOW_STORAGE_KEY: ci-storage-key
+          BIZFLOW_STORAGE_SECRET: ci-storage-secret
+          BIZFLOW_STORAGE_BUCKET: bizflow-ci
+          BIZFLOW_STORAGE_ENDPOINT: https://storage.example.com
+          BIZFLOW_STORAGE_REGION: ap-southeast-1
         run: python manage.py shell -c "from django.core.cache import cache; cache.set('ci-production-cache-check', 'ok', 30); assert cache.get('ci-production-cache-check') == 'ok'"
