@@ -1,9 +1,14 @@
+from datetime import time
+
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
 
+from apps.attendance.models import AttendanceRecord
 from apps.employees.models import Employee
 from apps.organization.models import Organization, OrganizationMembership
+from apps.workforce.models import ShiftTemplate
 
 
 class AttendanceTenantContextTests(TestCase):
@@ -50,3 +55,19 @@ class AttendanceTenantContextTests(TestCase):
             content_type='application/json',
         )
         self.assertEqual(response.status_code, 403)
+
+    def test_attendance_record_rejects_cross_tenant_clock_shift(self):
+        shift = ShiftTemplate.objects.create(
+            organization=self.org_b,
+            name='Beta Shift',
+            start_time=time(8, 0),
+            end_time=time(17, 0),
+        )
+        record = AttendanceRecord(
+            employee=self.employee,
+            clock_shift=shift,
+            clock_in_mode=AttendanceRecord.ClockInMode.COVER,
+            attendance_date='2026-08-10',
+        )
+        with self.assertRaises(ValidationError):
+            record.full_clean()
