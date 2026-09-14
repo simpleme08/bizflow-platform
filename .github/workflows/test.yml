@@ -68,4 +68,5 @@ jobs:
           POSTGRES_PASSWORD: ci-password
           POSTGRES_HOST: localhost
           POSTGRES_SSLMODE: disable
+          REDIS_URL: redis://localhost:6379/0
         run: python manage.py check --deploy
