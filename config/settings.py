@@ -57,19 +57,9 @@ REDIS_URL = os.getenv('REDIS_URL', '').strip()
 if ENVIRONMENT == 'production' and not REDIS_URL:
     raise RuntimeError('REDIS_URL must be set in production for shared cache and login throttling')
 if REDIS_URL:
-    CACHES = {
-        'default': {
-            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
-            'LOCATION': REDIS_URL,
-        },
-    }
+    CACHES = {'default': {'BACKEND': 'django.core.cache.backends.redis.RedisCache', 'LOCATION': REDIS_URL}}
 else:
-    CACHES = {
-        'default': {
-            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-            'LOCATION': 'bizflow-development-cache',
-        },
-    }
+    CACHES = {'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache', 'LOCATION': 'bizflow-development-cache'}}
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
@@ -88,10 +78,27 @@ STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
-STORAGES = {
-    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
-    'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'},
-}
+
+STORAGE_BACKEND = os.getenv('DJANGO_STORAGE', 'filesystem').strip().lower()
+if ENVIRONMENT == 'production' and STORAGE_BACKEND != 's3':
+    raise RuntimeError('DJANGO_STORAGE=s3 is required in production so private HR files are not stored on ephemeral local disk')
+if STORAGE_BACKEND == 's3':
+    AWS_ACCESS_KEY_ID = os.getenv('BIZFLOW_STORAGE_KEY', '').strip()
+    AWS_SECRET_ACCESS_KEY = os.getenv('BIZFLOW_STORAGE_SECRET', '').strip()
+    AWS_STORAGE_BUCKET_NAME = os.getenv('BIZFLOW_STORAGE_BUCKET', '').strip()
+    AWS_S3_ENDPOINT_URL = os.getenv('BIZFLOW_STORAGE_ENDPOINT', '').strip()
+    AWS_S3_REGION_NAME = os.getenv('BIZFLOW_STORAGE_REGION', '').strip() or None
+    AWS_S3_ADDRESSING_STYLE = os.getenv('BIZFLOW_STORAGE_ADDRESSING', 'path').strip()
+    AWS_S3_SIGNATURE_VERSION = os.getenv('BIZFLOW_STORAGE_SIGNATURE', 's3v4').strip()
+    AWS_QUERYSTRING_AUTH = True
+    AWS_QUERYSTRING_EXPIRE = int(os.getenv('BIZFLOW_STORAGE_URL_TTL', '300'))
+    AWS_DEFAULT_ACL = None
+    AWS_S3_FILE_OVERWRITE = False
+    if ENVIRONMENT == 'production' and not all((AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_STORAGE_BUCKET_NAME, AWS_S3_ENDPOINT_URL)):
+        raise RuntimeError('Private storage credentials, bucket, and endpoint must be configured in production')
+    STORAGES = {'default': {'BACKEND': 'storages.backends.s3.S3Storage'}, 'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'}}
+else:
+    STORAGES = {'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'}, 'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'}}
 
 SECURE_SSL_REDIRECT = ENVIRONMENT == 'production'
 SECURE_HSTS_SECONDS = 31536000 if ENVIRONMENT == 'production' else 0
@@ -118,12 +125,8 @@ LOGOUT_REDIRECT_URL = '/'
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
-    'formatters': {
-        'default': {'format': '{levelname} {asctime} {name} {message}', 'style': '{'},
-    },
-    'handlers': {
-        'console': {'class': 'logging.StreamHandler', 'formatter': 'default'},
-    },
+    'formatters': {'default': {'format': '{levelname} {asctime} {name} {message}', 'style': '{'}},
+    'handlers': {'console': {'class': 'logging.StreamHandler', 'formatter': 'default'}},
     'root': {'handlers': ['console'], 'level': 'INFO' if ENVIRONMENT == 'production' else 'WARNING'},
 }
 
