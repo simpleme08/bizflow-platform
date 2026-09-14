@@ -165,6 +165,14 @@ class PayrollConfidence:
     @classmethod
     @transaction.atomic
     def process_period(cls, period, organization, actor=None):
+        # Serialize payroll processing per period. Without the row lock, two requests
+        # can calculate the same draft period concurrently and overwrite each other's
+        # records/provenance, creating an ambiguous payroll result.
+        period = (
+            type(period).objects.select_for_update()
+            .select_related('organization')
+            .get(pk=period.pk, organization=organization)
+        )
         check = cls.preflight(period, organization)
         period.confidence_status = check['confidence']
         period.confidence_summary = check
