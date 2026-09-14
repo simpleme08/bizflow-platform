@@ -2,6 +2,22 @@
 
 This document is the release checklist for the production HR/payroll service. A green CI run is necessary but does not replace these operational controls.
 
+## Zero-budget nationwide pilot architecture
+
+For the initial nationwide pilot, Davao, Manila, and future Philippine customers use one BizFlow application and tenant-isolated data model. Do not create separate city deployments.
+
+Recommended initial topology:
+
+- GitHub: source control and CI/CD.
+- Render Free, Singapore region: Django web service.
+- Supabase Free: managed PostgreSQL database.
+- A managed Redis/Valkey service: shared cache and login-throttling backend.
+- S3-compatible private object storage: employee documents, attendance proof, and other private uploads.
+
+Free-tier services are a temporary pilot infrastructure choice. They do not provide the same availability, backup, recovery, or monitoring guarantees as paid production infrastructure. Do not represent the free tier as a high-availability or disaster-recovery environment.
+
+The first paid upgrade should prioritize verified PostgreSQL backups/PITR and restore capability, followed by an always-on application service and production monitoring.
+
 ## Required production configuration
 
 - `DJANGO_ENV=production`
@@ -12,20 +28,24 @@ This document is the release checklist for the production HR/payroll service. A 
 - `DB_ENGINE=postgresql`
 - PostgreSQL credentials configured through deployment secrets
 - `POSTGRES_SSLMODE=require` unless the managed database explicitly requires another secure mode
+- `REDIS_URL` configured to a shared managed Redis/Valkey service
+- `DJANGO_STORAGE=s3` in production
+- Private object-storage credentials configured only as deployment secrets
 - PayMongo live credentials and webhook secret configured before enabling paid subscriptions
 
-Never commit production secrets, database credentials, webhook secrets, or customer data.
+Never commit production secrets, database credentials, webhook secrets, storage credentials, or customer data.
 
 ## Database and backup gate
 
 Before onboarding real payroll data:
 
 1. Enable managed PostgreSQL automated backups and point-in-time recovery where the provider supports it.
-2. Set and document the backup retention period required by the business.
-3. Perform a restore test into an isolated database at least monthly and after major schema changes.
-4. Verify that restored data can pass `python manage.py check --deploy` and application readiness checks.
-5. Record the last successful restore date and owner of the recovery procedure.
-6. Keep a second recovery copy or provider-supported disaster-recovery mechanism outside the primary database instance.
+2. If the free database tier does not provide verified recovery, establish a scheduled encrypted logical database export as an interim pilot safeguard and keep it outside the application container.
+3. Set and document the backup retention period required by the business.
+4. Perform a restore test into an isolated database at least monthly and after major schema changes.
+5. Verify that restored data can pass `python manage.py check --deploy` and application readiness checks.
+6. Record the last successful restore date and owner of the recovery procedure.
+7. Keep a second recovery copy or provider-supported disaster-recovery mechanism outside the primary database instance.
 
 A backup that has never been restored is not considered verified.
 
