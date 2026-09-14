@@ -2,9 +2,10 @@ services:
   - type: web
     name: bizflow-hris
     runtime: python
+    region: singapore
     plan: free
-    buildCommand: pip install -r requirements.txt && python manage.py migrate --noinput && python manage.py collectstatic --noinput
-    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
+    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput
+    startCommand: python manage.py migrate --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
     healthCheckPath: /ready/
     envVars:
       - key: DJANGO_DEBUG
