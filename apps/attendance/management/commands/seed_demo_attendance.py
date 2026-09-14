@@ -1,25 +1,28 @@
 from datetime import date, datetime, time, timedelta
 
-from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
+from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
 
 from apps.attendance.models import AttendanceRecord
 from apps.employees.models import Employee, EmployeeAssignment
 from apps.organization.models import Organization, OrganizationMembership
-from apps.payroll.models import EmployeeSalary, PayrollPeriod
+from apps.payroll.models import EmployeeSalary, PayrollHoliday, PayrollPeriod, PayrollRecord
 from apps.workforce.models import ShiftTemplate
 
 
 class Command(BaseCommand):
-    help = 'Seed a deterministic BizFlow HRIS demo organization, attendance data, and a draft payroll period.'
+    help = 'Seed deterministic BizFlow demo employees, August 2026 attendance, holidays, and draft payroll records.'
 
     DEMO_ORG_NAME = 'BizFlow Demo Company'
     DEMO_ORG_SLUG = 'bizflow-demo'
     START = date(2026, 8, 16)
     END = date(2026, 8, 31)
-
+    HOLIDAYS = {
+        date(2026, 8, 21): ('Ninoy Aquino Day', PayrollHoliday.Kind.SPECIAL_NON_WORKING, False),
+        date(2026, 8, 31): ('National Heroes Day', PayrollHoliday.Kind.REGULAR, False),
+    }
     EMPLOYEES = [
         ('DEMO-001', 'Demo', 'Normal', 22000),
         ('DEMO-002', 'Demo', 'Late', 24000),
@@ -30,17 +33,14 @@ class Command(BaseCommand):
     ]
 
     def add_arguments(self, parser):
-        parser.add_argument('--reset', action='store_true', help='Delete existing demo attendance and payroll data before reseeding.')
+        parser.add_argument('--reset', action='store_true', help='Delete existing demo attendance/payroll data before reseeding.')
 
     def aware(self, day, hour, minute=0):
         return timezone.make_aware(datetime.combine(day, time(hour, minute)), timezone.get_current_timezone())
 
     @transaction.atomic
     def handle(self, *args, **options):
-        org, _ = Organization.objects.get_or_create(
-            slug=self.DEMO_ORG_SLUG,
-            defaults={'name': self.DEMO_ORG_NAME},
-        )
+        org, _ = Organization.objects.get_or_create(slug=self.DEMO_ORG_SLUG, defaults={'name': self.DEMO_ORG_NAME})
         org.name = self.DEMO_ORG_NAME
         org.is_active = True
         org.save(update_fields=('name', 'is_active', 'updated_at'))
@@ -51,8 +51,7 @@ class Command(BaseCommand):
         manager.set_unusable_password()
         manager.save(update_fields=('is_active', 'password'))
         OrganizationMembership.objects.update_or_create(
-            organization=org,
-            user=manager,
+            organization=org, user=manager,
             defaults={'role': OrganizationMembership.Role.OWNER, 'is_active': True},
         )
 
@@ -61,38 +60,35 @@ class Command(BaseCommand):
             name='Demo Day Shift',
             defaults={'start_time': time(8), 'end_time': time(17)},
         )
-        night_shift, _ = ShiftTemplate.objects.get_or_create(
-            organization=org,
-            name='Demo Night Shift',
-            defaults={'start_time': time(22), 'end_time': time(7)},
-        )
 
         if options['reset']:
             AttendanceRecord.objects.filter(employee__organization=org, attendance_date__range=(self.START, self.END)).delete()
+            PayrollRecord.objects.filter(payroll_period__organization=org, payroll_period__start_date=self.START, payroll_period__end_date=self.END).delete()
             PayrollPeriod.objects.filter(organization=org, start_date=self.START, end_date=self.END).delete()
+
+        for holiday_date, (name, kind, is_double) in self.HOLIDAYS.items():
+            PayrollHoliday.objects.update_or_create(
+                organization=org,
+                holiday_date=holiday_date,
+                defaults={'name': name, 'kind': kind, 'is_double': is_double, 'is_active': True},
+            )
 
         employees = {}
         for number, first_name, last_name, salary in self.EMPLOYEES:
-            username = f'demo-{number.lower().replace("-", "-")}'
+            username = f'demo-{number.lower()}'
             user, _ = User.objects.get_or_create(username=username, defaults={'is_active': True})
             user.is_active = True
             user.set_unusable_password()
             user.save(update_fields=('is_active', 'password'))
             OrganizationMembership.objects.update_or_create(
-                organization=org,
-                user=user,
+                organization=org, user=user,
                 defaults={'role': OrganizationMembership.Role.EMPLOYEE, 'is_active': True},
             )
             employee, _ = Employee.objects.update_or_create(
                 employee_number=number,
                 defaults={
-                    'user': user,
-                    'organization': org,
-                    'first_name': first_name,
-                    'last_name': last_name,
-                    'status': Employee.Status.REGULAR,
-                    'is_active': True,
-                    'hire_date': date(2025, 1, 1),
+                    'user': user, 'organization': org, 'first_name': first_name, 'last_name': last_name,
+                    'status': Employee.Status.REGULAR, 'is_active': True, 'hire_date': date(2025, 1, 1),
                 },
             )
             EmployeeSalary.objects.update_or_create(
@@ -100,44 +96,58 @@ class Command(BaseCommand):
                 defaults={'basic_salary': salary, 'effective_date': date(2026, 1, 1)},
             )
             EmployeeAssignment.objects.update_or_create(
-                employee=employee,
-                shift_template=day_shift,
-                start_date=date(2026, 1, 1),
+                employee=employee, shift_template=day_shift, start_date=date(2026, 1, 1),
                 defaults={'end_date': None, 'is_primary': True},
             )
             employees[number] = employee
 
-        PayrollPeriod.objects.update_or_create(
-            organization=org,
-            start_date=self.START,
-            end_date=self.END,
+        period, _ = PayrollPeriod.objects.update_or_create(
+            organization=org, start_date=self.START, end_date=self.END,
             defaults={
                 'name': 'Demo August 16-31, 2026',
                 'frequency': PayrollPeriod.Frequency.SEMI_MONTHLY,
                 'status': PayrollPeriod.Status.OPEN,
                 'confidence_status': 'REVIEW',
-                'confidence_summary': {'demo_seed': True, 'note': 'Demo payroll intentionally remains unprocessed.'},
+                'confidence_summary': {'demo_seed': True, 'note': 'Demo payroll records are intentionally DRAFT and unapproved.'},
             },
         )
 
+        for employee in employees.values():
+            PayrollRecord.objects.update_or_create(
+                employee=employee,
+                payroll_period=period,
+                defaults={
+                    'status': PayrollRecord.Status.DRAFT,
+                    'basic_pay': 0,
+                    'gross_pay': 0,
+                    'net_pay': 0,
+                    'calculation_rule_version': '',
+                    'calculation_input_hash': '',
+                    'calculation_output_hash': '',
+                    'calculation_snapshot': {'demo_seed': True, 'note': 'Run payroll processing before approval.'},
+                },
+            )
+
+        attendance_count = 0
         day = self.START
-        created = 0
         while day <= self.END:
-            if day.weekday() < 5:
+            if day.weekday() < 5 and day not in self.HOLIDAYS:
                 self.seed_present(employees['DEMO-001'], day)
                 self.seed_late(employees['DEMO-002'], day)
                 self.seed_overtime(employees['DEMO-003'], day)
-                if day not in (date(2026, 8, 21), date(2026, 8, 31)):
+                if day != date(2026, 8, 24):
                     self.seed_present(employees['DEMO-004'], day)
-                created += 4
+                attendance_count += 4 if day != date(2026, 8, 24) else 3
             day += timedelta(days=1)
 
         self.seed_leave(employees['DEMO-004'], date(2026, 8, 24))
         self.seed_holiday(employees['DEMO-005'], date(2026, 8, 21), 'Ninoy Aquino Day')
         self.seed_holiday(employees['DEMO-006'], date(2026, 8, 31), 'National Heroes Day')
+        attendance_count += 3
 
         self.stdout.write(self.style.SUCCESS(
-            f'Demo seed ready: {org.slug}; {len(employees)} employees; {created + 2} representative attendance records; payroll period remains OPEN/DRAFT-ready.'
+            f'Demo seed ready: {org.slug}; {len(employees)} employees; {attendance_count} attendance records; '
+            f'{PayrollRecord.objects.filter(payroll_period=period, status=PayrollRecord.Status.DRAFT).count()} DRAFT payroll records; no payroll approval/payment performed.'
         ))
         self.stdout.write('Demo manager: demo-manager (password intentionally unset; assign a password before interactive use).')
 
@@ -172,7 +182,7 @@ class Command(BaseCommand):
         self.save_record(employee, day, (8, 0), (18, 0), overtime=60, remarks='Demo overtime case.')
 
     def seed_leave(self, employee, day):
-        self.save_record(employee, day, status=AttendanceRecord.Status.LEAVE, remarks='Demo approved-leave representation; no payroll approval performed.')
+        self.save_record(employee, day, status=AttendanceRecord.Status.LEAVE, remarks='Demo leave case; payroll remains DRAFT.')
 
     def seed_holiday(self, employee, day, name):
         self.save_record(employee, day, (8, 0), (17, 0), overtime=60, remarks=f'Demo holiday work: {name}.')
