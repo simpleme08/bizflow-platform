@@ -23,6 +23,15 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -70,3 +79,18 @@ jobs:
           POSTGRES_SSLMODE: disable
           REDIS_URL: redis://localhost:6379/0
         run: python manage.py check --deploy
+      - name: Verify production cache connectivity
+        env:
+          DJANGO_ENV: production
+          DJANGO_SECRET_KEY: ci-production-check-secret
+          DJANGO_DEBUG: '0'
+          DJANGO_ALLOWED_HOSTS: app.example.com
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://app.example.com
+          DB_ENGINE: postgresql
+          POSTGRES_DB: bizflow
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-password
+          POSTGRES_HOST: localhost
+          POSTGRES_SSLMODE: disable
+          REDIS_URL: redis://localhost:6379/0
+        run: python manage.py shell -c "from django.core.cache import cache; cache.set('ci-production-cache-check', 'ok', 30); assert cache.get('ci-production-cache-check') == 'ok'"
