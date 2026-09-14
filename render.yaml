@@ -8,11 +8,63 @@ services:
     startCommand: python manage.py migrate --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
     healthCheckPath: /ready/
     envVars:
+      - key: DJANGO_ENV
+        value: production
       - key: DJANGO_DEBUG
         value: "False"
-      - key: DB_ENGINE
-        value: postgresql
-      - key: POSTGRES_SSLMODE
-        value: require
       - key: DJANGO_SECRET_KEY
         generateValue: true
+      - key: DJANGO_ALLOWED_HOSTS
+        sync: false
+      - key: DJANGO_CSRF_TRUSTED_ORIGINS
+        sync: false
+      - key: DB_ENGINE
+        value: postgresql
+      - key: POSTGRES_DB
+        sync: false
+      - key: POSTGRES_USER
+        sync: false
+      - key: POSTGRES_PASSWORD
+        sync: false
+      - key: POSTGRES_HOST
+        sync: false
+      - key: POSTGRES_PORT
+        value: "5432"
+      - key: POSTGRES_SSLMODE
+        value: require
+      - key: POSTGRES_CONN_MAX_AGE
+        value: "60"
+      - key: REDIS_URL
+        sync: false
+      - key: DJANGO_STORAGE
+        value: s3
+      - key: BIZFLOW_STORAGE_KEY
+        sync: false
+      - key: BIZFLOW_STORAGE_SECRET
+        sync: false
+      - key: BIZFLOW_STORAGE_BUCKET
+        sync: false
+      - key: BIZFLOW_STORAGE_ENDPOINT
+        sync: false
+      - key: BIZFLOW_STORAGE_REGION
+        sync: false
+      - key: BIZFLOW_STORAGE_ADDRESSING
+        value: path
+      - key: BIZFLOW_STORAGE_SIGNATURE
+        value: s3v4
+      - key: BIZFLOW_STORAGE_URL_TTL
+        value: "300"
+      - key: PAYMONGO_SECRET_KEY
+        sync: false
+      - key: PAYMONGO_PUBLIC_KEY
+        sync: false
+      - key: PAYMONGO_WEBHOOK_SECRET
+        sync: false
+      - key: PAYMONGO_LIVEMODE
+        value: "True"
+      - key: PAYMONGO_PLAN_STARTER
+        sync: false
+      - key: PAYMONGO_PLAN_GROWTH
+        sync: false
+      - key: PAYMONGO_PLAN_BUSINESS
+        sync: false
