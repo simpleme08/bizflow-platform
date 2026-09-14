@@ -52,8 +52,8 @@ def process_payroll(request):
             period = PayrollPeriod.objects.select_for_update().get(id=request.POST.get('period_id'), organization=membership.organization)
         except PayrollPeriod.DoesNotExist:
             return JsonResponse({'detail': 'Payroll period was not found.'}, status=404)
-        if period.status != PayrollPeriod.Status.DRAFT:
-            return JsonResponse({'detail': 'Only draft payroll periods can be processed.'}, status=409)
+        if period.status != PayrollPeriod.Status.OPEN:
+            return JsonResponse({'detail': 'Only open payroll periods can be processed.'}, status=409)
         if PayrollRecord.objects.filter(payroll_period=period).exclude(status=PayrollRecord.Status.DRAFT).exists():
             return JsonResponse({'detail': 'Payroll contains approved or paid records and cannot be recalculated.'}, status=409)
         try:
