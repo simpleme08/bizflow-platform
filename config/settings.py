@@ -4,6 +4,7 @@ Django settings for config project.
 
 from pathlib import Path
 import os
+from urllib.parse import unquote, urlparse
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -45,12 +46,32 @@ TEMPLATES = [{
 }]
 WSGI_APPLICATION = 'config.wsgi.application'
 
+DATABASE_URL = os.getenv('DATABASE_URL', '').strip()
 DB_ENGINE = os.getenv('DB_ENGINE', 'sqlite').lower()
-if DB_ENGINE == 'postgresql':
+if DATABASE_URL:
+    parsed_database_url = urlparse(DATABASE_URL)
+    if parsed_database_url.scheme not in ('postgresql', 'postgres'):
+        raise RuntimeError('DATABASE_URL must use the postgresql:// scheme')
+    if not parsed_database_url.hostname or not parsed_database_url.username or not parsed_database_url.path.strip('/'):
+        raise RuntimeError('DATABASE_URL must include database host, user, and database name')
+    database_options = dict(item.split('=', 1) for item in parsed_database_url.query.split('&') if '=' in item)
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': unquote(parsed_database_url.path.lstrip('/')),
+            'USER': unquote(parsed_database_url.username),
+            'PASSWORD': unquote(parsed_database_url.password or ''),
+            'HOST': parsed_database_url.hostname,
+            'PORT': str(parsed_database_url.port or 5432),
+            'CONN_MAX_AGE': int(os.getenv('POSTGRES_CONN_MAX_AGE', '60')),
+            'OPTIONS': {'sslmode': database_options.get('sslmode', os.getenv('POSTGRES_SSLMODE', 'require'))},
+        }
+    }
+elif DB_ENGINE == 'postgresql':
     DATABASES = {'default': {'ENGINE': 'django.db.backends.postgresql', 'NAME': os.getenv('POSTGRES_DB', 'bizflow'), 'USER': os.getenv('POSTGRES_USER', 'postgres'), 'PASSWORD': os.getenv('POSTGRES_PASSWORD', ''), 'HOST': os.getenv('POSTGRES_HOST', 'localhost'), 'PORT': os.getenv('POSTGRES_PORT', '5432'), 'CONN_MAX_AGE': int(os.getenv('POSTGRES_CONN_MAX_AGE', '60')), 'OPTIONS': {'sslmode': os.getenv('POSTGRES_SSLMODE', 'require')}}}
 else:
     if ENVIRONMENT == 'production':
-        raise RuntimeError('PostgreSQL is required in production; set DB_ENGINE=postgresql')
+        raise RuntimeError('PostgreSQL is required in production; set DATABASE_URL or DB_ENGINE=postgresql')
     DATABASES = {'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': BASE_DIR / 'db.sqlite3'}}
 
 REDIS_URL = os.getenv('REDIS_URL', '').strip()
