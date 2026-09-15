@@ -1,8 +1,10 @@
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
+import os
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
 from apps.attendance.models import AttendanceRecord
@@ -35,6 +37,12 @@ class Command(BaseCommand):
     )
 
     def handle(self, *args, **options):
+        if getattr(settings, 'ENVIRONMENT', '').lower() == 'production':
+            raise CommandError('seed_hsis_demo is disabled in production.')
+        self.demo_password = os.getenv('BIZFLOW_HSIS_DEMO_PASSWORD') or os.getenv('BIZFLOW_DEMO_PASSWORD')
+        if not self.demo_password:
+            raise CommandError('Set BIZFLOW_HSIS_DEMO_PASSWORD (or BIZFLOW_DEMO_PASSWORD) before running this demo seed.')
+
         today = timezone.localdate()
         organization, _ = Organization.objects.update_or_create(
             slug='high-speed-internet-support',
@@ -46,169 +54,62 @@ class Command(BaseCommand):
                 'overage_rate': Decimal('30.00'),
             },
         )
-
-        client, _ = Client.objects.update_or_create(
-            organization=organization,
-            code='HSIS',
-            defaults={'name': 'High Speed Internet Support', 'is_active': True},
-        )
+        client, _ = Client.objects.update_or_create(organization=organization, code='HSIS', defaults={'name': 'High Speed Internet Support', 'is_active': True})
         sites = {
-            'Parañaque': ClientSite.objects.update_or_create(
-                client=client,
-                name='Parañaque Operations Center',
-                defaults={'address': '2nd Floor, 35 Doña Soledad Ave, Betterliving Subdivision, Barangay Don Bosco, Parañaque City, Philippines', 'is_active': True},
-            )[0],
-            'Davao': ClientSite.objects.update_or_create(
-                client=client,
-                name='Davao Operations Center',
-                defaults={'address': 'Davao City, Philippines', 'is_active': True},
-            )[0],
+            'Parañaque': ClientSite.objects.update_or_create(client=client, name='Parañaque Operations Center', defaults={'address': '2nd Floor, 35 Doña Soledad Ave, Betterliving Subdivision, Barangay Don Bosco, Parañaque City, Philippines', 'is_active': True})[0],
+            'Davao': ClientSite.objects.update_or_create(client=client, name='Davao Operations Center', defaults={'address': 'Davao City, Philippines', 'is_active': True})[0],
         }
-
         departments = {}
         for code, name in (('VFDA', 'Virtual Front Desk Assistance'), ('TECH', 'Technical Support')):
-            departments[code] = Department.objects.update_or_create(
-                organization=organization,
-                code=code,
-                defaults={'name': name},
-            )[0]
-
+            departments[code] = Department.objects.update_or_create(organization=organization, code=code, defaults={'name': name})[0]
         positions = {}
-        for code, title in (
-            ('HSIS-VFDA-1', 'Virtual Front Desk Agent'),
-            ('HSIS-TECH-1', 'Technical Support Agent'),
-        ):
-            positions[code] = Position.objects.update_or_create(
-                organization=organization,
-                code=code,
-                defaults={'title': title},
-            )[0]
-
-        employment_types = {
-            'REG': EmploymentType.objects.update_or_create(
-                organization=organization, code='REG', defaults={'name': 'Regular', 'eligible_for_overtime': True}
-            )[0],
-        }
-
+        for code, title in (('HSIS-VFDA-1', 'Virtual Front Desk Agent'), ('HSIS-TECH-1', 'Technical Support Agent')):
+            positions[code] = Position.objects.update_or_create(organization=organization, code=code, defaults={'title': title})[0]
+        employment_types = {'REG': EmploymentType.objects.update_or_create(organization=organization, code='REG', defaults={'name': 'Regular', 'eligible_for_overtime': True})[0]}
         shifts = {
-            'Day': ShiftTemplate.objects.update_or_create(
-                name='HSIS Day Shift', defaults={'start_time': time(8, 0), 'end_time': time(17, 0)}
-            )[0],
-            'Night': ShiftTemplate.objects.update_or_create(
-                name='HSIS Night Shift', defaults={'start_time': time(22, 0), 'end_time': time(7, 0)}
-            )[0],
+            'Day': ShiftTemplate.objects.update_or_create(name='HSIS Day Shift', defaults={'start_time': time(8, 0), 'end_time': time(17, 0)})[0],
+            'Night': ShiftTemplate.objects.update_or_create(name='HSIS Night Shift', defaults={'start_time': time(22, 0), 'end_time': time(7, 0)})[0],
         }
-
         self.seed_admin_accounts(organization, shifts['Day'], today)
-        employees = []
-        for person in self.people:
-            employees.append(self.create_employee(organization, departments, positions, employment_types, client, sites, shifts, today, person))
-
+        employees = [self.create_employee(organization, departments, positions, employment_types, client, sites, shifts, today, person) for person in self.people]
         self.seed_attendance(employees, today)
         self.seed_payroll(employees, organization, today)
-
-        self.stdout.write(self.style.SUCCESS(
-            'HSIS demo ready: 16 agents, 2 sites (Parañaque/Davao), VFDA + Technical Support, shift assignments, '
-            'attendance history, salary history, and a payroll period ready for approval.'
-        ))
-        self.stdout.write('HSIS employee password: DemoHSIS2026!')
-        self.stdout.write('HSIS HR login: hsis_hr / DemoHSISRole2026!')
-        self.stdout.write('HSIS manager login: hsis_manager / DemoHSISRole2026!')
+        self.stdout.write(self.style.SUCCESS('HSIS demo ready: 16 agents, 2 sites (Parañaque/Davao), VFDA + Technical Support, shift assignments, attendance history, salary history, and a payroll period ready for approval.'))
+        self.stdout.write('HSIS demo accounts use the password supplied through BIZFLOW_HSIS_DEMO_PASSWORD.')
+        self.stdout.write('HSIS HR login: hsis_hr / <BIZFLOW_HSIS_DEMO_PASSWORD>')
+        self.stdout.write('HSIS manager login: hsis_manager / <BIZFLOW_HSIS_DEMO_PASSWORD>')
 
     def seed_admin_accounts(self, organization, day_shift, today):
-        accounts = (
-            ('hsis_hr', OrganizationMembership.Role.HR, 'HSIS', 'HR'),
-            ('hsis_manager', OrganizationMembership.Role.MANAGER, 'HSIS', 'Manager'),
-        )
+        accounts = (('hsis_hr', OrganizationMembership.Role.HR, 'HSIS', 'HR'), ('hsis_manager', OrganizationMembership.Role.MANAGER, 'HSIS', 'Manager'))
         User = get_user_model()
         for username, role, first_name, last_name in accounts:
             user, _ = User.objects.get_or_create(username=username, defaults={'first_name': first_name, 'last_name': last_name})
-            user.set_password('DemoHSISRole2026!')
+            user.set_password(self.demo_password)
             user.is_active = True
             user.save(update_fields=('password', 'is_active', 'first_name', 'last_name'))
-            OrganizationMembership.objects.update_or_create(
-                organization=organization,
-                user=user,
-                defaults={'role': role, 'is_active': True},
-            )
-
+            OrganizationMembership.objects.update_or_create(organization=organization, user=user, defaults={'role': role, 'is_active': True})
         user, _ = User.objects.get_or_create(username='hsis.employee', defaults={'first_name': 'Demo', 'last_name': 'Employee'})
-        user.set_password('DemoHSIS2026!')
+        user.set_password(self.demo_password)
         user.is_active = True
         user.save(update_fields=('password', 'is_active', 'first_name', 'last_name'))
-        OrganizationMembership.objects.update_or_create(
-            organization=organization,
-            user=user,
-            defaults={'role': OrganizationMembership.Role.EMPLOYEE, 'is_active': True},
-        )
-        employee, _ = Employee.objects.update_or_create(
-            employee_number='HSIS-DEMO-EMP',
-            defaults={'user': user, 'organization': organization, 'first_name': 'Demo', 'last_name': 'Employee', 'is_active': True},
-        )
-        EmployeeAssignment.objects.update_or_create(
-            employee=employee,
-            shift_template=day_shift,
-            start_date=date(today.year, 1, 1),
-            defaults={'is_primary': True},
-        )
+        OrganizationMembership.objects.update_or_create(organization=organization, user=user, defaults={'role': OrganizationMembership.Role.EMPLOYEE, 'is_active': True})
+        employee, _ = Employee.objects.update_or_create(employee_number='HSIS-DEMO-EMP', defaults={'user': user, 'organization': organization, 'first_name': 'Demo', 'last_name': 'Employee', 'is_active': True})
+        EmployeeAssignment.objects.update_or_create(employee=employee, shift_template=day_shift, start_date=date(today.year, 1, 1), defaults={'is_primary': True})
 
     def create_employee(self, organization, departments, positions, employment_types, client, sites, shifts, today, person):
         number, first_name, last_name, username, department_code, position_code, site_name, shift_name, salary = person
         User = get_user_model()
         user, _ = User.objects.get_or_create(username=username, defaults={'first_name': first_name, 'last_name': last_name})
-        user.set_password('DemoHSIS2026!')
+        user.set_password(self.demo_password)
         user.is_active = True
         user.save(update_fields=('password', 'is_active', 'first_name', 'last_name'))
-        OrganizationMembership.objects.update_or_create(
-            organization=organization,
-            user=user,
-            defaults={'role': OrganizationMembership.Role.EMPLOYEE, 'is_active': True},
-        )
-        employee, _ = Employee.objects.update_or_create(
-            employee_number=number,
-            defaults={
-                'user': user,
-                'organization': organization,
-                'department': departments[department_code],
-                'position': positions[position_code],
-                'employment_type': employment_types['REG'],
-                'first_name': first_name,
-                'last_name': last_name,
-                'is_active': True,
-            },
-        )
-        assignment, _ = EmployeeAssignment.objects.update_or_create(
-            employee=employee,
-            shift_template=shifts[shift_name],
-            start_date=date(today.year, 1, 1),
-            defaults={'client': client, 'client_site': sites[site_name], 'is_primary': True},
-        )
-        EmployeeSalary.objects.update_or_create(
-            employee=employee,
-            defaults={'basic_salary': salary, 'effective_date': date(today.year, 1, 1)},
-        )
-        EmployeeSalaryHistory.objects.update_or_create(
-            employee=employee,
-            effective_date=date(today.year - 1, 1, 1),
-            defaults={'basic_salary': salary - Decimal('1500.00'), 'reason': 'Prior-year demo salary'},
-        )
-        EmployeeSalaryHistory.objects.update_or_create(
-            employee=employee,
-            effective_date=date(today.year, 1, 1),
-            defaults={'basic_salary': salary, 'reason': 'Annual salary adjustment'},
-        )
-        PayrollProfile.objects.update_or_create(
-            employee=employee,
-            defaults={
-                'sss_number': f'34-000{number[-3:]}-0',
-                'philhealth_number': f'12-000{number[-3:]}-0',
-                'pagibig_number': f'12-000{number[-3:]}-0',
-                'tin': f'900-000-{number[-3:]}',
-                'minimum_wage_earner': False,
-                'wage_region': 'NCR' if site_name == 'Parañaque' else 'XI',
-                'wage_category': 'NON_AGRICULTURE',
-            },
-        )
+        OrganizationMembership.objects.update_or_create(organization=organization, user=user, defaults={'role': OrganizationMembership.Role.EMPLOYEE, 'is_active': True})
+        employee, _ = Employee.objects.update_or_create(employee_number=number, defaults={'user': user, 'organization': organization, 'department': departments[department_code], 'position': positions[position_code], 'employment_type': employment_types['REG'], 'first_name': first_name, 'last_name': last_name, 'is_active': True})
+        EmployeeAssignment.objects.update_or_create(employee=employee, shift_template=shifts[shift_name], start_date=date(today.year, 1, 1), defaults={'client': client, 'client_site': sites[site_name], 'is_primary': True})
+        EmployeeSalary.objects.update_or_create(employee=employee, defaults={'basic_salary': salary, 'effective_date': date(today.year, 1, 1)})
+        EmployeeSalaryHistory.objects.update_or_create(employee=employee, effective_date=date(today.year - 1, 1, 1), defaults={'basic_salary': salary - Decimal('1500.00'), 'reason': 'Prior-year demo salary'})
+        EmployeeSalaryHistory.objects.update_or_create(employee=employee, effective_date=date(today.year, 1, 1), defaults={'basic_salary': salary, 'reason': 'Annual salary adjustment'})
+        PayrollProfile.objects.update_or_create(employee=employee, defaults={'sss_number': f'34-000{number[-3:]}-0', 'philhealth_number': f'12-000{number[-3:]}-0', 'pagibig_number': f'12-000{number[-3:]}-0', 'tin': f'900-000-{number[-3:]}', 'minimum_wage_earner': False, 'wage_region': 'NCR' if site_name == 'Parañaque' else 'XI', 'wage_category': 'NON_AGRICULTURE'})
         return employee
 
     def business_days(self, end_date, count):
@@ -235,21 +136,7 @@ class Command(BaseCommand):
                     time_out = timezone.make_aware(datetime.combine(attendance_date, time(17, 0)))
                 late = 10 if (index + day_index) % 7 == 0 else 0
                 overtime = 60 if (index + day_index) % 6 == 0 else 0
-                AttendanceRecord.objects.update_or_create(
-                    employee=employee,
-                    attendance_date=attendance_date,
-                    defaults={
-                        'assignment': assignment,
-                        'time_in': time_in,
-                        'time_out': time_out,
-                        'late_minutes': late,
-                        'overtime_minutes': overtime,
-                        'status': AttendanceRecord.Status.PRESENT,
-                    },
-                )
-
-            # Leave today's record empty for the first VFDA agent so the camera time-clock
-            # can be demonstrated immediately; everyone else has a current completed record.
+                AttendanceRecord.objects.update_or_create(employee=employee, attendance_date=attendance_date, defaults={'assignment': assignment, 'time_in': time_in, 'time_out': time_out, 'late_minutes': late, 'overtime_minutes': overtime, 'status': AttendanceRecord.Status.PRESENT})
             if employee.employee_number == 'HSIS-P001':
                 AttendanceRecord.objects.filter(employee=employee, attendance_date=today).delete()
             else:
@@ -259,11 +146,7 @@ class Command(BaseCommand):
                 else:
                     time_in = timezone.make_aware(datetime.combine(today, time(8, 0)))
                     time_out = timezone.make_aware(datetime.combine(today, time(17, 0)))
-                AttendanceRecord.objects.update_or_create(
-                    employee=employee,
-                    attendance_date=today,
-                    defaults={'assignment': assignment, 'time_in': time_in, 'time_out': time_out, 'status': AttendanceRecord.Status.PRESENT},
-                )
+                AttendanceRecord.objects.update_or_create(employee=employee, attendance_date=today, defaults={'assignment': assignment, 'time_in': time_in, 'time_out': time_out, 'status': AttendanceRecord.Status.PRESENT})
 
     def seed_payroll(self, employees, organization, today):
         periods = (
@@ -273,12 +156,7 @@ class Command(BaseCommand):
             ('HSIS Payroll September 1-15, 2026 - For Approval', date(2026, 9, 1), date(2026, 9, 15), PayrollPeriod.Status.CALCULATED),
         )
         for name, start_date, end_date, status in periods:
-            period, _ = PayrollPeriod.objects.update_or_create(
-                organization=organization,
-                start_date=start_date,
-                end_date=end_date,
-                defaults={'name': name, 'status': status, 'frequency': PayrollPeriod.Frequency.SEMI_MONTHLY},
-            )
+            period, _ = PayrollPeriod.objects.update_or_create(organization=organization, start_date=start_date, end_date=end_date, defaults={'name': name, 'status': status, 'frequency': PayrollPeriod.Frequency.SEMI_MONTHLY})
             for employee in employees:
                 salary = employee.salary.basic_salary
                 basic = (salary / Decimal('2')).quantize(Decimal('0.01'))
@@ -289,24 +167,4 @@ class Command(BaseCommand):
                 other = Decimal('250.00')
                 net = gross - statutory - late - other
                 record_status = PayrollRecord.Status.DRAFT if status == PayrollPeriod.Status.CALCULATED else PayrollRecord.Status.APPROVED
-                PayrollRecord.objects.update_or_create(
-                    employee=employee,
-                    payroll_period=period,
-                    defaults={
-                        'basic_pay': basic,
-                        'overtime_pay': overtime,
-                        'gross_pay': gross,
-                        'sss_employee': (gross * Decimal('0.05')).quantize(Decimal('0.01')),
-                        'philhealth_employee': (gross * Decimal('0.025')).quantize(Decimal('0.01')),
-                        'pagibig_employee': (gross * Decimal('0.005')).quantize(Decimal('0.01')),
-                        'withholding_tax': Decimal('0.00'),
-                        'late_deduction': late,
-                        'undertime_deduction': Decimal('0.00'),
-                        'leave_without_pay': Decimal('0.00'),
-                        'loan_deductions': Decimal('0.00'),
-                        'other_deductions': other,
-                        'gross_pay': gross,
-                        'net_pay': net,
-                        'status': record_status,
-                    },
-                )
+                PayrollRecord.objects.update_or_create(employee=employee, payroll_period=period, defaults={'basic_pay': basic, 'overtime_pay': overtime, 'gross_pay': gross, 'sss_employee': (gross * Decimal('0.05')).quantize(Decimal('0.01')), 'philhealth_employee': (gross * Decimal('0.025')).quantize(Decimal('0.01')), 'pagibig_employee': (gross * Decimal('0.005')).quantize(Decimal('0.01')), 'withholding_tax': Decimal('0.00'), 'late_deduction': late, 'undertime_deduction': Decimal('0.00'), 'leave_without_pay': Decimal('0.00'), 'loan_deductions': Decimal('0.00'), 'other_deductions': other, 'gross_pay': gross, 'net_pay': net, 'status': record_status})
