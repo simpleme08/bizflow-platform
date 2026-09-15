@@ -22,7 +22,7 @@ class PayrollConfidenceCommandTests(TestCase):
             stdout=output,
         )
         self.assertIn("confidence-co: REVIEW", output.getvalue())
-        self.assertIn("wage configuration", output.getvalue().lower())
+        self.assertIn("no effective wage-rate table", output.getvalue().lower())
 
     def test_blocks_without_any_effective_provenance(self):
         PayrollRuleSet.objects.filter(organization__isnull=True).update(is_active=False)
