@@ -1,6 +1,5 @@
 from decimal import Decimal, InvalidOperation
 
-from django.db import transaction
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
@@ -8,16 +7,16 @@ from django.views.decorators.http import require_http_methods
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
-from apps.organization.models import OrganizationMembership
+from apps.organization.context import current_membership
 from apps.core.services import record_audit
 
-from .completion import apply_record_adjustments, settle_loans_for_record
+from .completion import apply_record_adjustments
 from .models import PayrollAdjustment, PayrollPeriod, PayrollRecord
 from .services import PayrollCalculator
 
 
 def _membership(request, permission=None):
-    membership = OrganizationMembership.objects.filter(user=request.user, is_active=True, organization__is_active=True).first()
+    membership = current_membership(request)
     if membership is None or (permission and not membership.has_permission(permission)):
         return None
     return membership
@@ -27,7 +26,7 @@ def payroll_page(request):
     if not request.user.is_authenticated:
         return redirect('login')
     from apps.accounts.views import workspace_url_for_user
-    return render(request, 'payroll/payroll.html', {'workspace_url': workspace_url_for_user(request.user)})
+    return render(request, 'payroll/payroll.html', {'workspace_url': workspace_url_for_user(request)})
 
 
 def payroll_api(request):
@@ -47,11 +46,16 @@ def payroll_api(request):
 def my_payroll_api(request):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
+    membership = _membership(request, 'view_payroll')
+    if membership is None:
+        return JsonResponse({'detail': 'No active organization membership found.'}, status=403)
     try:
         employee = request.user.employee_profile
     except AttributeError:
         return JsonResponse({'detail': 'No employee profile is linked to this account.'}, status=404)
-    records = employee.payroll_records.select_related('payroll_period').filter(status__in=(PayrollRecord.Status.APPROVED, PayrollRecord.Status.PAID), payroll_period__organization=employee.organization).order_by('-payroll_period__end_date', '-created_at')
+    if employee.organization_id != membership.organization_id or not employee.organization.is_active:
+        return JsonResponse({'detail': 'Employee organization access is not available.'}, status=403)
+    records = employee.payroll_records.select_related('payroll_period').filter(status__in=(PayrollRecord.Status.APPROVED, PayrollRecord.Status.PAID), payroll_period__organization=membership.organization, employee__organization=membership.organization).order_by('-payroll_period__end_date', '-created_at')
     return JsonResponse({'records': [{
         'id': str(record.id), 'period': record.payroll_period.name, 'period_start': record.payroll_period.start_date.isoformat(), 'period_end': record.payroll_period.end_date.isoformat(),
         'basic_pay': str(record.basic_pay), 'overtime_pay': str(record.overtime_pay), 'gross_pay': str(record.gross_pay), 'total_deductions': str(record.total_deductions), 'net_pay': str(record.net_pay), 'status': record.status,
@@ -107,15 +111,18 @@ def create_payroll_adjustment(request, record_id):
     if record.status != PayrollRecord.Status.DRAFT:
         return JsonResponse({'detail': 'Only draft payroll records can receive adjustments.'}, status=409)
     try:
+        amount = Decimal(request.POST.get('amount', '0'))
+        if amount <= 0:
+            raise ValueError('Adjustment amount must be greater than zero.')
         adjustment = PayrollAdjustment.objects.create(
             payroll_record=record,
             kind=request.POST.get('kind', PayrollAdjustment.Kind.EARNING),
             description=request.POST.get('description', '').strip(),
-            amount=Decimal(request.POST.get('amount', '0')),
+            amount=amount,
             taxable=request.POST.get('taxable', 'true').lower() == 'true',
-            approved=request.POST.get('approved', 'false').lower() == 'true',
+            approved=False,
         )
-    except Exception as exc:
+    except (InvalidOperation, ValueError, TypeError) as exc:
         return JsonResponse({'detail': str(exc)}, status=400)
     return JsonResponse({'id': str(adjustment.id), 'kind': adjustment.kind, 'description': adjustment.description, 'amount': str(adjustment.amount), 'approved': adjustment.approved}, status=201)
 
@@ -123,7 +130,7 @@ def create_payroll_adjustment(request, record_id):
 @require_http_methods(['POST'])
 def apply_payroll_adjustments(request, record_id):
     if not request.user.is_authenticated:
-        return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
+        return JsonResponse({'detail': 'Payroll management permission is required.'}, status=403)
     membership = _membership(request, 'manage_payroll')
     if membership is None:
         return JsonResponse({'detail': 'Payroll management permission is required.'}, status=403)
@@ -139,60 +146,15 @@ def apply_payroll_adjustments(request, record_id):
     return JsonResponse({'id': str(record.id), 'gross_pay': str(record.gross_pay), 'loan_deductions': str(record.loan_deductions), 'withholding_tax': str(record.withholding_tax), 'net_pay': str(record.net_pay)})
 
 
-@require_http_methods(['POST'])
-def approve_payroll(request, record_id):
-    if not request.user.is_authenticated:
-        return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
-    membership = _membership(request, 'manage_payroll')
-    if membership is None:
-        return JsonResponse({'detail': 'Payroll management permission is required.'}, status=403)
-    with transaction.atomic():
-        try:
-            record = PayrollRecord.objects.select_for_update().select_related('payroll_period').get(id=record_id, employee__organization=membership.organization, payroll_period__organization=membership.organization)
-        except PayrollRecord.DoesNotExist:
-            return JsonResponse({'detail': 'Payroll record was not found.'}, status=404)
-        if record.payroll_period.status != PayrollPeriod.Status.CALCULATED:
-            return JsonResponse({'detail': 'Payroll must be calculated before records can be approved.'}, status=409)
-        if record.status != PayrollRecord.Status.DRAFT:
-            return JsonResponse({'detail': 'Only draft payroll records can be approved.'}, status=409)
-        record.status = PayrollRecord.Status.APPROVED
-        record.save(update_fields=('status', 'updated_at'))
-    record_audit(organization=membership.organization, actor=request.user, action='payroll.approved', entity=record)
-    return JsonResponse({'id': str(record.id), 'status': record.status})
-
-
-@require_http_methods(['POST'])
-def mark_payroll_paid(request, record_id):
-    if not request.user.is_authenticated:
-        return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
-    membership = _membership(request, 'manage_payroll')
-    if membership is None:
-        return JsonResponse({'detail': 'Payroll management permission is required.'}, status=403)
-    with transaction.atomic():
-        try:
-            record = PayrollRecord.objects.select_for_update().select_related('payroll_period').get(id=record_id, employee__organization=membership.organization, payroll_period__organization=membership.organization)
-        except PayrollRecord.DoesNotExist:
-            return JsonResponse({'detail': 'Payroll record was not found.'}, status=404)
-        if record.status != PayrollRecord.Status.APPROVED:
-            return JsonResponse({'detail': 'Only approved payroll records can be marked paid.'}, status=409)
-        if record.loan_deductions:
-            settle_loans_for_record(record)
-        record.status = PayrollRecord.Status.PAID
-        record.save(update_fields=('status', 'updated_at'))
-        period = PayrollPeriod.objects.select_for_update().get(pk=record.payroll_period_id)
-        if not PayrollRecord.objects.filter(payroll_period=period).exclude(status=PayrollRecord.Status.PAID).exists():
-            period.status = PayrollPeriod.Status.PAID
-            period.save(update_fields=('status', 'updated_at'))
-    record_audit(organization=membership.organization, actor=request.user, action='payroll.paid', entity=record)
-    return JsonResponse({'id': str(record.id), 'status': record.status, 'period_status': period.status})
-
-
 def payslip(request, record_id):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
+    membership = _membership(request, 'view_payroll')
+    if membership is None:
+        return JsonResponse({'detail': 'No active organization membership found.'}, status=403)
     try:
         employee = request.user.employee_profile
-        record = PayrollRecord.objects.select_related('employee', 'payroll_period').get(id=record_id, employee=employee, payroll_period__organization=employee.organization, status__in=(PayrollRecord.Status.APPROVED, PayrollRecord.Status.PAID))
+        record = PayrollRecord.objects.select_related('employee', 'payroll_period').get(id=record_id, employee=employee, employee__organization=membership.organization, payroll_period__organization=membership.organization, status__in=(PayrollRecord.Status.APPROVED, PayrollRecord.Status.PAID))
     except (AttributeError, PayrollRecord.DoesNotExist):
         return JsonResponse({'detail': 'Approved payslip was not found.'}, status=404)
     response = HttpResponse(content_type='application/pdf')
@@ -214,5 +176,5 @@ def payslip(request, record_id):
         pdf.drawRightString(420, 660 - index * 22, f'PHP {amount:,.2f}')
     pdf.drawString(72, 230, f'Generated: {timezone.localtime().strftime("%B %d, %Y %I:%M %p")} PHT')
     pdf.save()
-    record_audit(organization=employee.organization, actor=request.user, action='payslip.generated', entity=record)
+    record_audit(organization=membership.organization, actor=request.user, action='payslip.generated', entity=record)
     return response

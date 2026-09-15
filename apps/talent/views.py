@@ -7,13 +7,14 @@ from django.views.decorators.http import require_http_methods
 
 from apps.core.services import record_audit
 from apps.employees.models import Employee
+from apps.organization.context import current_membership
 from apps.organization.models import OrganizationMembership
 
 from .models import BenefitEnrollment, BenefitPlan, Candidate, EmployeeGoal, JobApplication, JobOpening, OffboardingRecord, PerformanceCycle, PerformanceReview
 
 
 def _membership(request):
-    return OrganizationMembership.objects.filter(user=request.user, is_active=True, organization__is_active=True).select_related('organization').first()
+    return current_membership(request)
 
 
 def _require(request, permission):

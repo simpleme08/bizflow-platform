@@ -1,5 +1,6 @@
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
+from django.core.exceptions import ValidationError
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 
@@ -26,13 +27,18 @@ def loans_api(request):
             'principal': str(loan.principal), 'interest': str(loan.interest), 'installment_amount': str(loan.installment_amount),
             'start_date': loan.start_date.isoformat(), 'end_date': loan.end_date.isoformat(), 'balance': str(loan.balance), 'status': loan.status,
         } for loan in loans]})
+
     try:
         from apps.employees.models import Employee
-        employee = Employee.objects.get(id=request.POST.get('employee_id'), organization=membership.organization)
+
+        employee = Employee.objects.get(
+            id=request.POST.get('employee_id'),
+            organization=membership.organization,
+        )
         principal = Decimal(request.POST.get('principal', '0'))
         interest = Decimal(request.POST.get('interest', '0'))
         installment = Decimal(request.POST.get('installment_amount', '0'))
-        loan = EmployeeLoan.objects.create(
+        loan = EmployeeLoan(
             employee=employee,
             lender=request.POST.get('lender', '').strip(),
             loan_type=request.POST.get('loan_type', '').strip(),
@@ -44,8 +50,13 @@ def loans_api(request):
             end_date=request.POST.get('end_date'),
             balance=principal + interest,
         )
-    except Exception as exc:
-        return JsonResponse({'detail': str(exc)}, status=400)
+        loan.full_clean()
+        loan.save(force_insert=True)
+    except Employee.DoesNotExist:
+        return JsonResponse({'detail': 'Employee was not found.'}, status=404)
+    except (ValidationError, InvalidOperation, TypeError, ValueError):
+        return JsonResponse({'detail': 'Invalid loan data.'}, status=400)
+
     record_audit(organization=membership.organization, actor=request.user, action='payroll.loan.created', entity=loan)
     return JsonResponse({'id': str(loan.id), 'balance': str(loan.balance), 'status': loan.status}, status=201)
 

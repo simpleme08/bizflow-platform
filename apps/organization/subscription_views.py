@@ -1,15 +1,13 @@
 from django.http import JsonResponse
 
 from apps.organization.billing import active_employee_count, get_plan
-from apps.organization.models import OrganizationMembership
+from apps.organization.context import current_membership
 
 
 def subscription_api(request):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
-    membership = OrganizationMembership.objects.filter(
-        user=request.user, is_active=True, organization__is_active=True,
-    ).select_related('organization').first()
+    membership = current_membership(request)
     if membership is None:
         return JsonResponse({'detail': 'No active organization membership found.'}, status=403)
     if not membership.has_permission('manage_organization') and not membership.has_permission('view_reports'):

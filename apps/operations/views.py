@@ -11,12 +11,13 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from apps.core.services import record_audit
+from apps.organization.context import current_membership
 from apps.organization.models import OrganizationMembership
 from .models import ApprovalRequest, Announcement, DocumentAcknowledgement, EmployeeDocument, ExternalConnector, ProfileChangeRequest, Project, TimesheetEntry
 
 
 def _membership(request):
-    return OrganizationMembership.objects.filter(user=request.user, is_active=True, organization__is_active=True).select_related('organization').first()
+    return current_membership(request)
 
 
 def _access(request, management=False):
@@ -204,6 +205,8 @@ def timesheet_decision(request, entry_id):
         return JsonResponse({'detail': 'You do not have permission to approve timesheets.'}, status=403)
     try:
         item = TimesheetEntry.objects.get(id=entry_id, employee__organization=membership.organization, status=TimesheetEntry.Status.SUBMITTED)
+        if item.employee_id == getattr(getattr(request.user, 'employee_profile', None), 'id', None):
+            return JsonResponse({'detail': 'Employees cannot approve their own timesheets.'}, status=403)
         payload = _json(request)
         decision = payload['decision']
         if decision not in ('approve', 'reject'):

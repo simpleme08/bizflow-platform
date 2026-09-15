@@ -33,6 +33,11 @@ class PayrollCalculatorTests(TestCase):
         self.assertEqual(PhilippinePayrollRules.philhealth(Decimal('20000.00')), (Decimal('500.00'), Decimal('500.00')))
         self.assertEqual(PhilippinePayrollRules.pagibig(Decimal('20000.00')), (Decimal('100.00'), Decimal('100.00')))
 
+    def test_statutory_contribution_caps_are_applied(self):
+        self.assertEqual(PhilippinePayrollRules.sss(Decimal('100000.00')), (Decimal('1750.00'), Decimal('3530.00')))
+        self.assertEqual(PhilippinePayrollRules.philhealth(Decimal('200000.00')), (Decimal('2500.00'), Decimal('2500.00')))
+        self.assertEqual(PhilippinePayrollRules.pagibig(Decimal('100000.00')), (Decimal('100.00'), Decimal('100.00')))
+
     def test_withholding_tax_uses_bir_tables(self):
         self.assertEqual(PhilippineWithholdingTax.calculate(Decimal('10417.00')), Decimal('0.00'))
         self.assertEqual(PhilippineWithholdingTax.calculate(Decimal('12000.00')), Decimal('237.45'))
@@ -67,6 +72,26 @@ class PayrollCalculatorTests(TestCase):
         PayrollHoliday.objects.create(organization=self.employee.organization, holiday_date=date(2026, 8, 11), name='Test Regular Holiday', kind=PayrollHoliday.Kind.REGULAR)
         result = PayrollCalculator.calculate(self.employee, self.period)
         self.assertEqual(result['holiday_pay'], Decimal('909.09'))
+
+    def test_special_non_working_holiday_adds_thirty_percent_premium(self):
+        assignment = self.employee.assignments.first()
+        AttendanceRecord.objects.create(employee=self.employee, assignment=assignment, attendance_date=date(2026, 8, 12), time_in=timezone.make_aware(datetime(2026, 8, 12, 8, 0)), time_out=timezone.make_aware(datetime(2026, 8, 12, 17, 0)))
+        PayrollHoliday.objects.create(organization=self.employee.organization, holiday_date=date(2026, 8, 12), name='Test Special Day', kind=PayrollHoliday.Kind.SPECIAL_NON_WORKING)
+        result = PayrollCalculator.calculate(self.employee, self.period)
+        self.assertEqual(result['holiday_pay'], Decimal('272.73'))
+
+    def test_regular_holiday_overtime_uses_two_times_then_thirty_percent(self):
+        assignment = self.employee.assignments.first()
+        attendance = AttendanceRecord.objects.create(employee=self.employee, assignment=assignment, attendance_date=date(2026, 8, 13), time_in=timezone.make_aware(datetime(2026, 8, 13, 8, 0)), time_out=timezone.make_aware(datetime(2026, 8, 13, 18, 0)), overtime_minutes=60)
+        PayrollHoliday.objects.create(organization=self.employee.organization, holiday_date=attendance.attendance_date, name='Test Regular Holiday OT', kind=PayrollHoliday.Kind.REGULAR)
+        hourly_rate = Decimal('20000.00') / Decimal('22') / Decimal('8')
+        self.assertEqual(PayrollCalculator._overtime_pay_for_attendance(attendance, hourly_rate), Decimal('295.45'))
+
+    def test_2026_august_holiday_types_match_dole_advisory(self):
+        PayrollHoliday.objects.create(organization=self.employee.organization, holiday_date=date(2026, 8, 21), name='Ninoy Aquino Day', kind=PayrollHoliday.Kind.SPECIAL_NON_WORKING)
+        PayrollHoliday.objects.create(organization=self.employee.organization, holiday_date=date(2026, 8, 31), name='National Heroes Day', kind=PayrollHoliday.Kind.REGULAR)
+        self.assertEqual(PayrollHoliday.objects.get(holiday_date=date(2026, 8, 21)).kind, PayrollHoliday.Kind.SPECIAL_NON_WORKING)
+        self.assertEqual(PayrollHoliday.objects.get(holiday_date=date(2026, 8, 31)).kind, PayrollHoliday.Kind.REGULAR)
 
     def test_approved_unpaid_leave_is_automatically_deducted(self):
         leave_type = LeaveType.objects.create(name='Unpaid Leave', code='UL', annual_credits=Decimal('10.00'), is_paid=False)

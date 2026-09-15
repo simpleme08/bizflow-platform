@@ -7,6 +7,7 @@ from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_GET
 
 from .models import PayrollPeriod, PayrollRecord
+from .services import PayrollCalculator, PhilippinePayrollRules
 from .views import _membership
 
 
@@ -107,21 +108,40 @@ def payroll_remittance_export(request, period_id, export_type):
             rows,
         )
 
-    # BIR 1601-C is an aggregate return.  This export is a calculation sheet
-    # for the current period/month, not a claimed eFPS upload file layout.
+    # BIR 1601-C is an aggregate calculation sheet, not a claimed eFPS upload layout.
     period_month_start = period.start_date.replace(day=1)
     period_month_end = period.end_date
     if period_month_end.month != period_month_start.month or period_month_end.year != period_month_start.year:
         period_month_end = date(period_month_start.year, period_month_start.month, monthrange(period_month_start.year, period_month_start.month)[1])
+
     total_compensation = sum((r.gross_pay for r in records), 0)
     total_statutory = sum((r.statutory_deductions for r in records), 0)
     total_tax = sum((r.withholding_tax for r in records), 0)
     total_thirteenth = sum((r.thirteenth_month for r in records), 0)
-    mwe_records = [r for r in records if getattr(getattr(r.employee, 'payroll_profile', None), 'minimum_wage_earner', False)]
-    mwe_basic = sum((r.basic_pay for r in mwe_records), 0)
-    mwe_ot_holiday_nd = sum((r.overtime_pay + r.holiday_pay + r.night_differential for r in mwe_records), 0)
-    other_non_taxable = sum((r.taxable_supplementary for r in records), 0)
-    taxable_compensation = total_compensation - total_statutory - total_thirteenth
+    exempt_thirteenth = min(total_thirteenth, PhilippinePayrollRules.THIRTEENTH_MONTH_EXEMPTION)
+
+    mwe_basic = 0
+    mwe_ot_holiday_nd = 0
+    for record in records:
+        profile = getattr(record.employee, 'payroll_profile', None)
+        if not profile or not profile.minimum_wage_earner:
+            continue
+        wage_rate = PayrollCalculator._wage_rate_for_employee(record.employee, period)
+        salary = PayrollCalculator._salary_for_period(record.employee, period)
+        if wage_rate is None or salary is None:
+            continue
+        daily_rate = salary.basic_salary / PayrollCalculator.WORKING_DAYS
+        if daily_rate <= wage_rate.daily_rate:
+            periods = PayrollCalculator.periods_per_month(period)
+            qualifying_regular = min(record.basic_pay, PhilippinePayrollRules.money(wage_rate.daily_rate * PayrollCalculator.WORKING_DAYS / periods))
+            mwe_basic += qualifying_regular
+            mwe_ot_holiday_nd += record.overtime_pay + record.holiday_pay + record.night_differential
+
+    # taxable_supplementary is taxable by definition, so it must never be reported
+    # as "other non-taxable compensation".
+    other_non_taxable = 0
+    total_non_taxable = mwe_basic + mwe_ot_holiday_nd + exempt_thirteenth + total_statutory + other_non_taxable
+    taxable_compensation = max(0, total_compensation - total_non_taxable)
     rows = [[
         period_month_start.strftime('%m/%Y'),
         f'{total_compensation:.2f}',
@@ -131,7 +151,7 @@ def payroll_remittance_export(request, period_id, export_type):
         '0.00',
         f'{total_statutory:.2f}',
         f'{other_non_taxable:.2f}',
-        f'{(mwe_basic + mwe_ot_holiday_nd + total_thirteenth + total_statutory):.2f}',
+        f'{total_non_taxable:.2f}',
         f'{taxable_compensation:.2f}',
         f'{total_tax:.2f}',
         '0.00',

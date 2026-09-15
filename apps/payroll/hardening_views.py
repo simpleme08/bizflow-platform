@@ -47,16 +47,19 @@ def process_payroll(request):
     membership = _payroll_membership(request, 'process')
     if membership is None:
         return JsonResponse({'detail': 'Payroll processing permission is required.'}, status=403)
-    try:
-        period = PayrollPeriod.objects.get(id=request.POST.get('period_id'), organization=membership.organization)
-    except PayrollPeriod.DoesNotExist:
-        return JsonResponse({'detail': 'Payroll period was not found.'}, status=404)
-    if PayrollRecord.objects.filter(payroll_period=period).exclude(status=PayrollRecord.Status.DRAFT).exists():
-        return JsonResponse({'detail': 'Payroll contains approved or paid records and cannot be recalculated.'}, status=409)
-    try:
-        processed = PayrollConfidence.process_period(period, membership.organization, actor=request.user)
-    except ValueError as exc:
-        return JsonResponse({'detail': str(exc)}, status=409)
+    with transaction.atomic():
+        try:
+            period = PayrollPeriod.objects.select_for_update().get(id=request.POST.get('period_id'), organization=membership.organization)
+        except PayrollPeriod.DoesNotExist:
+            return JsonResponse({'detail': 'Payroll period was not found.'}, status=404)
+        if period.status != PayrollPeriod.Status.OPEN:
+            return JsonResponse({'detail': 'Only open payroll periods can be processed.'}, status=409)
+        if PayrollRecord.objects.filter(payroll_period=period).exclude(status=PayrollRecord.Status.DRAFT).exists():
+            return JsonResponse({'detail': 'Payroll contains approved or paid records and cannot be recalculated.'}, status=409)
+        try:
+            processed = PayrollConfidence.process_period(period, membership.organization, actor=request.user)
+        except ValueError as exc:
+            return JsonResponse({'detail': str(exc)}, status=409)
     record_audit(organization=membership.organization, actor=request.user, action='payroll.processed', entity=period, details={'processed': processed, 'confidence': period.confidence_status, 'rule_set': period.rule_set.version if period.rule_set else None})
     return JsonResponse({'period': period.name, 'processed': processed, 'status': period.status, 'confidence': period.confidence_status})
 
@@ -73,7 +76,7 @@ def approve_payroll(request, record_id):
             record = PayrollRecord.objects.select_for_update().select_related('payroll_period').get(id=record_id, employee__organization=membership.organization, payroll_period__organization=membership.organization)
         except PayrollRecord.DoesNotExist:
             return JsonResponse({'detail': 'Payroll record was not found.'}, status=404)
-        period = record.payroll_period
+        period = PayrollPeriod.objects.select_for_update().get(pk=record.payroll_period_id)
         if period.status != PayrollPeriod.Status.CALCULATED:
             return JsonResponse({'detail': 'Payroll must be calculated before records can be approved.'}, status=409)
         if period.processed_by_id == request.user.id:

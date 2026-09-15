@@ -1,0 +1,73 @@
+from datetime import time
+
+from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
+from django.test import TestCase
+from django.urls import reverse
+
+from apps.attendance.models import AttendanceRecord
+from apps.employees.models import Employee
+from apps.organization.models import Organization, OrganizationMembership
+from apps.workforce.models import ShiftTemplate
+
+
+class AttendanceTenantContextTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username='multi-manager', password='test-password')
+        self.org_a = Organization.objects.create(name='Alpha Corporation', slug='alpha')
+        self.org_b = Organization.objects.create(name='Beta Corporation', slug='beta')
+        OrganizationMembership.objects.create(
+            organization=self.org_a,
+            user=self.user,
+            role=OrganizationMembership.Role.MANAGER,
+            is_active=True,
+        )
+        OrganizationMembership.objects.create(
+            organization=self.org_b,
+            user=self.user,
+            role=OrganizationMembership.Role.MANAGER,
+            is_active=True,
+        )
+        employee_user = User.objects.create_user(username='alpha-employee', password='test-password')
+        self.employee = Employee.objects.create(
+            employee_number='EMP-ALPHA-001',
+            user=employee_user,
+            organization=self.org_a,
+            first_name='Alpha',
+            last_name='Employee',
+            is_active=True,
+        )
+        self.client.login(username='multi-manager', password='test-password')
+
+    def test_dashboard_fails_closed_without_selected_organization(self):
+        response = self.client.get(reverse('dashboard'))
+        self.assertEqual(response.status_code, 403)
+        self.assertIn('Select an organization', response.json()['detail'])
+
+    def test_attendance_write_fails_closed_without_selected_organization(self):
+        response = self.client.post(
+            reverse('record-attendance'),
+            data={
+                'employee_id': str(self.employee.id),
+                'attendance_date': '2026-08-10',
+            },
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_attendance_record_rejects_cross_tenant_clock_shift(self):
+        shift = ShiftTemplate.objects.create(
+            organization=self.org_b,
+            name='Beta Shift',
+            start_time=time(8, 0),
+            end_time=time(17, 0),
+        )
+        record = AttendanceRecord(
+            employee=self.employee,
+            clock_shift=shift,
+            clock_in_mode=AttendanceRecord.ClockInMode.COVER,
+            attendance_date='2026-08-10',
+        )
+        with self.assertRaises(ValidationError):
+            record.full_clean()

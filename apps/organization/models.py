@@ -34,7 +34,6 @@ class Organization(BaseModel):
 
     @property
     def organization_memberships(self):
-        """Backward-compatible alias for the organization's membership manager."""
         return self.memberships
 
     def __str__(self):
@@ -107,9 +106,9 @@ class OrganizationMembership(BaseModel):
         SUPER_USER = 'SUPER_USER', 'Super User'
 
     ROLE_PERMISSIONS = {
-        'OWNER': {'view_employees', 'view_attendance', 'manage_organization', 'manage_users', 'manage_employees', 'manage_attendance', 'approve_leave', 'view_payroll', 'manage_payroll', 'view_reports', 'manage_recruiting', 'manage_performance', 'manage_benefits', 'manage_offboarding'},
-        'SUPER_USER': {'view_employees', 'view_attendance', 'manage_organization', 'manage_users', 'manage_employees', 'manage_attendance', 'approve_leave', 'view_payroll', 'manage_payroll', 'view_reports', 'manage_recruiting', 'manage_performance', 'manage_benefits', 'manage_offboarding'},
-        'CEO': {'view_employees', 'view_attendance', 'approve_leave', 'view_payroll', 'view_reports'},
+        'OWNER': {'view_employees', 'view_attendance', 'manage_organization', 'manage_users', 'manage_employees', 'manage_attendance', 'approve_leave', 'view_payroll', 'manage_payroll', 'approve_payroll', 'pay_payroll', 'view_reports', 'manage_recruiting', 'manage_performance', 'manage_benefits', 'manage_offboarding'},
+        'SUPER_USER': {'view_employees', 'view_attendance', 'manage_organization', 'manage_users', 'manage_employees', 'manage_attendance', 'approve_leave', 'view_payroll', 'manage_payroll', 'approve_payroll', 'pay_payroll', 'view_reports', 'manage_recruiting', 'manage_performance', 'manage_benefits', 'manage_offboarding'},
+        'CEO': {'view_employees', 'view_attendance', 'approve_leave', 'view_payroll', 'approve_payroll', 'view_reports'},
         'HR': {'manage_users', 'manage_employees', 'manage_attendance', 'approve_leave', 'view_payroll', 'manage_payroll', 'view_reports', 'manage_recruiting', 'manage_performance', 'manage_benefits', 'manage_offboarding'},
         'ADMIN': {'manage_users', 'manage_employees', 'manage_attendance', 'approve_leave', 'view_reports', 'manage_recruiting', 'manage_performance', 'manage_benefits', 'manage_offboarding'},
         'SME': {'view_employees', 'view_attendance', 'manage_attendance', 'view_reports'},
