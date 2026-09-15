@@ -15,13 +15,12 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 
 application = get_wsgi_application()
 
-# Render services created before the production-hardening blueprint may retain
-# their original start command. In that case, provisioning must still be able
-# to run when explicitly enabled through the production-only environment flag.
-# The command itself performs all validation and never logs passwords.
+# Legacy Render services may retain an older start command after the repository
+# blueprint changes. A separate, explicit switch keeps this compatibility path
+# opt-in so a correctly configured service does not provision twice.
 if (
     os.environ.get("DJANGO_ENV", "development").lower() == "production"
-    and os.environ.get("BIZFLOW_PROVISION_ACCOUNTS", "false").lower() == "true"
+    and os.environ.get("BIZFLOW_PROVISION_ON_WSGI", "false").lower() == "true"
 ):
     from django.core.management import call_command
 
