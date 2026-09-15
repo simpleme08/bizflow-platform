@@ -13,7 +13,19 @@ class PayrollConfidenceCommandTests(TestCase):
     def setUp(self):
         self.organization = Organization.objects.create(name="Confidence Co", slug="confidence-co")
 
-    def test_blocks_without_effective_provenance(self):
+    def test_baseline_provenance_requires_review_without_wage_table(self):
+        output = StringIO()
+        call_command(
+            "payroll_confidence_check",
+            organization="confidence-co",
+            as_of="2026-09-15",
+            stdout=output,
+        )
+        self.assertIn("confidence-co: REVIEW", output.getvalue())
+        self.assertIn("wage configuration", output.getvalue().lower())
+
+    def test_blocks_without_any_effective_provenance(self):
+        PayrollRuleSet.objects.filter(organization__isnull=True).update(is_active=False)
         output = StringIO()
         with self.assertRaises(CommandError):
             call_command(
