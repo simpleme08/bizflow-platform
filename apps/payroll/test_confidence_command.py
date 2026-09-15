@@ -1,7 +1,7 @@
 from datetime import date
 from io import StringIO
 
-from django.core.management import call_command
+from django.core.management import CommandError, call_command
 from django.test import TestCase
 
 from apps.organization.models import Organization
@@ -15,7 +15,7 @@ class PayrollConfidenceCommandTests(TestCase):
 
     def test_blocks_without_effective_provenance(self):
         output = StringIO()
-        with self.assertRaises(Exception):
+        with self.assertRaises(CommandError):
             call_command(
                 "payroll_confidence_check",
                 organization="confidence-co",
