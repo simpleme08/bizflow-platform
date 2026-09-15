@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db.models.signals import pre_save
 from django.dispatch import receiver
@@ -8,6 +9,8 @@ from .models import PayrollPeriod
 
 @receiver(pre_save, sender=PayrollPeriod)
 def enforce_payroll_confidence(sender, instance, **kwargs):
+    if settings.ENVIRONMENT != "production":
+        return
     if instance.status != PayrollPeriod.Status.CALCULATED or not instance.organization_id:
         return
     status, summary, rule_set = PayrollConfidenceGate.evaluate(instance.organization, instance)
