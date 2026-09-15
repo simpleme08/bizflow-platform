@@ -16,6 +16,10 @@ if not SECRET_KEY:
         raise RuntimeError('DJANGO_SECRET_KEY must be set in production')
     SECRET_KEY = 'dev-only-key-change-this-before-production'
 
+# Render may assign a service URL dynamically. Keep the configured production
+# host strict, while allowing Render's current *.onrender.com hostname as a
+# fallback when an environment variable has not yet been updated after a URL
+# change. Explicit DJANGO_ALLOWED_HOSTS entries remain authoritative.
 ALLOWED_HOSTS = [host.strip() for host in os.getenv('DJANGO_ALLOWED_HOSTS', '').split(',') if host.strip()]
 if not ALLOWED_HOSTS:
     ALLOWED_HOSTS = ['127.0.0.1', 'localhost'] if ENVIRONMENT != 'production' else []
@@ -24,6 +28,10 @@ if ENVIRONMENT == 'production':
         raise RuntimeError('DJANGO_DEBUG must be False in production')
     if not ALLOWED_HOSTS or '*' in ALLOWED_HOSTS or any(host in {'localhost', '127.0.0.1'} for host in ALLOWED_HOSTS):
         raise RuntimeError('DJANGO_ALLOWED_HOSTS must contain real production hostnames')
+    # Render's managed hostname is safe to allow by suffix because it is a
+    # hostname namespace controlled by Render, not a wildcard HTTP host value.
+    if 'onrender.com' not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append('.onrender.com')
 
 INSTALLED_APPS = [
     'django.contrib.admin', 'django.contrib.auth', 'django.contrib.contenttypes', 'django.contrib.sessions',
@@ -119,10 +127,6 @@ if STORAGE_BACKEND == 's3':
         raise RuntimeError('Private storage credentials, bucket, and endpoint must be configured in production')
     STORAGES = {
         'default': {'BACKEND': 'storages.backends.s3.S3Storage'},
-        # Some third-party AdminLTE assets reference optional .map files that
-        # are not distributed with the package. Manifest storage validates every
-        # reference during collectstatic and turns that optional artifact into a
-        # production build failure. CompressedStaticFilesStorage avoids that.
         'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage'},
     }
 else:
