@@ -40,17 +40,20 @@ class Command(BaseCommand):
                 f"Production organization '{organization_slug}' exists but is inactive; refusing to reactivate it."
             )
 
+        reset_passwords = os.getenv('BIZFLOW_PROVISION_RESET_PASSWORDS', 'false').lower() == 'true'
         User = get_user_model()
         for role, prefix in self.ROLE_SPECS:
-            self._provision_account(User, organization, role, prefix)
+            self._provision_account(User, organization, role, prefix, reset_passwords)
 
         self.stdout.write(self.style.SUCCESS(
             f"Production account provisioning complete for '{organization.name}' ({organization.slug})."
         ))
         if created:
             self.stdout.write('Created the production organization as FREE/TRIALING.')
+        if reset_passwords:
+            self.stdout.write('Configured active account passwords were reset because BIZFLOW_PROVISION_RESET_PASSWORDS=true.')
 
-    def _provision_account(self, User, organization, role, prefix):
+    def _provision_account(self, User, organization, role, prefix, reset_passwords):
         username = self._required(f'BIZFLOW_PRODUCTION_{prefix}_USERNAME')
         password = self._required(f'BIZFLOW_PRODUCTION_{prefix}_PASSWORD')
         email = os.getenv(f'BIZFLOW_PRODUCTION_{prefix}_EMAIL', '').strip()
@@ -80,6 +83,9 @@ class Command(BaseCommand):
                 if value and getattr(user, field) != value:
                     setattr(user, field, value)
                     update_fields.append(field)
+            if reset_passwords:
+                user.set_password(password)
+                update_fields.append('password')
             if update_fields:
                 user.save(update_fields=update_fields)
 
