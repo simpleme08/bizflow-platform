@@ -12,7 +12,6 @@ from apps.workforce.models import ShiftTemplate
 class Command(BaseCommand):
     help = 'Create demo accounts for every BizFlow role except programmer.'
 
-    password = 'DemoRole2026!'
     role_accounts = (
         ('demo_owner', OrganizationMembership.Role.OWNER, 'Demo Owner'),
         ('demo_admin', OrganizationMembership.Role.ADMIN, 'Demo Admin'),
@@ -28,6 +27,10 @@ class Command(BaseCommand):
         if os.getenv('DJANGO_ENV', '').lower() == 'production':
             raise CommandError('Demo account seeding is disabled in production.')
 
+        password = os.getenv('BIZFLOW_DEMO_PASSWORD', '').strip()
+        if not password:
+            raise CommandError('Set BIZFLOW_DEMO_PASSWORD before running demo account seeding.')
+
         organization = Organization.objects.filter(is_active=True).order_by('created_at').first()
         if organization is None:
             organization = Organization.objects.create(name='Default Organization', slug='default')
@@ -42,7 +45,7 @@ class Command(BaseCommand):
                 username=username,
                 defaults={'first_name': first_name, 'last_name': last_name},
             )
-            user.set_password(self.password)
+            user.set_password(password)
             user.is_active = True
             user.save(update_fields=('password', 'is_active', 'first_name', 'last_name'))
             OrganizationMembership.objects.update_or_create(
@@ -68,4 +71,4 @@ class Command(BaseCommand):
                     defaults={'is_primary': True},
                 )
         self.stdout.write(self.style.SUCCESS(f'Created or updated {len(self.role_accounts)} demo role accounts.'))
-        self.stdout.write('Username pattern: demo_<role> | Password: <demo credential configured in source>')
+        self.stdout.write('Username pattern: demo_<role> | Password supplied through BIZFLOW_DEMO_PASSWORD.')
