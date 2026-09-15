@@ -5,7 +5,7 @@ services:
     region: singapore
     plan: free
     buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput
-    startCommand: python manage.py migrate --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
+    startCommand: python manage.py migrate --noinput && if [ "$BIZFLOW_PROVISION_ACCOUNTS" = "true" ]; then python manage.py provision_production_accounts; fi && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
     healthCheckPath: /ready/
     envVars:
       - key: DJANGO_ENV
@@ -57,4 +57,28 @@ services:
       - key: PAYMONGO_PLAN_GROWTH
         sync: false
       - key: PAYMONGO_PLAN_BUSINESS
+        sync: false
+      - key: BIZFLOW_PROVISION_ACCOUNTS
+        value: "false"
+      - key: BIZFLOW_PRODUCTION_ORG_SLUG
+        sync: false
+      - key: BIZFLOW_PRODUCTION_ORG_NAME
+        sync: false
+      - key: BIZFLOW_PRODUCTION_HR_USERNAME
+        sync: false
+      - key: BIZFLOW_PRODUCTION_HR_PASSWORD
+        sync: false
+      - key: BIZFLOW_PRODUCTION_HR_EMAIL
+        sync: false
+      - key: BIZFLOW_PRODUCTION_SME_USERNAME
+        sync: false
+      - key: BIZFLOW_PRODUCTION_SME_PASSWORD
+        sync: false
+      - key: BIZFLOW_PRODUCTION_SME_EMAIL
+        sync: false
+      - key: BIZFLOW_PRODUCTION_SUPER_USER_USERNAME
+        sync: false
+      - key: BIZFLOW_PRODUCTION_SUPER_USER_PASSWORD
+        sync: false
+      - key: BIZFLOW_PRODUCTION_SUPER_USER_EMAIL
         sync: false
