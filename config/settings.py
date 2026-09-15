@@ -16,22 +16,23 @@ if not SECRET_KEY:
         raise RuntimeError('DJANGO_SECRET_KEY must be set in production')
     SECRET_KEY = 'dev-only-key-change-this-before-production'
 
-# Render may assign a service URL dynamically. Keep the configured production
-# host strict, while allowing Render's current *.onrender.com hostname as a
-# fallback when an environment variable has not yet been updated after a URL
-# change. Explicit DJANGO_ALLOWED_HOSTS entries remain authoritative.
 ALLOWED_HOSTS = [host.strip() for host in os.getenv('DJANGO_ALLOWED_HOSTS', '').split(',') if host.strip()]
 if not ALLOWED_HOSTS:
     ALLOWED_HOSTS = ['127.0.0.1', 'localhost'] if ENVIRONMENT != 'production' else []
+
+# Render exposes the service's canonical public URL. Add only that exact
+# hostname when configured; never use a broad wildcard/suffix for production.
+render_external_url = os.getenv('RENDER_EXTERNAL_URL', '').strip()
+if render_external_url:
+    render_host = urlparse(render_external_url).hostname
+    if render_host and render_host not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(render_host)
+
 if ENVIRONMENT == 'production':
     if DEBUG:
         raise RuntimeError('DJANGO_DEBUG must be False in production')
     if not ALLOWED_HOSTS or '*' in ALLOWED_HOSTS or any(host in {'localhost', '127.0.0.1'} for host in ALLOWED_HOSTS):
         raise RuntimeError('DJANGO_ALLOWED_HOSTS must contain real production hostnames')
-    # Render's managed hostname is safe to allow by suffix because it is a
-    # hostname namespace controlled by Render, not a wildcard HTTP host value.
-    if 'onrender.com' not in ALLOWED_HOSTS:
-        ALLOWED_HOSTS.append('.onrender.com')
 
 INSTALLED_APPS = [
     'django.contrib.admin', 'django.contrib.auth', 'django.contrib.contenttypes', 'django.contrib.sessions',
@@ -150,8 +151,12 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
 SECURE_REFERRER_POLICY = 'same-origin'
 CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in os.getenv('DJANGO_CSRF_TRUSTED_ORIGINS', '').split(',') if origin.strip()]
+if render_external_url:
+    render_origin = render_external_url.rstrip('/')
+    if render_origin.startswith('https://') and render_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(render_origin)
 if ENVIRONMENT == 'production' and not CSRF_TRUSTED_ORIGINS:
-    raise RuntimeError('DJANGO_CSRF_TRUSTED_ORIGINS must be configured in production')
+    raise RuntimeError('DJANGO_CSRF_TRUSTED_ORIGINS must be configured in production or supplied by Render external URL')
 
 LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/'
