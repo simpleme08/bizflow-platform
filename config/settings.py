@@ -117,9 +117,19 @@ if STORAGE_BACKEND == 's3':
     AWS_S3_FILE_OVERWRITE = False
     if ENVIRONMENT == 'production' and not all((AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_STORAGE_BUCKET_NAME, AWS_S3_ENDPOINT_URL)):
         raise RuntimeError('Private storage credentials, bucket, and endpoint must be configured in production')
-    STORAGES = {'default': {'BACKEND': 'storages.backends.s3.S3Storage'}, 'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'}}
+    STORAGES = {
+        'default': {'BACKEND': 'storages.backends.s3.S3Storage'},
+        # Some third-party AdminLTE assets reference optional .map files that
+        # are not distributed with the package. Manifest storage validates every
+        # reference during collectstatic and turns that optional artifact into a
+        # production build failure. CompressedStaticFilesStorage avoids that.
+        'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage'},
+    }
 else:
-    STORAGES = {'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'}, 'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'}}
+    STORAGES = {
+        'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+        'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage'},
+    }
 
 SECURE_SSL_REDIRECT = ENVIRONMENT == 'production'
 SECURE_HSTS_SECONDS = 31536000 if ENVIRONMENT == 'production' else 0
