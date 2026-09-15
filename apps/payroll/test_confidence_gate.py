@@ -18,7 +18,11 @@ class PayrollConfidenceGateTests(TestCase):
             end_date=date(2026, 8, 15),
         )
 
+    def disable_global_baseline(self):
+        PayrollRuleSet.objects.filter(organization__isnull=True).update(is_active=False)
+
     def test_missing_rule_set_blocks(self):
+        self.disable_global_baseline()
         status, summary, selected = PayrollConfidenceGate.evaluate(self.organization, self.period)
         self.assertEqual(status, "BLOCKED")
         self.assertIsNone(selected)
@@ -38,12 +42,20 @@ class PayrollConfidenceGateTests(TestCase):
             source_name="Organization source",
             source_url="https://example.com/org",
         )
+        PayrollWageRate.objects.create(
+            organization=self.organization,
+            region_code="NCR",
+            category="NON_AGRICULTURE",
+            daily_rate="700.00",
+            effective_from=date(2026, 1, 1),
+        )
         status, summary, selected = PayrollConfidenceGate.evaluate(self.organization, self.period)
         self.assertEqual(status, "READY")
         self.assertEqual(selected, organization_rule)
         self.assertEqual(summary["rule_set_version"], "org-2026")
 
     def test_expired_rule_set_does_not_pass(self):
+        self.disable_global_baseline()
         PayrollRuleSet.objects.create(
             organization=self.organization,
             version="expired",
