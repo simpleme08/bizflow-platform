@@ -2,8 +2,17 @@ __pycache__/
 *.py[cod]
 *.sqlite3
 .env
+.env.*.local
 .venv/
 venv/
 staticfiles/
 media/
 .pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.DS_Store
+.idea/
+.vscode/
