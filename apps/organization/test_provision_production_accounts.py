@@ -38,7 +38,7 @@ class ProvisionProductionAccountsCommandTests(TestCase):
             self.assertTrue(membership.is_active)
             self.assertTrue(user.check_password(password))
 
-    def test_existing_password_is_not_overwritten(self):
+    def test_existing_password_is_not_overwritten_by_default(self):
         user = get_user_model().objects.create_user(
             username='production-hr', password='original-password'
         )
@@ -47,6 +47,20 @@ class ProvisionProductionAccountsCommandTests(TestCase):
         user.refresh_from_db()
         self.assertTrue(user.check_password('original-password'))
         self.assertFalse(user.check_password('hr-test-password'))
+
+    def test_reset_passwords_can_recover_existing_active_account(self):
+        user = get_user_model().objects.create_user(
+            username='production-hr', password='original-password'
+        )
+        with patch.dict(
+            os.environ,
+            {**self.env, 'BIZFLOW_PROVISION_RESET_PASSWORDS': 'true'},
+            clear=False,
+        ):
+            call_command('provision_production_accounts')
+        user.refresh_from_db()
+        self.assertTrue(user.check_password('hr-test-password'))
+        self.assertFalse(user.check_password('original-password'))
 
     def test_inactive_user_is_not_reactivated(self):
         user = get_user_model().objects.create_user(
