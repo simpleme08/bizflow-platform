@@ -1,7 +1,8 @@
+import os
 from datetime import date, time
 
 from django.contrib.auth import get_user_model
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
 from apps.employees.models import Employee, EmployeeAssignment
 from apps.organization.models import Organization, OrganizationMembership
@@ -24,6 +25,9 @@ class Command(BaseCommand):
     )
 
     def handle(self, *args, **options):
+        if os.getenv('DJANGO_ENV', '').lower() == 'production':
+            raise CommandError('Demo account seeding is disabled in production.')
+
         organization = Organization.objects.filter(is_active=True).order_by('created_at').first()
         if organization is None:
             organization = Organization.objects.create(name='Default Organization', slug='default')
@@ -64,4 +68,4 @@ class Command(BaseCommand):
                     defaults={'is_primary': True},
                 )
         self.stdout.write(self.style.SUCCESS(f'Created or updated {len(self.role_accounts)} demo role accounts.'))
-        self.stdout.write(f'Username pattern: demo_<role> | Password: {self.password}')
+        self.stdout.write('Username pattern: demo_<role> | Password: <demo credential configured in source>')
