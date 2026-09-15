@@ -18,18 +18,8 @@ services:
         sync: false
       - key: DJANGO_CSRF_TRUSTED_ORIGINS
         sync: false
-      - key: DB_ENGINE
-        value: postgresql
-      - key: POSTGRES_DB
+      - key: DATABASE_URL
         sync: false
-      - key: POSTGRES_USER
-        sync: false
-      - key: POSTGRES_PASSWORD
-        sync: false
-      - key: POSTGRES_HOST
-        sync: false
-      - key: POSTGRES_PORT
-        value: "5432"
       - key: POSTGRES_SSLMODE
         value: require
       - key: POSTGRES_CONN_MAX_AGE
@@ -61,7 +51,7 @@ services:
       - key: PAYMONGO_WEBHOOK_SECRET
         sync: false
       - key: PAYMONGO_LIVEMODE
-        value: "True"
+        value: "False"
       - key: PAYMONGO_PLAN_STARTER
         sync: false
       - key: PAYMONGO_PLAN_GROWTH
