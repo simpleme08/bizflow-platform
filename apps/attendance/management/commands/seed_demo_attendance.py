@@ -1,7 +1,8 @@
 from datetime import date, datetime, time, timedelta
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
 
@@ -40,6 +41,9 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def handle(self, *args, **options):
+        if getattr(settings, 'ENVIRONMENT', '').lower() == 'production':
+            raise CommandError('seed_demo_attendance is disabled in production.')
+
         org, _ = Organization.objects.get_or_create(slug=self.DEMO_ORG_SLUG, defaults={'name': self.DEMO_ORG_NAME})
         org.name = self.DEMO_ORG_NAME
         org.is_active = True
