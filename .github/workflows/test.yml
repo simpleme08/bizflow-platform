@@ -40,6 +40,18 @@ jobs:
           cache: pip
       - name: Install dependencies
         run: pip install -r requirements.txt
+      - name: Verify migration state
+        env:
+          DJANGO_ENV: development
+          DJANGO_SECRET_KEY: ci-test-secret
+          DJANGO_DEBUG: '1'
+          DB_ENGINE: postgresql
+          POSTGRES_DB: bizflow
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-password
+          POSTGRES_HOST: localhost
+          POSTGRES_SSLMODE: disable
+        run: python manage.py makemigrations --check --dry-run
       - name: Run migrations
         env:
           DJANGO_ENV: development
