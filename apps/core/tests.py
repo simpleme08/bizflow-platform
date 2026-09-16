@@ -31,7 +31,7 @@ class HealthCheckTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {'status': 'ok'})
 
-    def test_readiness_endpoint_checks_database(self):
+    def test_readiness_endpoint_checks_database_and_cache(self):
         response = self.client.get(reverse('readiness'))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {'status': 'ready', 'database': 'ok'})
+        self.assertEqual(response.json(), {'status': 'ready', 'database': 'ok', 'cache': 'ok'})
