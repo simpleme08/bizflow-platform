@@ -61,7 +61,7 @@ services:
       - key: BIZFLOW_PROVISION_ACCOUNTS
         value: "false"
       - key: BIZFLOW_PROVISION_ON_WSGI
-        value: "false"
+        value: "true"
       - key: BIZFLOW_PROVISION_RESET_PASSWORDS
         value: "false"
       - key: BIZFLOW_PRODUCTION_ORG_SLUG
