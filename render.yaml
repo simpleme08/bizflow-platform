@@ -4,7 +4,7 @@ services:
     runtime: python
     region: singapore
     plan: free
-    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py check --deploy
+    buildCommand: pip install -r requirements.txt && python manage.py check --deploy && python manage.py collectstatic --noinput
     startCommand: python manage.py migrate --noinput && if [ "$BIZFLOW_PROVISION_ACCOUNTS" = "true" ]; then python manage.py provision_production_accounts; fi && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
     healthCheckPath: /ready/
     envVars:
