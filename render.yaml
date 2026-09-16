@@ -59,7 +59,7 @@ services:
       - key: PAYMONGO_PLAN_BUSINESS
         sync: false
       - key: BIZFLOW_PROVISION_ACCOUNTS
-        value: "false"
+        value: "true"
       - key: BIZFLOW_PROVISION_ON_WSGI
         value: "false"
       - key: BIZFLOW_PROVISION_RESET_PASSWORDS
