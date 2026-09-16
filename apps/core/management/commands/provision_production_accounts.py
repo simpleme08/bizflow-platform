@@ -8,7 +8,7 @@ from apps.organization.models import Organization, OrganizationMembership
 
 
 class Command(BaseCommand):
-    help = 'Idempotently provision the explicitly configured production HRIS role accounts.'
+    help = 'Provision explicitly configured production HRIS accounts without reactivating disabled records.'
 
     ACCOUNT_ENV = (
         ('HR', OrganizationMembership.Role.HR, 'BIZFLOW_PRODUCTION_HR'),
@@ -16,7 +16,8 @@ class Command(BaseCommand):
         ('SUPER_USER', OrganizationMembership.Role.SUPER_USER, 'BIZFLOW_PRODUCTION_SUPER_USER'),
     )
 
-    def _value(self, key, required=True):
+    @staticmethod
+    def _value(key, required=True):
         value = os.getenv(key, '').strip()
         if required and not value:
             raise CommandError(f'{key} must be configured for production account provisioning.')
@@ -41,35 +42,66 @@ class Command(BaseCommand):
 
         User = get_user_model()
         with transaction.atomic():
-            organization, _ = Organization.objects.update_or_create(
-                slug=slug,
-                defaults={'name': name, 'is_active': True},
-            )
+            organization = Organization.objects.filter(slug=slug).first()
+            if organization is None:
+                organization = Organization.objects.create(
+                    slug=slug,
+                    name=name,
+                    is_active=True,
+                    plan_code=Organization.Plan.FREE,
+                    subscription_status=Organization.SubscriptionStatus.TRIALING,
+                )
+                self.stdout.write('Created the production organization as FREE/TRIALING.')
+            elif not organization.is_active:
+                raise CommandError(
+                    f"Production organization '{slug}' exists but is inactive; refusing to reactivate it."
+                )
+
             for label, role, username, password, email, first_name, last_name in accounts:
-                user, created = User.objects.get_or_create(username=username)
-                changed = []
-                if email and user.email != email:
-                    user.email = email
-                    changed.append('email')
-                if first_name and user.first_name != first_name:
-                    user.first_name = first_name
-                    changed.append('first_name')
-                if last_name and user.last_name != last_name:
-                    user.last_name = last_name
-                    changed.append('last_name')
-                if created or reset_passwords:
+                user = User.objects.filter(username=username).first()
+                if user is None:
+                    user = User(
+                        username=username,
+                        email=email,
+                        first_name=first_name,
+                        last_name=last_name,
+                        is_active=True,
+                    )
                     user.set_password(password)
-                    changed.append('password')
-                if not user.is_active:
-                    user.is_active = True
-                    changed.append('is_active')
-                if changed:
-                    user.save(update_fields=sorted(set(changed)))
-                OrganizationMembership.objects.update_or_create(
+                    user.save()
+                else:
+                    if not user.is_active:
+                        raise CommandError(
+                            f"Configured production user '{username}' is inactive; refusing to reactivate it."
+                        )
+                    changed = []
+                    for field, value in (
+                        ('email', email),
+                        ('first_name', first_name),
+                        ('last_name', last_name),
+                    ):
+                        if value and getattr(user, field) != value:
+                            setattr(user, field, value)
+                            changed.append(field)
+                    if reset_passwords:
+                        user.set_password(password)
+                        changed.append('password')
+                    if changed:
+                        user.save(update_fields=sorted(set(changed)))
+
+                membership, created = OrganizationMembership.objects.get_or_create(
                     organization=organization,
                     user=user,
                     defaults={'role': role, 'is_active': True},
                 )
+                if not created:
+                    if not membership.is_active:
+                        raise CommandError(
+                            f"Configured membership for '{username}' is inactive; refusing to reactivate it."
+                        )
+                    if membership.role != role:
+                        membership.role = role
+                        membership.save(update_fields=('role', 'updated_at'))
                 self.stdout.write(f'{label}: provisioned {username}')
 
-        self.stdout.write(self.style.SUCCESS(f'Production accounts ready for organization {organization.slug}.'))
+        self.stdout.write(self.style.SUCCESS(f'Production accounts ready for organization {slug}.'))
