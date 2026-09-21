@@ -12,8 +12,11 @@ class EmployeeLoginTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'People.')
-        self.assertContains(response, 'Sign in to BizFlow')
+        self.assertContains(response, 'Sign in')
         self.assertContains(response, 'Open time clock')
+        html = response.content.decode()
+        self.assertEqual(html.count('href="/login/"'), 1)
+        self.assertNotIn('method="post"', html)
         self.assertNotContains(response, 'Client workspaces')
 
     def setUp(self):
