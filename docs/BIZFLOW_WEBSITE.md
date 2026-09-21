@@ -12,7 +12,7 @@ This replaces the previous "People operations. Connected." headline and position
 - Visitors are directed to contact BizFlow for business inquiries, demos, onboarding and partnerships.
 - The homepage uses a polished depth/3D visual language: perspective dashboard, floating information card, layered surfaces, soft shadows and responsive motion.
 - The product story follows a simple flow: People → Time → Payroll.
-- Existing sign-in, employee time clock and HSIS client-experience routes remain available.
+- The BizFlow website is the single public entry point for HRIS sign-in and the employee time clock. Customer-specific websites are outside this repository.
 
 ## Inquiry CTA
 
