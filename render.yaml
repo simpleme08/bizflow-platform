@@ -62,14 +62,6 @@ services:
         value: "true"
       - key: BIZFLOW_PROVISION_ON_WSGI
         value: "false"
-      - key: BIZFLOW_PROVISION_DEMO_ON_WSGI
-        value: "false"
-      - key: BIZFLOW_PRODUCTION_DEMO_SEED
-        value: "false"
-      - key: BIZFLOW_DEMO_PASSWORD
-        sync: false
-      - key: BIZFLOW_DEMO_RESET_PASSWORDS
-        value: "false"
       - key: BIZFLOW_PROVISION_RESET_PASSWORDS
         value: "false"
       - key: BIZFLOW_PRODUCTION_ORG_SLUG
