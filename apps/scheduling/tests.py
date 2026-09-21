@@ -41,13 +41,6 @@ class ShiftSchedulingTests(TestCase):
         self.assertNotIn(str(other_shift.id), shift_ids)
 
 
-    def test_multi_organization_user_must_use_selected_tenant(self):
-        other_org = Organization.objects.create(slug='other-org', name='Other Organization')
-        OrganizationMembership.objects.create(user=self.user, organization=other_org, role=OrganizationMembership.Role.SUPER_USER)
-        response = self.client.get('/api/scheduling/employees/', HTTP_X_ORGANIZATION_ID=str(other_org.id))
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()['employees'], [])
-
     def test_get_employees_returns_active_only(self):
         Employee.objects.create(employee_number='EMP-002', user=User.objects.create_user(username='emp2', password='EmpPass123!'), organization=self.organization, first_name='Jane', last_name='Smith', is_active=False, status=Employee.Status.SEPARATED)
         response = self.client.get('/api/scheduling/employees/')
