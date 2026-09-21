@@ -35,3 +35,7 @@ class HealthCheckTests(TestCase):
         response = self.client.get(reverse('readiness'))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {'status': 'ready', 'database': 'ok', 'cache': 'ok'})
+
+    def test_legacy_client_site_route_is_removed(self):
+        response = self.client.get('/client/high-speed-internet-support/')
+        self.assertEqual(response.status_code, 404)
