@@ -14,7 +14,7 @@ from PIL import Image, UnidentifiedImageError
 
 from apps.core.services import record_audit
 from apps.employees.models import Employee
-from apps.organization.context import current_membership
+from apps.organization.context import ACTIVE_ORGANIZATION_SESSION_KEY, current_membership
 from apps.organization.models import OrganizationMembership
 
 from .models import AttendanceRecord
@@ -89,7 +89,11 @@ def clock_login(request):
     if not employee.is_active: return JsonResponse({'detail':'This employee profile is inactive.'},status=403)
     membership=employee.organization.organization_memberships.filter(user=user,is_active=True).first()
     if membership is None or not employee.organization.is_active: return JsonResponse({'detail':'This employee does not have active organization access.'},status=403)
-    login(request,user); return JsonResponse(_clock_state(employee))
+    login(request, user)
+    # The time clock has no organization picker: the employee profile is the
+    # authoritative organization boundary for clocking attendance.
+    request.session[ACTIVE_ORGANIZATION_SESSION_KEY] = str(employee.organization_id)
+    return JsonResponse(_clock_state(employee))
 
 
 @require_http_methods(['GET','POST'])
@@ -100,6 +104,10 @@ def clock_action(request):
     if not employee.is_active or not employee.organization.is_active: return JsonResponse({'detail':'This employee is not eligible to record attendance.'},status=403)
     membership=employee.organization.organization_memberships.filter(user=request.user,is_active=True).first()
     if membership is None: return JsonResponse({'detail':'This employee does not have active organization access.'},status=403)
+    selected_membership=current_membership(request)
+    if selected_membership is not None and selected_membership.organization_id != employee.organization_id:
+        return JsonResponse({'detail':'The selected organization does not match this employee time clock.'},status=403)
+    request.session[ACTIVE_ORGANIZATION_SESSION_KEY] = str(employee.organization_id)
     if request.method=='GET': return JsonResponse(_clock_state(employee))
     action=request.POST.get('action')
     try: photo=_validate_clock_photo(request.FILES.get('photo'))
