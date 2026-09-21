@@ -22,6 +22,16 @@ class EmployeeLoginTests(TestCase):
         OrganizationMembership.objects.create(organization=organization, user=self.user, role=OrganizationMembership.Role.EMPLOYEE)
         Employee.objects.create(employee_number='EMP-LOGIN', user=self.user, organization=organization, first_name='Ana', last_name='Reyes')
 
+
+    def test_public_sign_in_link_resolves_to_unified_login(self):
+        response = self.client.get('/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'href="/login/"')
+        login_response = self.client.get('/login/')
+        self.assertEqual(login_response.status_code, 200)
+        self.assertContains(login_response, 'Sign in to BizFlow')
+
     def test_single_login_redirects_employee_to_ess(self):
         response = self.client.post('/login/', {'username': 'employee', 'password': 'password'})
 
