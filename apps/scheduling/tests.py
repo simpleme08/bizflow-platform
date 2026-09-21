@@ -44,10 +44,7 @@ class ShiftSchedulingTests(TestCase):
     def test_multi_organization_user_must_use_selected_tenant(self):
         other_org = Organization.objects.create(slug='other-org', name='Other Organization')
         OrganizationMembership.objects.create(user=self.user, organization=other_org, role=OrganizationMembership.Role.SUPER_USER)
-        self.client.session['active_organization_id'] = str(other_org.id)
-        self.client.session.save()
-
-        response = self.client.get('/api/scheduling/employees/')
+        response = self.client.get('/api/scheduling/employees/', HTTP_X_ORGANIZATION_ID=str(other_org.id))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['employees'], [])
 
