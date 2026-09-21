@@ -3,22 +3,9 @@ from django.db import connection
 from django.http import JsonResponse
 from django.shortcuts import render
 
-from .client_sites import CLIENT_SITES
-
 
 def website(request):
-    clients = [
-        {
-            "slug": slug,
-            "name": profile.get("name", slug.replace("-", " ").title()),
-            "short_name": profile.get("short_name", "Client"),
-            "eyebrow": profile.get("eyebrow", "Client workspace"),
-            "website": f"/client/{slug}/",
-            "login": f"/login/?org={slug}",
-        }
-        for slug, profile in CLIENT_SITES.items()
-    ]
-    return render(request, 'website.html', {"clients": clients})
+    return render(request, 'website.html')
 
 
 def health(request):
