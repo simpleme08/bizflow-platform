@@ -11,14 +11,14 @@
 <body>
 <div class="shell">
 <section class="intro">
-<div><a class="brand" href="/"><span class="mark"><i class="m1"></i><i class="m2"></i><i class="m3"></i><i class="m4"></i><i class="m5"></i><i class="m6"></i></span><span>BizFlow<small>PEOPLE OPERATIONS PLATFORM</small></span></a><div class="eyebrow">Secure workforce access</div><h1>Run your people.<br><em>Run your work.</em></h1><p>One connected workspace for employee records, attendance, leave, payroll, reporting, and operational workflows.</p><div class="points"><div class="point"><b>People</b>Workforce records</div><div class="point"><b>Time</b>Attendance &amp; leave</div><div class="point"><b>Payroll</b>Controlled pay workflows</div></div></div>
+<div><a class="brand" href="{% url 'website' %}"><span class="mark"><i class="m1"></i><i class="m2"></i><i class="m3"></i><i class="m4"></i><i class="m5"></i><i class="m6"></i></span><span>BizFlow<small>PEOPLE OPERATIONS PLATFORM</small></span></a><div class="eyebrow">Secure workforce access</div><h1>Run your people.<br><em>Run your work.</em></h1><p>One connected workspace for employee records, attendance, leave, payroll, reporting, and operational workflows.</p><div class="points"><div class="point"><b>People</b>Workforce records</div><div class="point"><b>Time</b>Attendance &amp; leave</div><div class="point"><b>Payroll</b>Controlled pay workflows</div></div></div>
 <div style="color:#71869e;font-size:.54rem">Tenant-scoped access · BizFlow HRIS</div>
 </section>
 <section class="form-side"><div class="card">
 <div class="label">Workspace access</div><div class="title">Sign in to BizFlow</div><p class="subtitle">Use your assigned credentials to enter your authorized organization workspace.</p>
 {% if error %}<div class="error">{{ error }}</div>{% endif %}
-<form method="post">{% csrf_token %}{% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}<div class="group"><label for="id_username">Username</label><input id="id_username" name="username" type="text" autocomplete="username" required autofocus></div><div class="group"><label for="id_password">Password</label><input id="id_password" name="password" type="password" autocomplete="current-password" required></div><button type="submit">Continue to workspace</button></form>
-<div class="meta"><div><b>People</b>HR records</div><div><b>Time</b>Attendance</div><div><b>Pay</b>Payroll</div></div><div class="back"><a href="/">← Back to BizFlow</a></div><div class="security">Access is protected by organization membership and role-based permissions.</div>
+<form method="post" action="{% url 'login' %}">{% csrf_token %}{% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}<div class="group"><label for="id_username">Username</label><input id="id_username" name="username" type="text" autocomplete="username" required autofocus></div><div class="group"><label for="id_password">Password</label><input id="id_password" name="password" type="password" autocomplete="current-password" required></div><button type="submit">Continue to workspace</button></form>
+<div class="meta"><div><b>People</b>HR records</div><div><b>Time</b>Attendance</div><div><b>Pay</b>Payroll</div></div><div class="back"><a href="{% url 'website' %}">← Back to BizFlow</a></div><div class="security">Access is protected by organization membership and role-based permissions.</div>
 </div></section>
 </div>
 </body>
