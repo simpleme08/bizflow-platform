@@ -1,4 +1,6 @@
 from django.contrib.auth import authenticate, login
+import logging
+
 from django.core.cache import cache
 from django.shortcuts import redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -8,6 +10,7 @@ from apps.organization.context import ACTIVE_ORGANIZATION_SESSION_KEY, current_m
 
 LOGIN_FAILURE_LIMIT = 5
 LOGIN_FAILURE_WINDOW = 15 * 60
+logger = logging.getLogger(__name__)
 
 
 def _client_ip(request):
@@ -36,7 +39,16 @@ def login_page(request):
     if request.method == 'POST':
         username = request.POST.get('username', '')
         throttle_key = _login_throttle_key(request, username)
-        if cache.get(throttle_key, 0) >= LOGIN_FAILURE_LIMIT:
+        try:
+            failure_count = cache.get(throttle_key, 0)
+        except Exception:
+            # Authentication must not become a 500 just because the shared
+            # throttling cache is temporarily unavailable. Readiness still
+            # reports cache health so the infrastructure can replace/recover
+            # an unhealthy instance.
+            logger.exception('Login throttling cache unavailable during sign-in')
+            failure_count = 0
+        if failure_count >= LOGIN_FAILURE_LIMIT:
             return render(
                 request,
                 'registration/login.html',
@@ -49,7 +61,10 @@ def login_page(request):
             memberships = user.organization_memberships.filter(is_active=True, organization__is_active=True).select_related('organization').order_by('organization__name')
             if not memberships.exists():
                 return render(request, 'registration/login.html', {'error': 'No active organization membership found.', 'next': next_url}, status=401)
-            cache.delete(throttle_key)
+            try:
+                cache.delete(throttle_key)
+            except Exception:
+                logger.exception('Login throttling cache unavailable while clearing failures')
             login(request, user)
             request.session.pop(ACTIVE_ORGANIZATION_SESSION_KEY, None)
             if memberships.count() > 1:
@@ -62,8 +77,11 @@ def login_page(request):
                 return redirect(next_url)
             return redirect_for_user(request)
 
-        failures = cache.get(throttle_key, 0) + 1
-        cache.set(throttle_key, failures, LOGIN_FAILURE_WINDOW)
+        try:
+            failures = cache.get(throttle_key, 0) + 1
+            cache.set(throttle_key, failures, LOGIN_FAILURE_WINDOW)
+        except Exception:
+            logger.exception('Login throttling cache unavailable while recording failed sign-in')
         return render(request, 'registration/login.html', {'error': 'Invalid username or password.', 'next': next_url}, status=401)
     return render(request, 'registration/login.html', {'next': next_url})
 
