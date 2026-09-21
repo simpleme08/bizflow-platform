@@ -11,18 +11,16 @@ class EmployeeLoginTests(TestCase):
         response = self.client.get('/')
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Run your people. Run your business.')
+        self.assertContains(response, 'People.')
+        self.assertContains(response, 'Sign in to BizFlow')
+        self.assertContains(response, 'Open time clock')
+        self.assertNotContains(response, 'Client workspaces')
 
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='employee', password='password')
         organization = Organization.objects.create(name='Acme', slug='acme')
         OrganizationMembership.objects.create(organization=organization, user=self.user, role=OrganizationMembership.Role.EMPLOYEE)
         Employee.objects.create(employee_number='EMP-LOGIN', user=self.user, organization=organization, first_name='Ana', last_name='Reyes')
-
-    def test_legacy_employee_login_redirects_to_unified_login(self):
-        response = self.client.post('/employee-login/', {'username': 'employee', 'password': 'password'})
-
-        self.assertRedirects(response, '/login/')
 
     def test_single_login_redirects_employee_to_ess(self):
         response = self.client.post('/login/', {'username': 'employee', 'password': 'password'})
