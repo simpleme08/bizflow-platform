@@ -4,6 +4,7 @@ from django.views.decorators.http import require_http_methods
 from datetime import date
 import json
 
+from apps.organization.context import current_membership
 from apps.organization.models import OrganizationMembership
 from apps.employees.models import Employee, EmployeeAssignment
 from apps.workforce.models import ShiftTemplate, Client, ClientSite
@@ -17,14 +18,14 @@ INELIGIBLE_ASSIGNMENT_STATUSES = {
 }
 
 
-def _membership_for(user):
-    return OrganizationMembership.objects.filter(user=user, is_active=True, organization__is_active=True).select_related('organization').first()
+def _membership_for(request):
+    return current_membership(request)
 
 
 def scheduling_page(request):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
-    membership = _membership_for(request.user)
+    membership = _membership_for(request)
     if membership is None or not membership.has_permission('manage_attendance'):
         return JsonResponse({'detail': 'Access denied. Requires scheduling permissions.'}, status=403)
     from django.shortcuts import render

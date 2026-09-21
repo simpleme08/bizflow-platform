@@ -77,7 +77,7 @@ For a disposable local/demo database:
 python manage.py seed_demo
 ```
 
-The seed is intended for demonstrations and creates representative organizations, users, employees and module data. **Do not run it against a real production HR database.** Change/remove all demo accounts before real use.
+The seed is intended for demonstrations and creates representative organizations, users, employees and module data. **Do not run it against a real production HR database.** Demo seeding is explicitly disabled in production and requires a password supplied through an environment variable.
 
 ## Timekeeping import
 
@@ -92,13 +92,15 @@ Upload `.xlsx` only. Supported statuses are `PRESENT`, `ABSENT`, `LEAVE`, and `H
 ## Health endpoints
 
 - `GET /health/` — process availability
-- `GET /ready/` — database readiness; returns HTTP 503 when the database is unavailable
+- `GET /ready/` — database **and shared-cache** readiness; returns HTTP 503 when either dependency is unavailable
 
 ## Production
 
 Production requires PostgreSQL, HTTPS, a real `DJANGO_SECRET_KEY`, exact allowed hosts/CSRF origins, managed secrets, backups, monitoring, email delivery, PayMongo live configuration, and a tested restore procedure.
 
-The included `render.yaml` runs migrations and static collection during deployment and uses `/ready/` as its health check. A free Render service is suitable for demonstration only; production should use infrastructure appropriate for availability, persistent storage, backups and monitoring.
+The included `render.yaml` runs migrations, verifies migration consistency, runs Django deployment checks and collects static assets during deployment. It uses `/ready/` as its health check and can provision the explicitly configured production HRIS role accounts idempotently without resetting existing passwords unless that reset flag is deliberately enabled.
+
+A free Render service is suitable for demonstration only; production should use infrastructure appropriate for availability, persistent storage, backups and monitoring.
 
 See [docs/production-launch.md](docs/production-launch.md) for the complete go-live gate.
 

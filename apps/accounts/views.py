@@ -116,6 +116,3 @@ def workspace_url_for_user(request_or_user):
 def redirect_for_user(request):
     return redirect(workspace_url_for_user(request))
 
-
-def employee_login(request):
-    return redirect('login')

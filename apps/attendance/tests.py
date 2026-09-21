@@ -70,6 +70,7 @@ class AttendanceCalculatorTests(TestCase):
         login_response = self.client.post('/clock/login/', {'username': 'juan', 'password': 'clock-password'})
         self.assertEqual(login_response.status_code, 200)
         self.assertEqual(login_response.json()['last_action'], 'NOT_STARTED')
+        self.assertEqual(self.client.session.get('active_organization_id'), str(self.assignment.employee.organization_id))
         clock_in_response = self.client.post('/clock/action/', {'action': 'CLOCK_IN', 'photo': self.photo()})
         self.assertEqual(clock_in_response.status_code, 200)
         self.assertEqual(clock_in_response.json()['last_action'], 'CLOCKED_IN')

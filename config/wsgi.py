@@ -2,9 +2,6 @@
 WSGI config for config project.
 
 It exposes the WSGI callable as a module-level variable named ``application``.
-
-For more information on this file, see
-https://docs.djangoproject.com/en/5.2/howto/deployment/wsgi/
 """
 
 import os
@@ -15,14 +12,26 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 
 application = get_wsgi_application()
 
-# Render services created before the production-hardening blueprint may retain
-# their original start command. In that case, provisioning must still be able
-# to run when explicitly enabled through the production-only environment flag.
-# The command itself performs all validation and never logs passwords.
+# Compatibility path for an existing Render service whose start command has not
+# yet been switched to the repository's current render.yaml. It is deliberately
+# opt-in and only runs when every required production credential is present.
+# Missing bootstrap credentials must never prevent the web process from starting.
 if (
     os.environ.get("DJANGO_ENV", "development").lower() == "production"
-    and os.environ.get("BIZFLOW_PROVISION_ACCOUNTS", "false").lower() == "true"
+    and os.environ.get("BIZFLOW_PROVISION_ON_WSGI", "false").lower() == "true"
 ):
-    from django.core.management import call_command
+    required = (
+        "BIZFLOW_PRODUCTION_ORG_SLUG",
+        "BIZFLOW_PRODUCTION_ORG_NAME",
+        "BIZFLOW_PRODUCTION_HR_USERNAME",
+        "BIZFLOW_PRODUCTION_HR_PASSWORD",
+        "BIZFLOW_PRODUCTION_SME_USERNAME",
+        "BIZFLOW_PRODUCTION_SME_PASSWORD",
+        "BIZFLOW_PRODUCTION_SUPER_USER_USERNAME",
+        "BIZFLOW_PRODUCTION_SUPER_USER_PASSWORD",
+    )
+    if all(os.environ.get(name, "").strip() for name in required):
+        from django.core.management import call_command
 
-    call_command("provision_production_accounts")
+        call_command("provision_production_accounts")
+

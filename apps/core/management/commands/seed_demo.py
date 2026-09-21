@@ -1,8 +1,10 @@
+import os
 from datetime import date, datetime, time
 from decimal import Decimal
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
 from apps.attendance.models import AttendanceRecord
@@ -32,12 +34,20 @@ class Command(BaseCommand):
     )
 
     def handle(self, *args, **options):
-        organization, _ = Organization.objects.get_or_create(slug='default', defaults={'name': 'Default Organization', 'is_active': True})
-        # A demo seed must repair a previously disabled default tenant so all
-        # demonstration accounts can sign in after the command completes.
-        if not organization.is_active:
+        is_production = getattr(settings, 'ENVIRONMENT', '').lower() == 'production'
+        if is_production and os.environ.get('BIZFLOW_PRODUCTION_DEMO_SEED', '').lower() not in ('1', 'true', 'yes'):
+            raise CommandError('Production demo seeding requires BIZFLOW_PRODUCTION_DEMO_SEED=true.')
+        self.demo_password = os.environ.get('BIZFLOW_DEMO_PASSWORD')
+        if not self.demo_password:
+            raise CommandError('Set BIZFLOW_DEMO_PASSWORD before running seed_demo.')
+        self.reset_passwords = os.environ.get('BIZFLOW_DEMO_RESET_PASSWORDS', 'false').lower() in ('1', 'true', 'yes')
+        organization_slug = os.environ.get('BIZFLOW_PRODUCTION_ORG_SLUG', 'default') if is_production else 'default'
+        organization_name = os.environ.get('BIZFLOW_PRODUCTION_ORG_NAME', 'BizFlow Production Demo') if is_production else 'Default Organization'
+        organization, _ = Organization.objects.get_or_create(slug=organization_slug, defaults={'name': organization_name, 'is_active': True})
+        if organization.name != organization_name or not organization.is_active:
+            organization.name = organization_name
             organization.is_active = True
-            organization.save(update_fields=('is_active', 'updated_at'))
+            organization.save(update_fields=('name', 'is_active', 'updated_at'))
         departments = {name: Department.objects.get_or_create(organization=organization, code=code, defaults={'name': name})[0] for name, code in {'Operations': 'OPS', 'Human Resources': 'HR', 'Finance': 'FIN', 'Customer Support': 'CS', 'IT Services': 'IT'}.items()}
         positions = {}
         for _, _, _, _, _, code, _, _, _, _, _, _ in self.people:
@@ -54,12 +64,7 @@ class Command(BaseCommand):
         today = timezone.localdate()
         for person in self.people:
             self.create_person(organization, departments, positions, employment_types, client, site, shifts, leave_types, today, person)
-        PayrollPeriod.objects.get_or_create(
-            organization=organization,
-            name='Demo August 1-15, 2026',
-            start_date=date(2026, 8, 1),
-            end_date=date(2026, 8, 15),
-        )
+        PayrollPeriod.objects.get_or_create(organization=organization, name='Demo August 1-15, 2026', start_date=date(2026, 8, 1), end_date=date(2026, 8, 15))
         self.seed_roles(organization, shifts['Day Shift'], today)
         self.seed_full_demo(organization, departments, today)
         self.stdout.write(self.style.SUCCESS(f'Full demo ready: {len(self.people)} employees, role accounts, payroll, talent, operations, and ESS data.'))
@@ -72,9 +77,13 @@ class Command(BaseCommand):
             ('demo_employee', OrganizationMembership.Role.EMPLOYEE, 'Emma', 'Reyes'),
         )
         for username, role, first_name, last_name in accounts:
-            user, _ = get_user_model().objects.get_or_create(username=username, defaults={'first_name': first_name, 'last_name': last_name})
-            user.set_password('DemoRole2026!'); user.is_active = True
-            if username == 'demo_superuser': user.is_staff = True; user.is_superuser = True
+            user, created = get_user_model().objects.get_or_create(username=username, defaults={'first_name': first_name, 'last_name': last_name})
+            user.is_active = True
+            if created or self.reset_passwords:
+                user.set_password(self.demo_password)
+            if username == 'demo_superuser':
+                user.is_staff = True
+                user.is_superuser = True
             user.save()
             OrganizationMembership.objects.update_or_create(organization=organization, user=user, defaults={'role': role, 'is_active': True})
             if role == OrganizationMembership.Role.EMPLOYEE:
@@ -85,12 +94,7 @@ class Command(BaseCommand):
         employees = list(organization.employees.filter(is_active=True).select_related('user'))
         hr_user = get_user_model().objects.get(username='demo_hr')
         manager_user = get_user_model().objects.get(username='demo_manager')
-        period, _ = PayrollPeriod.objects.get_or_create(
-            organization=organization,
-            name='Demo August 1-15, 2026',
-            start_date=date(2026, 8, 1),
-            end_date=date(2026, 8, 15),
-        )
+        period, _ = PayrollPeriod.objects.get_or_create(organization=organization, name='Demo August 1-15, 2026', start_date=date(2026, 8, 1), end_date=date(2026, 8, 15))
         for employee in employees:
             salary = getattr(employee, 'salary', None)
             basic = salary.basic_salary / Decimal('2') if salary else Decimal('15000.00')
@@ -112,7 +116,7 @@ class Command(BaseCommand):
         if len(employees) > 1:
             exit_record, _ = OffboardingRecord.objects.get_or_create(employee=employees[-1], defaults={'last_working_day': today, 'reason': 'Demo transition'})
             OffboardingTask.objects.get_or_create(offboarding=exit_record, title='Collect company assets', defaults={'assigned_to': hr_user, 'due_date': today})
-        document, _ = EmployeeDocument.objects.get_or_create(organization=organization, title='Employee Handbook', defaults={'category': 'Policy', 'body': 'Demo employee handbook and code of conduct.', 'requires_acknowledgement': True, 'status': EmployeeDocument.Status.PUBLISHED})
+        EmployeeDocument.objects.get_or_create(organization=organization, title='Employee Handbook', defaults={'category': 'Policy', 'body': 'Demo employee handbook and code of conduct.', 'requires_acknowledgement': True, 'status': EmployeeDocument.Status.PUBLISHED})
         Announcement.objects.get_or_create(organization=organization, title='Welcome to BizFlow', defaults={'message': 'Explore your self-service tools and keep your profile current.', 'is_published': True, 'published_at': timezone.now()})
         project, _ = Project.objects.get_or_create(organization=organization, code='INTERNAL', defaults={'name': 'Internal Operations', 'is_billable': False})
         if employees: TimesheetEntry.objects.get_or_create(employee=employees[0], project=project, work_date=today, defaults={'hours': Decimal('8.00'), 'status': TimesheetEntry.Status.APPROVED, 'approver': manager_user})
@@ -122,15 +126,17 @@ class Command(BaseCommand):
 
     def create_person(self, organization, departments, positions, employment_types, client, site, shifts, leave_types, today, person):
         number, first_name, last_name, username, department, position_code, employment_code, shift_name, salary, late_minutes, overtime_minutes, status = person
-        user, _ = get_user_model().objects.get_or_create(username=username, defaults={'first_name': first_name, 'last_name': last_name})
-        user.set_password('DemoEmployee2026!')
+        user, created = get_user_model().objects.get_or_create(username=username, defaults={'first_name': first_name, 'last_name': last_name})
         user.is_active = True
-        user.save(update_fields=('password', 'is_active', 'first_name', 'last_name'))
-        OrganizationMembership.objects.update_or_create(
-            organization=organization,
-            user=user,
-            defaults={'role': OrganizationMembership.Role.EMPLOYEE, 'is_active': True},
-        )
+        if created or self.reset_passwords:
+            user.set_password(self.demo_password)
+        user.first_name = first_name
+        user.last_name = last_name
+        update_fields = ['is_active', 'first_name', 'last_name']
+        if created or self.reset_passwords:
+            update_fields.append('password')
+        user.save(update_fields=update_fields)
+        OrganizationMembership.objects.update_or_create(organization=organization, user=user, defaults={'role': OrganizationMembership.Role.EMPLOYEE, 'is_active': True})
         employee, _ = Employee.objects.update_or_create(employee_number=number, defaults={'user': user, 'organization': organization, 'department': departments[department], 'position': positions[position_code], 'employment_type': employment_types[employment_code], 'first_name': first_name, 'last_name': last_name, 'is_active': True})
         assignment, _ = EmployeeAssignment.objects.update_or_create(employee=employee, shift_template=shifts[shift_name], start_date=date(today.year, 1, 1), defaults={'client': client, 'client_site': site, 'is_primary': True})
         EmployeeSalary.objects.update_or_create(employee=employee, defaults={'basic_salary': salary, 'effective_date': date(today.year, 1, 1)})
