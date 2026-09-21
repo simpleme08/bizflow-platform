@@ -35,12 +35,3 @@ if (
 
         call_command("provision_production_accounts")
 
-if (
-    os.environ.get("DJANGO_ENV", "development").lower() == "production"
-    and os.environ.get("BIZFLOW_PROVISION_DEMO_ON_WSGI", "false").lower() == "true"
-    and os.environ.get("BIZFLOW_PRODUCTION_DEMO_SEED", "false").lower() == "true"
-    and os.environ.get("BIZFLOW_DEMO_PASSWORD", "").strip()
-):
-    from django.core.management import call_command
-
-    call_command("seed_demo")
