@@ -37,7 +37,7 @@ Start here:
 12. [Production launch runbook](docs/production-launch.md)
 13. [Master project checklist](docs/master-checklist.md)
 14. [HR demo readiness](docs/DEMO_READINESS.md)
-14. [Contributing](docs/CONTRIBUTING.md)
+15. [Contributing](docs/CONTRIBUTING.md)
 
 ## Technology
 
