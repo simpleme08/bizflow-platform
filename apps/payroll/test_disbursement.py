@@ -14,7 +14,7 @@ class BankDisbursementTests(TestCase):
         self.user=User.objects.create_user(username='payroll-test',password='safe-password')
         self.org=Organization.objects.create(name='Disbursement Test Org', code='DTO')
         OrganizationMembership.objects.create(user=self.user, organization=self.org, role='ADMIN', is_active=True)
-        self.employee=Employee.objects.create(organization=self.org, employee_number='E-001', first_name='Ana', last_name='Test', status=Employee.Status.ACTIVE, is_active=True)
+        self.employee=Employee.objects.create(organization=self.org, employee_number='E-001', first_name='Ana', last_name='Test', status=Employee.Status.REGULAR, is_active=True)
         self.period=PayrollPeriod.objects.create(organization=self.org,name='September 2026',start_date='2026-09-01',end_date='2026-09-15',status=PayrollPeriod.Status.APPROVED)
         self.record=PayrollRecord.objects.create(employee=self.employee,payroll_period=self.period,net_pay=Decimal('12500.00'),gross_pay=Decimal('13000.00'),status=PayrollRecord.Status.APPROVED)
 
@@ -24,7 +24,7 @@ class BankDisbursementTests(TestCase):
 
     def test_export_contains_only_approved_or_paid_records(self):
         PayrollProfile.objects.create(employee=self.employee, bank_name='Test Bank', bank_account_name='Ana Test', bank_account_number='123456789')
-        draft_employee=Employee.objects.create(organization=self.org,employee_number='E-002',first_name='Draft',last_name='Employee',status=Employee.Status.ACTIVE,is_active=True)
+        draft_employee=Employee.objects.create(organization=self.org,employee_number='E-002',first_name='Draft',last_name='Employee',status=Employee.Status.REGULAR,is_active=True)
         PayrollRecord.objects.create(employee=draft_employee,payroll_period=self.period,net_pay=Decimal('9000.00'),gross_pay=Decimal('9000.00'),status=PayrollRecord.Status.DRAFT)
         payload, digest, count, total = build_bank_disbursement_csv(self.period)
         self.assertIn('123456789', payload)
