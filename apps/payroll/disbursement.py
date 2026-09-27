@@ -51,8 +51,6 @@ def build_bank_disbursement_csv(period):
 
 @transaction.atomic
 def prepare_bank_disbursement(period, actor):
-    if period.organization_id != getattr(actor, 'organization_id', None):
-        raise ValueError('Payroll period and actor organization do not match.')
     if period.status not in (PayrollPeriod.Status.APPROVED, PayrollPeriod.Status.PAID):
         raise ValueError('Payroll must be approved before a bank disbursement file can be prepared.')
     payload, digest, count, total = build_bank_disbursement_csv(period)
