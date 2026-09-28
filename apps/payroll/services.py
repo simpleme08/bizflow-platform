@@ -223,6 +223,30 @@ class PayrollCalculator:
         return PhilippinePayrollRules.money(cumulative_taxable - prior_taxable)
 
     @classmethod
+    def _statutory_for_period(cls, employee, period, monthly_basic):
+        if period.frequency == period.Frequency.MONTHLY:
+            return PhilippinePayrollRules.statutory(monthly_basic, periods_per_month=1)
+        current = PhilippinePayrollRules.statutory(monthly_basic, periods_per_month=2)
+        if period.start_date.day <= 15:
+            return current
+        prior = PayrollRecord.objects.filter(
+            employee=employee,
+            payroll_period__start_date__year=period.start_date.year,
+            payroll_period__start_date__month=period.start_date.month,
+            payroll_period__end_date__lt=period.start_date,
+            payroll_period__frequency=period.Frequency.SEMI_MONTHLY,
+            status__in=(PayrollRecord.Status.APPROVED, PayrollRecord.Status.PAID),
+        )
+        prior_totals = {}
+        for field in ('sss_employee', 'sss_employer', 'philhealth_employee', 'philhealth_employer', 'pagibig_employee', 'pagibig_employer'):
+            prior_totals[field] = sum((getattr(record, field) for record in prior), ZERO)
+        monthly = PhilippinePayrollRules.statutory(monthly_basic, periods_per_month=1)
+        return {
+            field: PhilippinePayrollRules.money(max(ZERO, monthly[field] - prior_totals[field]))
+            for field in monthly
+        }
+
+    @classmethod
     def calculate(cls, employee, period, other_deductions=ZERO, leave_without_pay=None, loan_deductions=ZERO, allowances=ZERO, commissions=ZERO, bonuses=ZERO, holiday_pay=None, night_differential=None, thirteenth_month=ZERO):
         if employee.organization_id != period.organization_id:
             raise ValueError('Employee and payroll period must belong to the same organization.')
@@ -251,7 +275,7 @@ class PayrollCalculator:
         night_differential = calculated_night if night_differential is None else money(night_differential)
         thirteenth_month = money(thirteenth_month)
         gross_pay = money(basic_pay + overtime_pay + holiday_pay + night_differential + allowances + commissions + bonuses + thirteenth_month)
-        statutory = PhilippinePayrollRules.statutory(salary.basic_salary, periods_per_month=periods)
+        statutory = cls._statutory_for_period(employee, period, salary.basic_salary)
         taxable_regular = money(basic_pay + allowances - statutory['sss_employee'] - statutory['philhealth_employee'] - statutory['pagibig_employee'])
         taxable_supplementary = money(commissions + bonuses + overtime_pay + holiday_pay + night_differential + cls._taxable_thirteenth_for_period(employee, period, thirteenth_month))
         taxable_before_mwe = money(taxable_regular + taxable_supplementary)
@@ -280,13 +304,13 @@ class PayrollCalculator:
 
     @classmethod
     def thirteenth_month(cls, employee, year):
-        records = PayrollRecord.objects.filter(employee=employee, payroll_period__end_date__year=year)
+        records = PayrollRecord.objects.filter(employee=employee, payroll_period__end_date__year=year, status__in=(PayrollRecord.Status.APPROVED, PayrollRecord.Status.PAID))
         basic = sum((record.basic_pay for record in records), ZERO)
         return PhilippinePayrollRules.money(basic / Decimal('12'))
 
     @classmethod
     def annual_tax_reconciliation(cls, employee, year):
-        records = PayrollRecord.objects.filter(employee=employee, payroll_period__end_date__year=year).order_by('payroll_period__end_date')
+        records = PayrollRecord.objects.filter(employee=employee, payroll_period__end_date__year=year, status__in=(PayrollRecord.Status.APPROVED, PayrollRecord.Status.PAID)).order_by('payroll_period__end_date')
         rows = list(records.values('basic_pay', 'allowances', 'commissions', 'bonuses', 'overtime_pay', 'holiday_pay', 'night_differential', 'thirteenth_month', 'sss_employee', 'philhealth_employee', 'pagibig_employee'))
         regular_and_supplementary = sum((row['basic_pay'] + row['allowances'] + row['commissions'] + row['bonuses'] + row['overtime_pay'] + row['holiday_pay'] + row['night_differential'] - row['sss_employee'] - row['philhealth_employee'] - row['pagibig_employee'] for row in rows), ZERO)
         total_thirteenth_month = sum((row['thirteenth_month'] for row in rows), ZERO)
