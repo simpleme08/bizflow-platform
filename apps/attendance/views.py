@@ -1,4 +1,5 @@
 import json
+import math
 from datetime import date, datetime, time
 from io import BytesIO
 
@@ -97,6 +98,32 @@ def clock_login(request):
 
 
 @require_http_methods(['GET','POST'])
+
+
+def _clock_controls_valid(request, organization):
+    device_id = request.POST.get('device_id', '').strip()
+    allowed_devices = organization.clock_device_ids or []
+    if allowed_devices and device_id not in allowed_devices:
+        return False, 'This device is not authorized for the organization time clock.'
+    if not organization.clock_geofence_enabled:
+        return True, ''
+    try:
+        latitude = float(request.POST.get('latitude'))
+        longitude = float(request.POST.get('longitude'))
+        target_lat = float(organization.clock_geofence_latitude)
+        target_lon = float(organization.clock_geofence_longitude)
+    except (TypeError, ValueError):
+        return False, 'Location is required for this organization time clock.'
+    radius = organization.clock_geofence_radius_meters
+    earth_radius = 6371000
+    dlat = math.radians(latitude - target_lat)
+    dlon = math.radians(longitude - target_lon)
+    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(target_lat)) * math.cos(math.radians(latitude)) * math.sin(dlon / 2) ** 2
+    distance = 2 * earth_radius * math.asin(math.sqrt(a))
+    if distance > radius:
+        return False, 'You are outside the configured attendance geofence.'
+    return True, ''
+
 def clock_action(request):
     if not request.user.is_authenticated: return JsonResponse({'detail':'Sign in before using the time clock.'},status=401)
     try: employee=request.user.employee_profile
@@ -110,6 +137,8 @@ def clock_action(request):
     request.session[ACTIVE_ORGANIZATION_SESSION_KEY] = str(employee.organization_id)
     if request.method=='GET': return JsonResponse(_clock_state(employee))
     action=request.POST.get('action')
+    controls_ok, controls_error = _clock_controls_valid(request, employee.organization)
+    if not controls_ok: return JsonResponse({'detail': controls_error}, status=403)
     try: photo=_validate_clock_photo(request.FILES.get('photo'))
     except ValueError as error: return JsonResponse({'detail':str(error)},status=400)
     now=timezone.now(); attendance_date=timezone.localdate()
