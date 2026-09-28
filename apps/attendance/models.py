@@ -112,4 +112,4 @@ class AttendanceException(BaseModel):
         constraints = [
             models.UniqueConstraint(fields=('attendance', 'code'), name='unique_attendance_exception_code'),
         ]
-        indexes = [models.Index(fields=('status', 'created_at'), name='attendance_exception_status_idx')]
+        indexes = [models.Index(fields=('status', 'created_at'), name='attn_exc_status_idx')]
