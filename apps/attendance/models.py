@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from apps.core.models import BaseModel
 from apps.employees.models import Employee, EmployeeAssignment
-from apps.workforce.models import ShiftTemplate
+from apps.workforce.models import CoverShift, ShiftTemplate
 
 
 class AttendanceRecord(BaseModel):
@@ -22,6 +22,8 @@ class AttendanceRecord(BaseModel):
         UNSCHEDULED = 'UNSCHEDULED', 'Unscheduled work'
 
     employee = models.ForeignKey(Employee, on_delete=models.PROTECT, related_name='attendance_records')
+    segment_number = models.PositiveIntegerField(default=1)
+    cover_shift = models.ForeignKey(CoverShift, on_delete=models.PROTECT, null=True, blank=True, related_name='attendance_records')
     assignment = models.ForeignKey(EmployeeAssignment, on_delete=models.PROTECT, null=True, blank=True, related_name='attendance_records')
     clock_shift = models.ForeignKey(ShiftTemplate, on_delete=models.PROTECT, null=True, blank=True, related_name='clock_attendance_records')
     clock_in_mode = models.CharField(max_length=20, choices=ClockInMode.choices, default=ClockInMode.SCHEDULED)
@@ -37,16 +39,27 @@ class AttendanceRecord(BaseModel):
     remarks = models.TextField(blank=True)
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=('employee', 'attendance_date'), name='unique_employee_attendance_date')]
+        constraints = [models.UniqueConstraint(fields=('employee', 'attendance_date', 'segment_number'), name='unique_employee_attendance_date_segment')]
         ordering = ('-attendance_date',)
 
     @property
     def effective_shift(self):
+        if self.cover_shift_id:
+            return self.cover_shift.shift_template
         if self.assignment_id:
             return self.assignment.shift_template
         return self.clock_shift
 
     def clean(self):
+        if self.cover_shift_id:
+            if self.cover_shift.employee_id != self.employee_id:
+                raise ValidationError('The cover shift must belong to the selected employee.')
+            if self.cover_shift.status != CoverShift.Status.APPROVED:
+                raise ValidationError('Only an approved cover shift can be attached to attendance.')
+            if self.cover_shift.work_date != self.attendance_date:
+                raise ValidationError('The cover shift date must match the attendance date.')
+        if self.segment_number < 1:
+            raise ValidationError('Attendance segment number must be positive.')
         if self.assignment_id and self.assignment.employee_id != self.employee_id:
             raise ValidationError('The assignment must belong to the selected employee.')
         if self.clock_shift_id:
