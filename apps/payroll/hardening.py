@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from django.db import transaction
 
-from apps.attendance.models import AttendanceRecord
+from apps.attendance.models import AttendanceException, AttendanceRecord
 
 from .models import PayrollRecord, PayrollRuleSet
 from .services import PayrollCalculator, PhilippinePayrollRules, PhilippineWithholdingTax
@@ -46,6 +46,9 @@ class PayrollConfidence:
     @classmethod
     def preflight(cls, period, organization):
         result = PayrollCalculator.preflight(period, organization)
+        exceptions = AttendanceException.objects.filter(attendance__employee__organization=organization, attendance__attendance_date__range=(period.start_date, period.end_date), status=AttendanceException.Status.OPEN).count()
+        if exceptions:
+            result.setdefault('warnings', []).append(f'{exceptions} attendance exceptions remain open for this payroll period.')
         rule_set = cls.rule_set_for(period, organization)
         errors = list(result.get('errors', []))
         warnings = list(result.get('warnings', []))
