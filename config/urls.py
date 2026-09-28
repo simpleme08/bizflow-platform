@@ -25,7 +25,7 @@ from apps.accounts.views import login_page, organization_select
 from apps.core.views import health, readiness, website
 from apps.core.audit_views import audit_api, retention_status
 from apps.scheduling.views import scheduling_page, get_shifts, get_clients, get_assignable_employees, get_employee_schedule, assign_shift, delete_assignment
-from apps.onboarding.views import onboarding_page, onboarding_api, onboarding_task_update
+from apps.onboarding.views import onboarding_page, onboarding_api, onboarding_status_update, onboarding_task_update
 from apps.talent.views import benefits_api, offboarding_api, performance_api, recruiting_api, talent_page
 from apps.operations.views import approval_decision, employee_hub_api, operations_api, operations_page, employee_hub_page, profile_request_decision, timesheet_decision
 from apps.operations.private_media_views import employee_document_file
@@ -48,7 +48,7 @@ urlpatterns = [
     path('api/payroll/loans/', loans_api, name='payroll-loans'), path('api/payroll/final-pay/', final_pay_api, name='payroll-final-pay'), path('api/payroll/remittance/<uuid:period_id>/<str:export_type>/', payroll_remittance_export, name='payroll-remittance-export'), path('api/payroll/disbursement/<uuid:period_id>/', payroll_disbursement_export, name='payroll-disbursement-export'),
     path('reports/', reports_page, name='reports-page'), path('api/reports/', reports_api, name='reports-api'), path('ess/', ess_page, name='ess-page'), path('api/ess/', ess_api, name='ess-api'),
     path('api/scheduling/shifts/', get_shifts, name='scheduling-shifts'), path('api/scheduling/clients/', get_clients, name='scheduling-clients'), path('api/scheduling/employees/', get_assignable_employees, name='scheduling-employees'), path('api/scheduling/employee-schedule/', get_employee_schedule, name='scheduling-employee-schedule'), path('api/scheduling/assign/', assign_shift, name='scheduling-assign'), path('api/scheduling/delete/', delete_assignment, name='scheduling-delete'),
-    path('onboarding/', onboarding_page, name='onboarding-page'), path('api/onboarding/', onboarding_api, name='onboarding-api'), path('api/onboarding/<uuid:onboarding_id>/tasks/<uuid:task_id>/', onboarding_task_update, name='onboarding-task-update'),
+    path('onboarding/', onboarding_page, name='onboarding-page'), path('api/onboarding/', onboarding_api, name='onboarding-api'), path('api/onboarding/<uuid:onboarding_id>/status/', onboarding_status_update, name='onboarding-status-update'), path('api/onboarding/<uuid:onboarding_id>/tasks/<uuid:task_id>/', onboarding_task_update, name='onboarding-task-update'),
     path('talent/', talent_page, name='talent-page'), path('api/recruiting/', recruiting_api, name='recruiting-api'), path('api/performance/', performance_api, name='performance-api'), path('api/benefits/', benefits_api, name='benefits-api'), path('api/offboarding/', offboarding_api, name='offboarding-api'),
     path('operations/', operations_page, name='operations-page'), path('employee-hub/', employee_hub_page, name='employee-hub-page'), path('api/operations/', operations_api, name='operations-api'), path('api/operations/employee/', employee_hub_api, name='employee-hub-api'), path('api/operations/approvals/<uuid:approval_id>/decision/', approval_decision, name='approval-decision'), path('api/operations/profile-requests/<uuid:request_id>/decision/', profile_request_decision, name='profile-request-decision'), path('api/operations/timesheets/<uuid:entry_id>/decision/', timesheet_decision, name='timesheet-decision'),
 ]
