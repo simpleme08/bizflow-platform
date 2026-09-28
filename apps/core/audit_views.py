@@ -1,5 +1,5 @@
 import csv
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_GET
