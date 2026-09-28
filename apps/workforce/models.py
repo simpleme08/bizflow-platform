@@ -136,7 +136,7 @@ class CoverShift(BaseModel):
             models.UniqueConstraint(fields=('employee', 'work_date'), name='unique_cover_shift_employee_date'),
         ]
         indexes = [
-            models.Index(fields=('employee', 'work_date', 'status'), name='cover_shift_emp_date_status_idx'),
+            models.Index(fields=('employee', 'work_date', 'status'), name='cover_shift_emp_dt_status'),
         ]
 
     def clean(self):
