@@ -64,7 +64,7 @@ class Command(BaseCommand):
         today = timezone.localdate()
         for person in self.people:
             self.create_person(organization, departments, positions, employment_types, client, site, shifts, leave_types, today, person)
-        PayrollPeriod.objects.get_or_create(organization=organization, name='Demo August 1-15, 2026', start_date=date(2026, 8, 1), end_date=date(2026, 8, 15))
+        PayrollPeriod.objects.get_or_create(organization=organization, name='Demo August 1-15, 2026', start_date=date(2026, 8, 1), end_date=date(2026, 8, 15), defaults={'status': PayrollPeriod.Status.OPEN})
         self.seed_roles(organization, shifts['Day Shift'], today)
         self.seed_full_demo(organization, departments, today)
         self.stdout.write(self.style.SUCCESS(f'Full demo ready: {len(self.people)} employees, role accounts, payroll, talent, operations, and ESS data.'))
@@ -98,7 +98,7 @@ class Command(BaseCommand):
         for employee in employees:
             salary = getattr(employee, 'salary', None)
             basic = salary.basic_salary / Decimal('2') if salary else Decimal('15000.00')
-            PayrollRecord.objects.update_or_create(employee=employee, payroll_period=period, defaults={'basic_pay': basic, 'overtime_pay': Decimal('500.00'), 'gross_pay': basic + Decimal('500.00'), 'late_deduction': Decimal('100.00'), 'undertime_deduction': Decimal('0.00'), 'other_deductions': Decimal('200.00'), 'net_pay': basic + Decimal('200.00'), 'status': PayrollRecord.Status.APPROVED})
+            PayrollRecord.objects.update_or_create(employee=employee, payroll_period=period, defaults={'basic_pay': basic, 'overtime_pay': Decimal('500.00'), 'gross_pay': basic + Decimal('500.00'), 'late_deduction': Decimal('100.00'), 'undertime_deduction': Decimal('0.00'), 'other_deductions': Decimal('200.00'), 'net_pay': basic + Decimal('200.00'), 'status': PayrollRecord.Status.DRAFT})
         workflow, _ = OnboardingWorkflow.objects.get_or_create(organization=organization, name='Standard New Hire')
         task_template, _ = OnboardingTaskTemplate.objects.get_or_create(workflow=workflow, title='Read employee handbook', defaults={'order': 1})
         if employees:

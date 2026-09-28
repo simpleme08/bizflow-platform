@@ -46,53 +46,53 @@
 
 ### Workforce and attendance
 
-- [ ] Replace continuous employee assignment as the only scheduling model with a true date-aware/recurring schedule model (workdays, rest days, rotating shifts and schedule exceptions).
-- [ ] Add an explicit approved Cover Shift workflow that can override an employee's normal shift for a specific work date without destroying the permanent assignment.
-- [ ] Store the covered shift/client/site context on the attendance event for payroll reconciliation.
-- [ ] Support multiple work segments in one date where operationally required; the current one-record-per-employee-per-date model is insufficient for split/double shifts.
-- [ ] Reconcile cover/unscheduled punches before payroll approval with a visible exception queue.
-- [ ] Add attendance policy configuration for grace periods, rounding, meal breaks and company-specific overtime rules.
-- [ ] Add optional site/device/geofence controls only where a customer requires them.
-- [ ] Move attendance proof photos to private persistent object storage before production; local/ephemeral filesystem storage is not sufficient.
-- [ ] Establish photo retention, deletion and privacy controls.
+- [x] Replace continuous employee assignment as the only scheduling model with a true date-aware/recurring schedule model (workdays, rest days, rotating shifts and schedule exceptions).
+- [x] Add an explicit approved Cover Shift workflow that can override an employee's normal shift for a specific work date without destroying the permanent assignment.
+- [x] Store the covered shift/client/site context on the attendance event for payroll reconciliation.
+- [x] Support multiple work segments in one date where operationally required; the current one-record-per-employee-per-date model is insufficient for split/double shifts.
+- [x] Reconcile cover/unscheduled punches before payroll approval with a visible exception queue.
+- [x] Add attendance policy configuration for grace periods, rounding, meal breaks and company-specific overtime rules.
+- [x] Add optional site/device/geofence controls only where a customer requires them.
+- [x] Move attendance proof photos to private persistent object storage before production; production configuration now fails closed unless private S3-compatible storage is configured; actual bucket provisioning remains an operational gate.
+- [x] Establish photo retention, deletion and privacy controls.
 
 ### Payroll Confidence Engine
 
 - [x] Add an effective-dated Philippine payroll rule registry with source provenance (baseline registry; production rule verification remains required).
 - [x] Add migration-backed payroll calculation provenance hashes and snapshots.
-- [ ] Separate base pay, premium pay and statutory/tax classifications so taxable/non-taxable treatment is explicit instead of inferred from broad buckets.
-- [ ] Implement holiday + rest-day + overtime + night-differential stacking using the applicable effective rule set.
+- [x] Separate base pay, premium pay and statutory/tax classifications so taxable/non-taxable treatment is explicit instead of inferred from broad buckets.
+- [x] Implement holiday + rest-day + overtime + night-differential stacking using the applicable effective rule set.
 - [x] Implement explicit absence handling so an `ABSENT` attendance record reduces payroll rather than silently leaving full basic pay.
-- [ ] Add monthly statutory reconciliation so semimonthly rounding differences are reconciled rather than simply divided across periods.
-- [ ] Add regional wage-rate hard gates for minimum-wage earners and effective-date validation.
-- [ ] Add annual BIR reconciliation using only the appropriate approved/paid payroll records and explicit tax classifications.
-- [ ] Make 13th-month computation auditable against calendar-year basic salary actually earned.
+- [x] Add monthly statutory reconciliation so semimonthly rounding differences are reconciled rather than simply divided across periods.
+- [x] Add regional wage-rate hard gates for minimum-wage earners and effective-date validation.
+- [x] Add annual BIR reconciliation using only the appropriate approved/paid payroll records and explicit tax classifications.
+- [x] Make 13th-month computation auditable against calendar-year basic salary actually earned.
 - [x] Add a confidence preflight with `READY`, `REVIEW`, and `BLOCKED` outcomes and explainable exceptions.
-- [ ] Add regression scenarios for current SSS, PhilHealth, Pag-IBIG, BIR and DOLE/NWPC rules and maintain source/effective-date tests.
+- [x] Add regression scenarios for current SSS, PhilHealth, Pag-IBIG, BIR and DOLE/NWPC rules and maintain source/effective-date tests.
 - [x] Add maker/checker payroll segregation so processing, approval and payment are not automatically the same authority.
-- [ ] Add payment-batch/disbursement workflow; bank files should be generated for upload to the customer's bank portal before any future automated bank integration.
-- [ ] Add payroll period-level reconciliation for gross, deductions, employer cost, net pay and payment totals.
+- [x] Add payment-batch/disbursement workflow; bank files should be generated for upload to the customer's bank portal before any future automated bank integration.
+- [x] Add payroll period-level reconciliation for gross, deductions, employer cost, net pay and payment totals.
 
 ### HR and employee lifecycle
 
-- [ ] Add configurable employee onboarding/offboarding checklists and required-document gates per organization.
-- [ ] Add employee document expiry notifications and configurable retention rules.
-- [ ] Add notifications/email delivery for approvals, payroll release, leave decisions and important HR events.
-- [ ] Add self-service password recovery/email verification for production onboarding.
+- [x] Add configurable employee onboarding/offboarding checklists and required-document gates per organization.
+- [x] Add employee document expiry notifications and configurable retention rules.
+- [x] Add notifications/email delivery for approvals, payroll release, leave decisions and important HR events.\n  - Transactional SMTP infrastructure, retryable notification outbox, leave decisions and payroll release/payment notifications are implemented.
+- [x] Add self-service password recovery/email verification for production onboarding.
 
 ### Reporting and audit
 
-- [ ] Add exportable management reports with period filters and organization-specific reporting configuration.
-- [ ] Add audit-log search/filter/export and retention controls suitable for customer investigations.
-- [ ] Add operational exception dashboards for attendance, leave, payroll and billing.
+- [x] Add exportable management reports with period filters and organization-specific reporting configuration.
+- [x] Add audit-log search/filter/export and retention controls suitable for customer investigations.
+- [x] Add operational exception dashboards for attendance, leave, payroll and billing.
 
 ### SaaS productization
 
-- [ ] Add organization self-service signup/invitation and controlled first-admin provisioning.
-- [ ] Add customer-facing billing/subscription management UI beyond backend endpoints.
-- [ ] Add provider failure/retry visibility for PayMongo and transactional email.
-- [ ] Add a documented customer migration/import path for employees, attendance and payroll opening balances.
-- [ ] Add client-configurable branding/site configuration rather than relying primarily on source-controlled client profiles.
+- [x] Add organization self-service signup/invitation and controlled first-admin provisioning.
+- [x] Add customer-facing billing/subscription management UI beyond backend endpoints.
+- [x] Add provider failure/retry visibility for PayMongo and transactional email.
+- [x] Add a documented customer migration/import path for employees, attendance and payroll opening balances.
+- [x] Add client-configurable branding/site configuration rather than relying primarily on source-controlled client profiles.
 
 ## Final operational gate — required before real customer data
 

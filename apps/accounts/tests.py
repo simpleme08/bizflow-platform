@@ -1,4 +1,6 @@
 from django.contrib.auth import get_user_model
+from unittest.mock import patch
+
 from django.test import TestCase
 
 from apps.employees.models import Employee
@@ -34,6 +36,14 @@ class EmployeeLoginTests(TestCase):
         login_response = self.client.get('/login/')
         self.assertEqual(login_response.status_code, 200)
         self.assertContains(login_response, 'Sign in to BizFlow')
+
+    def test_login_survives_throttling_cache_failure(self):
+        with patch('apps.accounts.views.cache.get', side_effect=RuntimeError('redis unavailable')), \
+             patch('apps.accounts.views.cache.set', side_effect=RuntimeError('redis unavailable')):
+            response = self.client.post('/login/', {'username': 'employee', 'password': 'password'})
+
+        self.assertRedirects(response, '/ess/')
+        self.assertTrue(response.wsgi_request.user.is_authenticated)
 
     def test_single_login_redirects_employee_to_ess(self):
         response = self.client.post('/login/', {'username': 'employee', 'password': 'password'})

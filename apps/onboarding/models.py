@@ -8,6 +8,7 @@ class OnboardingWorkflow(BaseModel):
     organization = models.ForeignKey('organization.Organization', on_delete=models.PROTECT, related_name='onboarding_workflows')
     name = models.CharField(max_length=120)
     is_active = models.BooleanField(default=True)
+    required_document_types = models.JSONField(default=list, blank=True, help_text='Document type names required before onboarding can be completed.')
 
     def __str__(self):
         return self.name

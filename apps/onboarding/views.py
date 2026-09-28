@@ -7,6 +7,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from apps.employees.models import Employee
+from apps.core.services import record_audit
 from apps.onboarding.models import EmployeeOnboarding, OnboardingTask, OnboardingTaskTemplate, OnboardingWorkflow
 from apps.organization.context import current_membership
 
@@ -59,6 +60,62 @@ def onboarding_api(request):
         OnboardingTask.objects.get_or_create(onboarding=onboarding, template=template, defaults={'title': template.title, 'description': template.description, 'due_date': expected_completion_date, 'status': OnboardingTask.Status.PENDING})
 
     return JsonResponse({'id': str(onboarding.id), 'status': onboarding.status}, status=201)
+
+
+@require_http_methods(['PATCH'])
+@require_http_methods(['PATCH'])
+def onboarding_status_update(request, onboarding_id):
+    if not request.user.is_authenticated:
+        return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
+    membership = _membership_for(request)
+    if membership is None or not membership.has_permission('manage_employees'):
+        return JsonResponse({'detail': 'Onboarding access required.'}, status=403)
+    try:
+        onboarding = EmployeeOnboarding.objects.select_related('workflow', 'employee').get(
+            id=onboarding_id,
+            employee__organization=membership.organization,
+        )
+        payload = json.loads(request.body or '{}')
+        new_status = payload.get('status')
+    except (EmployeeOnboarding.DoesNotExist, json.JSONDecodeError):
+        return JsonResponse({'detail': 'Invalid onboarding record or JSON.'}, status=400)
+    if new_status not in {choice.value for choice in EmployeeOnboarding.Status}:
+        return JsonResponse({'detail': 'Invalid onboarding status.'}, status=400)
+    if new_status == EmployeeOnboarding.Status.COMPLETED:
+        required = [str(item).strip() for item in (onboarding.workflow.required_document_types or []) if str(item).strip()]
+        missing = []
+        for document_type in required:
+            if not onboarding.employee.documents.filter(
+                document_type__iexact=document_type,
+                status='ACTIVE',
+            ).filter(
+                models_q_expiry_valid()
+            ).exists():
+                missing.append(document_type)
+        incomplete_required_tasks = onboarding.tasks.filter(
+            template__is_required=True,
+        ).exclude(status=OnboardingTask.Status.COMPLETED).count()
+        if missing or incomplete_required_tasks:
+            return JsonResponse({
+                'detail': 'Onboarding cannot be completed until required documents and tasks are complete.',
+                'missing_document_types': missing,
+                'incomplete_required_tasks': incomplete_required_tasks,
+            }, status=409)
+    onboarding.status = new_status
+    onboarding.save(update_fields=('status', 'updated_at'))
+    record_audit(
+        organization=membership.organization,
+        actor=request.user,
+        action='onboarding.status_changed',
+        entity=onboarding,
+        details={'status': new_status},
+    )
+    return JsonResponse({'id': str(onboarding.id), 'status': onboarding.status})
+
+
+def models_q_expiry_valid():
+    from django.db.models import Q
+    return Q(expiry_date__isnull=True) | Q(expiry_date__gte=timezone.localdate())
 
 
 @require_http_methods(['PATCH'])

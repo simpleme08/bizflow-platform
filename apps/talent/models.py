@@ -33,7 +33,6 @@ class Candidate(BaseModel):
     source = models.CharField(max_length=80, blank=True)
     resume_url = models.URLField(blank=True)
     notes = models.TextField(blank=True)
-
     class Meta:
         constraints = [models.UniqueConstraint(fields=('organization', 'email'), name='unique_candidate_email_per_org')]
         ordering = ('last_name', 'first_name')
@@ -150,3 +149,5 @@ class OffboardingRecord(BaseModel):
     reason = models.CharField(max_length=160, blank=True)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.PLANNED)
     notes = models.TextField(blank=True)
+    required_document_types = models.JSONField(default=list, blank=True)
+    required_clearances = models.JSONField(default=list, blank=True)

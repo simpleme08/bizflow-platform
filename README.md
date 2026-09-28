@@ -36,7 +36,11 @@ Start here:
 11. [Operations and release procedure](docs/OPERATIONS.md)
 12. [Production launch runbook](docs/production-launch.md)
 13. [Master project checklist](docs/master-checklist.md)
-14. [Contributing](docs/CONTRIBUTING.md)
+14. [HR demo readiness](docs/DEMO_READINESS.md)
+15. [Privacy and data retention](docs/PRIVACY_AND_DATA_RETENTION.md)
+16. [First-customer acceptance test](docs/FIRST_CUSTOMER_ACCEPTANCE_TEST.md)
+17. [Production operations](docs/PRODUCTION_OPERATIONS.md)
+18. [Contributing](docs/CONTRIBUTING.md)
 
 ## Technology
 

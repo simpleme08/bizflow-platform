@@ -10,6 +10,7 @@ from django.views.decorators.http import require_http_methods
 
 from apps.organization.context import current_membership
 from apps.core.services import record_audit
+from apps.core.notifications import queue_notification
 from apps.employees.models import Employee
 
 from .models import EmployeeLeaveBalance, LeaveApplication, LeaveType
@@ -134,9 +135,11 @@ def leave_decision(request, application_id):
                 return JsonResponse({'detail': 'Leave cannot be approved outside the employee active employment period.'}, status=409)
             application.approve(request.user)
             record_audit(organization=membership.organization, actor=request.user, action='leave.approved', entity=application)
+            queue_notification(organization=membership.organization, recipient=application.employee.user, event='leave.approved', subject='Leave request approved', body=f'Your {application.leave_type.name} leave from {application.start_date} to {application.end_date} was approved.')
         elif payload.get('decision') == 'reject':
             application.reject(request.user, payload.get('remarks', ''))
             record_audit(organization=membership.organization, actor=request.user, action='leave.rejected', entity=application)
+            queue_notification(organization=membership.organization, recipient=application.employee.user, event='leave.rejected', subject='Leave request update', body=f'Your {application.leave_type.name} leave request was rejected. {application.remarks}')
         else:
             return JsonResponse({'detail': 'Decision must be approve or reject.'}, status=400)
     except (LeaveApplication.DoesNotExist, json.JSONDecodeError):

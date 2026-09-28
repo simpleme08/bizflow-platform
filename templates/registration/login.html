@@ -18,7 +18,7 @@
 <div class="label">Workspace access</div><div class="title">Sign in to BizFlow</div><p class="subtitle">Use your assigned credentials to enter your authorized organization workspace.</p>
 {% if error %}<div class="error">{{ error }}</div>{% endif %}
 <form method="post" action="{% url 'login' %}">{% csrf_token %}{% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}<div class="group"><label for="id_username">Username</label><input id="id_username" name="username" type="text" autocomplete="username" required autofocus></div><div class="group"><label for="id_password">Password</label><input id="id_password" name="password" type="password" autocomplete="current-password" required></div><button type="submit">Continue to workspace</button></form>
-<div class="meta"><div><b>People</b>HR records</div><div><b>Time</b>Attendance</div><div><b>Pay</b>Payroll</div></div><div class="back"><a href="{% url 'website' %}">← Back to BizFlow</a></div><div class="security">Access is protected by organization membership and role-based permissions.</div>
+<div class="meta"><div><b>People</b>HR records</div><div><b>Time</b>Attendance</div><div><b>Pay</b>Payroll</div></div><div class="back"><a href="{% url 'password_reset' %}">Forgot your password?</a> · <a href="{% url 'website' %}">← Back to BizFlow</a></div><div class="security">Access is protected by organization membership and role-based permissions.</div>
 </div></section>
 </div>
 </body>

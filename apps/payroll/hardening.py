@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from django.db import transaction
 
-from apps.attendance.models import AttendanceRecord
+from apps.attendance.models import AttendanceException, AttendanceRecord
 
 from .models import PayrollRecord, PayrollRuleSet
 from .services import PayrollCalculator, PhilippinePayrollRules, PhilippineWithholdingTax
@@ -46,6 +46,9 @@ class PayrollConfidence:
     @classmethod
     def preflight(cls, period, organization):
         result = PayrollCalculator.preflight(period, organization)
+        exceptions = AttendanceException.objects.filter(attendance__employee__organization=organization, attendance__attendance_date__range=(period.start_date, period.end_date), status=AttendanceException.Status.OPEN).count()
+        if exceptions:
+            result.setdefault('warnings', []).append(f'{exceptions} attendance exceptions remain open for this payroll period.')
         rule_set = cls.rule_set_for(period, organization)
         errors = list(result.get('errors', []))
         warnings = list(result.get('warnings', []))
@@ -155,6 +158,17 @@ class PayrollConfidence:
                     'late_deduction', 'undertime_deduction', 'leave_without_pay', 'loan_deductions',
                     'other_deductions', 'gross_pay', 'net_pay',
                 )
+            }
+            record.tax_classification = {
+                'base_pay': {'taxable': True, 'amount': str(record.basic_pay)},
+                'allowances': {'taxable': True, 'amount': str(record.allowances)},
+                'overtime': {'taxable': True, 'amount': str(record.overtime_pay)},
+                'holiday_pay': {'taxable': True, 'amount': str(record.holiday_pay)},
+                'night_differential': {'taxable': True, 'amount': str(record.night_differential)},
+                'commissions': {'taxable': True, 'amount': str(record.commissions)},
+                'bonuses': {'taxable': True, 'amount': str(record.bonuses)},
+                'thirteenth_month': {'taxable_above_exemption': True, 'amount': str(record.thirteenth_month)},
+                'statutory_employee': {'taxable': False, 'amount': str(record.statutory_deductions)},
             }
             record.calculation_rule_version = rule_set.version if rule_set else ''
             record.calculation_input_hash = cls._hash(snapshot)

@@ -1,13 +1,17 @@
+from decimal import Decimal
+
 from django.db import transaction
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 
 from apps.core.services import record_audit
+from apps.core.notifications import queue_notification
 from apps.organization.models import OrganizationMembership
 
 from .completion import settle_loans_for_record
 from .hardening import PayrollConfidence
 from .models import PayrollPeriod, PayrollRecord
+from .reconciliation import PayrollReconciliation
 from .views import _membership
 
 
@@ -83,13 +87,30 @@ def approve_payroll(request, record_id):
             return JsonResponse({'detail': 'Maker/checker separation: the payroll processor cannot approve the same payroll.'}, status=409)
         if record.status != PayrollRecord.Status.DRAFT:
             return JsonResponse({'detail': 'Only draft payroll records can be approved.'}, status=409)
+        is_last_record = not PayrollRecord.objects.filter(
+            payroll_period=period,
+        ).exclude(id=record.id).exclude(status=PayrollRecord.Status.APPROVED).exists()
+        reconciliation = None
+        reconciliation_totals = None
+        if is_last_record:
+            reconciliation = PayrollReconciliation.validate(period)
+            reconciliation_totals = {key: (str(value) if isinstance(value, Decimal) else value) for key, value in reconciliation['totals'].items()}
+            if not reconciliation['ok']:
+                return JsonResponse({
+                    'detail': 'Payroll reconciliation failed; approval is blocked until the period is corrected.',
+                    'errors': reconciliation['errors'],
+                    'reconciliation': reconciliation_totals,
+                }, status=409)
         record.status = PayrollRecord.Status.APPROVED
         record.save(update_fields=('status', 'updated_at'))
-        if not PayrollRecord.objects.filter(payroll_period=period).exclude(status=PayrollRecord.Status.APPROVED).exists():
+        if is_last_record:
             period.approved_by = request.user
             period.status = PayrollPeriod.Status.APPROVED
-            period.save(update_fields=('approved_by', 'status', 'updated_at'))
+            period.confidence_summary = {**(period.confidence_summary or {}), 'reconciliation': {**reconciliation, 'totals': reconciliation_totals}}
+            period.save(update_fields=('approved_by', 'status', 'confidence_summary', 'updated_at'))
     record_audit(organization=membership.organization, actor=request.user, action='payroll.approved', entity=record, details={'period_id': str(period.id), 'period_approved': period.status == PayrollPeriod.Status.APPROVED})
+    if period.status == PayrollPeriod.Status.APPROVED:
+        queue_notification(organization=membership.organization, recipient=record.employee.user, event='payroll.released', subject='Payroll approved', body=f'Your payroll for {period.name} has been approved and is ready for payment.')
     return JsonResponse({'id': str(record.id), 'status': record.status, 'period_status': period.status, 'approved_by': request.user.get_username() if period.approved_by_id else None})
 
 
@@ -119,4 +140,5 @@ def mark_payroll_paid(request, record_id):
             period.paid_by = request.user
             period.save(update_fields=('status', 'paid_by', 'updated_at'))
     record_audit(organization=membership.organization, actor=request.user, action='payroll.paid', entity=record, details={'period_id': str(period.id), 'paid_by': request.user.get_username()})
+    queue_notification(organization=membership.organization, recipient=record.employee.user, event='payroll.paid', subject='Payroll paid', body=f'Your payroll for {period.name} has been marked paid. Net pay: {record.net_pay}.')
     return JsonResponse({'id': str(record.id), 'status': record.status, 'period_status': period.status, 'paid_by': request.user.get_username() if period.paid_by_id else None})
