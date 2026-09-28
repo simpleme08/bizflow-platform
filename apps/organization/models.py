@@ -27,6 +27,11 @@ class Organization(BaseModel):
     overage_rate = models.DecimalField(max_digits=10, decimal_places=2, default=50)
     audit_retention_days = models.PositiveIntegerField(default=3650)
     document_retention_days = models.PositiveIntegerField(default=3650)
+    attendance_grace_minutes = models.PositiveIntegerField(default=0)
+    attendance_rounding_minutes = models.PositiveIntegerField(default=0)
+    meal_break_minutes = models.PositiveIntegerField(default=0)
+    overtime_rounding_minutes = models.PositiveIntegerField(default=0)
+    overtime_after_minutes = models.PositiveIntegerField(default=0)
 
     class Meta:
         ordering = ('name',)
