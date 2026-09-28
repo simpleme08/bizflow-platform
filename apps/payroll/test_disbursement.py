@@ -11,6 +11,7 @@ from .disbursement import build_bank_disbursement_csv
 class BankDisbursementTests(TestCase):
     def setUp(self):
         User = get_user_model()
+        self.User = User
         self.user = User.objects.create_user(username='payroll-test', password='safe-password')
         self.employee_user = User.objects.create_user(username='employee-test', password='safe-password')
         self.org = Organization.objects.create(name='Disbursement Test Org')
@@ -51,7 +52,7 @@ class BankDisbursementTests(TestCase):
             bank_account_name='Ana Test',
             bank_account_number='123456789',
         )
-        draft_user = User.objects.create_user(username='draft-employee-test', password='safe-password')
+        draft_user = self.User.objects.create_user(username='draft-employee-test', password='safe-password')
         draft_employee = Employee.objects.create(
             organization=self.org,
             user=draft_user,
