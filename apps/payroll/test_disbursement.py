@@ -12,7 +12,7 @@ class BankDisbursementTests(TestCase):
     def setUp(self):
         User=get_user_model()
         self.user=User.objects.create_user(username='payroll-test',password='safe-password')
-        self.org=Organization.objects.create(name='Disbursement Test Org', code='DTO')
+        self.org=Organization.objects.create(name='Disbursement Test Org')
         OrganizationMembership.objects.create(user=self.user, organization=self.org, role='ADMIN', is_active=True)
         self.employee=Employee.objects.create(organization=self.org, employee_number='E-001', first_name='Ana', last_name='Test', status=Employee.Status.REGULAR, is_active=True)
         self.period=PayrollPeriod.objects.create(organization=self.org,name='September 2026',start_date='2026-09-01',end_date='2026-09-15',status=PayrollPeriod.Status.APPROVED)
