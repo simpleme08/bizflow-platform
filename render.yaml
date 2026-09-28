@@ -106,7 +106,7 @@ services:
     runtime: python
     plan: starter
     buildCommand: pip install -r requirements.txt
-    startCommand: python manage.py apply_retention_policy && python manage.py notify_document_expiry --days 30
+    startCommand: python manage.py apply_retention_policy && python manage.py notify_document_expiry --days 30 && python manage.py deliver_notifications --limit 200
     envVars:
       - key: DJANGO_ENV
         value: production
