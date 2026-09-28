@@ -2,7 +2,7 @@ from datetime import date
 
 from django.db.models import Q
 
-from apps.workforce.models import CoverShift, ScheduleException, ScheduleRule
+from apps.workforce.models import CoverShift, ScheduleException, ScheduleRule, ShiftTemplate
 
 
 def resolve_schedule(employee, work_date):
@@ -46,13 +46,18 @@ def resolve_schedule(employee, work_date):
         weekdays = {int(day) for day in rule.weekdays}
         if weekday not in weekdays or weekday in {int(day) for day in rule.rest_days}:
             continue
-        if rule.pattern == ScheduleRule.Pattern.ROTATING and rule.cycle_weeks > 1:
-            week_index = ((work_date - rule.effective_from).days // 7) % rule.cycle_weeks
-            if week_index >= rule.cycle_weeks:
+        shift = rule.shift_template
+        if rule.pattern == ScheduleRule.Pattern.ROTATING and rule.rotation_shifts:
+            week_index = ((work_date - rule.effective_from).days // 7) % len(rule.rotation_shifts)
+            try:
+                shift = ShiftTemplate.objects.filter(id=rule.rotation_shifts[week_index]).filter(Q(organization=employee.organization) | Q(organization__isnull=True)).first()
+            except (TypeError, ValueError):
+                shift = None
+            if shift is None:
                 continue
         return {
             'kind': 'SCHEDULED',
-            'shift': rule.shift_template,
+            'shift': shift,
             'client': None,
             'client_site': None,
             'cover_shift': None,
