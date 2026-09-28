@@ -1,10 +1,16 @@
-from django.contrib.auth import authenticate, login
+from django.contrib.auth import authenticate, login, get_user_model
 import logging
 
 from django.core.cache import cache
 from django.shortcuts import redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_http_methods
+from django.core import signing
+from django.db import transaction
+from django.http import JsonResponse
+from django.utils.text import slugify
+from django.core.mail import send_mail
+from apps.organization.models import Organization, OrganizationMembership
 
 from apps.organization.context import ACTIVE_ORGANIZATION_SESSION_KEY, current_membership
 
@@ -134,3 +140,45 @@ def workspace_url_for_user(request_or_user):
 def redirect_for_user(request):
     return redirect(workspace_url_for_user(request))
 
+
+
+@require_http_methods(['GET', 'POST'])
+def signup(request):
+    if request.user.is_authenticated:
+        return redirect('workspace')
+    if request.method == 'GET':
+        return render(request, 'registration/signup.html')
+    username = request.POST.get('email', '').strip().lower()
+    password = request.POST.get('password', '')
+    organization_name = request.POST.get('organization_name', '').strip()
+    full_name = request.POST.get('name', '').strip()
+    if not username or '@' not in username or len(password) < 12 or not organization_name or not full_name:
+        return render(request, 'registration/signup.html', {'error': 'Provide a valid email, organization name, name, and a password of at least 12 characters.'}, status=400)
+    if get_user_model().objects.filter(email__iexact=username).exists():
+        return render(request, 'registration/signup.html', {'error': 'An account already exists for that email.'}, status=409)
+    slug = slugify(organization_name)[:70] or 'organization'
+    if Organization.objects.filter(slug=slug).exists():
+        slug = f'{slug}-{signing.b62_encode(abs(hash(username)) % 10**8)}'[:80]
+    with transaction.atomic():
+        User = get_user_model()
+        user = User.objects.create_user(username=username, email=username, password=password, first_name=full_name.split(' ', 1)[0], last_name=full_name.split(' ', 1)[1] if ' ' in full_name else '')
+        user.is_active = False
+        user.save(update_fields=('is_active',))
+        organization = Organization.objects.create(name=organization_name, slug=slug)
+        OrganizationMembership.objects.create(user=user, organization=organization, role=OrganizationMembership.Role.OWNER)
+        token = signing.dumps({'user_id': user.pk, 'organization_id': organization.pk}, salt='bizflow-email-verification')
+        verification_url = request.build_absolute_uri(f'/verify-email/{token}/')
+        send_mail('Verify your BizFlow account', f'Verify your account: {verification_url}', None, [username], fail_silently=False)
+    return render(request, 'registration/signup_done.html')
+ 
+ 
+def verify_email(request, token):
+    try:
+        data = signing.loads(token, salt='bizflow-email-verification', max_age=60 * 60 * 24)
+        user = get_user_model().objects.get(pk=data['user_id'], email__isnull=False)
+        membership = OrganizationMembership.objects.get(user=user, organization_id=data['organization_id'], role=OrganizationMembership.Role.OWNER)
+    except (signing.BadSignature, signing.SignatureExpired, get_user_model().DoesNotExist, OrganizationMembership.DoesNotExist):
+        return render(request, 'registration/signup_done.html', {'error': 'This verification link is invalid or expired.'}, status=400)
+    user.is_active = True
+    user.save(update_fields=('is_active',))
+    return redirect('login')

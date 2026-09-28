@@ -6,6 +6,7 @@ from datetime import datetime, timezone as dt_timezone
 from django.conf import settings
 from django.db import transaction
 from django.http import JsonResponse
+from django.shortcuts import render
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
@@ -247,3 +248,13 @@ def paymongo_webhook(request):
         webhook.payload = payload
         webhook.save(update_fields=['processed_at', 'payload', 'updated_at'])
     return JsonResponse({'received': True})
+
+
+def billing_page(request):
+    if not request.user.is_authenticated:
+        from django.shortcuts import redirect
+        return redirect('login')
+    membership = _authorized(request, 'manage_organization')
+    if membership is None:
+        return JsonResponse({'detail': 'Permission denied.'}, status=403)
+    return render(request, 'organization/billing.html', {'organization': membership.organization})

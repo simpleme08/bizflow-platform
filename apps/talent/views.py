@@ -136,3 +136,34 @@ def offboarding_api(request):
         return JsonResponse({'detail': 'Provide a valid employee and last working day.'}, status=400)
     record_audit(organization=membership.organization, actor=request.user, action='offboarding.created', entity=item)
     return JsonResponse({'id': str(item.id)}, status=201)
+
+
+@require_http_methods(['PATCH'])
+def offboarding_status(request, record_id):
+    membership, error = _require(request, 'manage_offboarding')
+    if error:
+        return error
+    try:
+        item = OffboardingRecord.objects.get(id=record_id, employee__organization=membership.organization)
+        payload = json.loads(request.body or '{}')
+        target = payload.get('status')
+        if target not in OffboardingRecord.Status.values:
+            return JsonResponse({'detail': 'Invalid offboarding status.'}, status=400)
+        if target == OffboardingRecord.Status.COMPLETED:
+            missing_documents = []
+            for document_type in item.required_document_types:
+                if not item.employee.documents.filter(document_type=document_type, status='ACTIVE').exists():
+                    missing_documents.append(document_type)
+            missing_clearances = [name for name in item.required_clearances if not payload.get('clearances', {}).get(name)]
+            if missing_documents or missing_clearances:
+                return JsonResponse({'detail': 'Offboarding completion is blocked.', 'missing_document_types': missing_documents, 'missing_clearances': missing_clearances}, status=409)
+            if not item.employee.separation_date or item.employee.separation_date > item.last_working_day:
+                return JsonResponse({'detail': 'Employee separation date must be set on or before the last working day.'}, status=409)
+        item.status = target
+        item.save(update_fields=('status', 'updated_at'))
+        record_audit(organization=membership.organization, actor=request.user, action='offboarding.status_changed', entity=item, details={'status': target})
+        return JsonResponse({'id': str(item.id), 'status': item.status})
+    except OffboardingRecord.DoesNotExist:
+        return JsonResponse({'detail': 'Offboarding record not found.'}, status=404)
+    except json.JSONDecodeError:
+        return JsonResponse({'detail': 'Invalid JSON.'}, status=400)

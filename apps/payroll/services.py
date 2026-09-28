@@ -6,6 +6,7 @@ from django.utils import timezone
 
 from apps.attendance.models import AttendanceRecord
 from apps.leave.models import LeaveApplication
+from apps.workforce.scheduling import resolve_schedule
 
 from .models import PayrollHoliday, PayrollRecord, PayrollWageRate
 
@@ -182,14 +183,26 @@ class PayrollCalculator:
         return holiday
 
     @classmethod
+    def _is_rest_day(cls, attendance):
+        try:
+            return resolve_schedule(attendance.employee, attendance.attendance_date)['kind'] == 'REST'
+        except Exception:
+            return False
+
+    @classmethod
     def _holiday_premium(cls, attendance, daily_rate):
         holiday = cls._holiday_for_attendance(attendance)
         if holiday is None or holiday.kind == PayrollHoliday.Kind.SPECIAL_WORKING or not attendance.time_in or not attendance.time_out:
             return ZERO
+        rest_day = cls._is_rest_day(attendance)
         if holiday.kind == PayrollHoliday.Kind.REGULAR:
-            premium_multiplier = Decimal('2.00') if holiday.is_double else Decimal('1.00')
+            premium_multiplier = Decimal('1.60') if rest_day else Decimal('1.00')
+            if holiday.is_double:
+                premium_multiplier += Decimal('1.00')
         else:
-            premium_multiplier = Decimal('0.50') if holiday.is_double else Decimal('0.30')
+            premium_multiplier = Decimal('0.50') if rest_day else Decimal('0.30')
+            if holiday.is_double:
+                premium_multiplier += Decimal('0.50')
         return cls_money(daily_rate * premium_multiplier)
 
     @classmethod
@@ -200,9 +213,9 @@ class PayrollCalculator:
         if holiday is None or holiday.kind == PayrollHoliday.Kind.SPECIAL_WORKING:
             multiplier = cls.OVERTIME_MULTIPLIER
         elif holiday.kind == PayrollHoliday.Kind.REGULAR:
-            multiplier = cls.REGULAR_HOLIDAY_MULTIPLIER * cls.HOLIDAY_OVERTIME_MULTIPLIER
+            multiplier = (Decimal('2.60') if cls._is_rest_day(attendance) else cls.REGULAR_HOLIDAY_MULTIPLIER) * cls.HOLIDAY_OVERTIME_MULTIPLIER
         else:
-            multiplier = cls.SPECIAL_HOLIDAY_MULTIPLIER * cls.HOLIDAY_OVERTIME_MULTIPLIER
+            multiplier = (Decimal('1.50') if cls._is_rest_day(attendance) else cls.SPECIAL_HOLIDAY_MULTIPLIER) * cls.HOLIDAY_OVERTIME_MULTIPLIER
         return cls_money(Decimal(attendance.overtime_minutes) / Decimal('60') * hourly_rate * multiplier)
 
     @classmethod
@@ -221,6 +234,30 @@ class PayrollCalculator:
         prior_taxable = max(ZERO, prior_thirteenth - PhilippinePayrollRules.THIRTEENTH_MONTH_EXEMPTION)
         cumulative_taxable = max(ZERO, cumulative - PhilippinePayrollRules.THIRTEENTH_MONTH_EXEMPTION)
         return PhilippinePayrollRules.money(cumulative_taxable - prior_taxable)
+
+    @classmethod
+    def _statutory_for_period(cls, employee, period, monthly_basic):
+        if period.frequency == period.Frequency.MONTHLY:
+            return PhilippinePayrollRules.statutory(monthly_basic, periods_per_month=1)
+        current = PhilippinePayrollRules.statutory(monthly_basic, periods_per_month=2)
+        if period.start_date.day <= 15:
+            return current
+        prior = PayrollRecord.objects.filter(
+            employee=employee,
+            payroll_period__start_date__year=period.start_date.year,
+            payroll_period__start_date__month=period.start_date.month,
+            payroll_period__end_date__lt=period.start_date,
+            payroll_period__frequency=period.Frequency.SEMI_MONTHLY,
+            status__in=(PayrollRecord.Status.APPROVED, PayrollRecord.Status.PAID),
+        )
+        prior_totals = {}
+        for field in ('sss_employee', 'sss_employer', 'philhealth_employee', 'philhealth_employer', 'pagibig_employee', 'pagibig_employer'):
+            prior_totals[field] = sum((getattr(record, field) for record in prior), ZERO)
+        monthly = PhilippinePayrollRules.statutory(monthly_basic, periods_per_month=1)
+        return {
+            field: PhilippinePayrollRules.money(max(ZERO, monthly[field] - prior_totals[field]))
+            for field in monthly
+        }
 
     @classmethod
     def calculate(cls, employee, period, other_deductions=ZERO, leave_without_pay=None, loan_deductions=ZERO, allowances=ZERO, commissions=ZERO, bonuses=ZERO, holiday_pay=None, night_differential=None, thirteenth_month=ZERO):
@@ -251,7 +288,7 @@ class PayrollCalculator:
         night_differential = calculated_night if night_differential is None else money(night_differential)
         thirteenth_month = money(thirteenth_month)
         gross_pay = money(basic_pay + overtime_pay + holiday_pay + night_differential + allowances + commissions + bonuses + thirteenth_month)
-        statutory = PhilippinePayrollRules.statutory(salary.basic_salary, periods_per_month=periods)
+        statutory = cls._statutory_for_period(employee, period, salary.basic_salary)
         taxable_regular = money(basic_pay + allowances - statutory['sss_employee'] - statutory['philhealth_employee'] - statutory['pagibig_employee'])
         taxable_supplementary = money(commissions + bonuses + overtime_pay + holiday_pay + night_differential + cls._taxable_thirteenth_for_period(employee, period, thirteenth_month))
         taxable_before_mwe = money(taxable_regular + taxable_supplementary)
@@ -279,14 +316,34 @@ class PayrollCalculator:
         }
 
     @classmethod
+    def thirteenth_month_audit(cls, employee, year):
+        records = PayrollRecord.objects.filter(
+            employee=employee,
+            payroll_period__end_date__year=year,
+            status__in=(PayrollRecord.Status.APPROVED, PayrollRecord.Status.PAID),
+        ).select_related('payroll_period').order_by('payroll_period__end_date')
+        rows = [
+            {
+                'period': record.payroll_period.name,
+                'start_date': record.payroll_period.start_date.isoformat(),
+                'end_date': record.payroll_period.end_date.isoformat(),
+                'basic_pay': str(record.basic_pay),
+            }
+            for record in records
+        ]
+        earned_basic = sum((record.basic_pay for record in records), ZERO)
+        computed = PhilippinePayrollRules.money(earned_basic / Decimal('12'))
+        return {'year': year, 'earned_basic_salary': str(PhilippinePayrollRules.money(earned_basic)), 'thirteenth_month': str(computed), 'periods': rows}
+
+    @classmethod
     def thirteenth_month(cls, employee, year):
-        records = PayrollRecord.objects.filter(employee=employee, payroll_period__end_date__year=year)
+        records = PayrollRecord.objects.filter(employee=employee, payroll_period__end_date__year=year, status__in=(PayrollRecord.Status.APPROVED, PayrollRecord.Status.PAID))
         basic = sum((record.basic_pay for record in records), ZERO)
         return PhilippinePayrollRules.money(basic / Decimal('12'))
 
     @classmethod
     def annual_tax_reconciliation(cls, employee, year):
-        records = PayrollRecord.objects.filter(employee=employee, payroll_period__end_date__year=year).order_by('payroll_period__end_date')
+        records = PayrollRecord.objects.filter(employee=employee, payroll_period__end_date__year=year, status__in=(PayrollRecord.Status.APPROVED, PayrollRecord.Status.PAID)).order_by('payroll_period__end_date')
         rows = list(records.values('basic_pay', 'allowances', 'commissions', 'bonuses', 'overtime_pay', 'holiday_pay', 'night_differential', 'thirteenth_month', 'sss_employee', 'philhealth_employee', 'pagibig_employee'))
         regular_and_supplementary = sum((row['basic_pay'] + row['allowances'] + row['commissions'] + row['bonuses'] + row['overtime_pay'] + row['holiday_pay'] + row['night_differential'] - row['sss_employee'] - row['philhealth_employee'] - row['pagibig_employee'] for row in rows), ZERO)
         total_thirteenth_month = sum((row['thirteenth_month'] for row in rows), ZERO)
@@ -312,8 +369,14 @@ class PayrollCalculator:
                 for field, label in (('sss_number', 'SSS'), ('philhealth_number', 'PhilHealth'), ('pagibig_number', 'Pag-IBIG'), ('tin', 'TIN')):
                     if not getattr(profile, field):
                         warnings.append(f'{employee.employee_number}: missing {label} number')
-                if profile.minimum_wage_earner and not cls._wage_rate_for_employee(employee, period):
-                    warnings.append(f'{employee.employee_number}: MWE flag is set but no exact organization/global wage rate is configured')
+                if profile.minimum_wage_earner:
+                    wage_rate = cls._wage_rate_for_employee(employee, period)
+                    if wage_rate is None:
+                        errors.append(f'{employee.employee_number}: MWE flag requires an effective regional wage rate before payroll processing')
+                    else:
+                        salary = cls._salary_for_period(employee, period)
+                        if salary and (salary.basic_salary / cls.WORKING_DAYS) < wage_rate.daily_rate:
+                            errors.append(f'{employee.employee_number}: salary daily rate is below the configured regional minimum wage rate {wage_rate.daily_rate}')
             try:
                 cls.calculate(employee, period)
             except ValueError as exc:
