@@ -46,10 +46,10 @@
 
 ### Workforce and attendance
 
-- [ ] Replace continuous employee assignment as the only scheduling model with a true date-aware/recurring schedule model (workdays, rest days, rotating shifts and schedule exceptions).
-- [ ] Add an explicit approved Cover Shift workflow that can override an employee's normal shift for a specific work date without destroying the permanent assignment.
-- [ ] Store the covered shift/client/site context on the attendance event for payroll reconciliation.
-- [ ] Support multiple work segments in one date where operationally required; the current one-record-per-employee-per-date model is insufficient for split/double shifts.
+- [x] Replace continuous employee assignment as the only scheduling model with a true date-aware/recurring schedule model (workdays, rest days, rotating shifts and schedule exceptions).
+- [x] Add an explicit approved Cover Shift workflow that can override an employee's normal shift for a specific work date without destroying the permanent assignment.
+- [x] Store the covered shift/client/site context on the attendance event for payroll reconciliation.
+- [x] Support multiple work segments in one date where operationally required; the current one-record-per-employee-per-date model is insufficient for split/double shifts.
 - [ ] Reconcile cover/unscheduled punches before payroll approval with a visible exception queue.
 - [ ] Add attendance policy configuration for grace periods, rounding, meal breaks and company-specific overtime rules.
 - [ ] Add optional site/device/geofence controls only where a customer requires them.
@@ -63,9 +63,9 @@
 - [ ] Separate base pay, premium pay and statutory/tax classifications so taxable/non-taxable treatment is explicit instead of inferred from broad buckets.
 - [ ] Implement holiday + rest-day + overtime + night-differential stacking using the applicable effective rule set.
 - [x] Implement explicit absence handling so an `ABSENT` attendance record reduces payroll rather than silently leaving full basic pay.
-- [ ] Add monthly statutory reconciliation so semimonthly rounding differences are reconciled rather than simply divided across periods.
+- [x] Add monthly statutory reconciliation so semimonthly rounding differences are reconciled rather than simply divided across periods.
 - [ ] Add regional wage-rate hard gates for minimum-wage earners and effective-date validation.
-- [ ] Add annual BIR reconciliation using only the appropriate approved/paid payroll records and explicit tax classifications.
+- [x] Add annual BIR reconciliation using only the appropriate approved/paid payroll records and explicit tax classifications.
 - [ ] Make 13th-month computation auditable against calendar-year basic salary actually earned.
 - [x] Add a confidence preflight with `READY`, `REVIEW`, and `BLOCKED` outcomes and explainable exceptions.
 - [ ] Add regression scenarios for current SSS, PhilHealth, Pag-IBIG, BIR and DOLE/NWPC rules and maintain source/effective-date tests.
