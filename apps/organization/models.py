@@ -30,6 +30,7 @@ class Organization(BaseModel):
     primary_color = models.CharField(max_length=20, default='#1f2937')
     audit_retention_days = models.PositiveIntegerField(default=3650)
     document_retention_days = models.PositiveIntegerField(default=3650)
+    attendance_photo_retention_days = models.PositiveIntegerField(default=90)
     attendance_grace_minutes = models.PositiveIntegerField(default=0)
     attendance_rounding_minutes = models.PositiveIntegerField(default=0)
     meal_break_minutes = models.PositiveIntegerField(default=0)
