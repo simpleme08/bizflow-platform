@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.db import transaction
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
@@ -88,20 +90,22 @@ def approve_payroll(request, record_id):
             payroll_period=period,
         ).exclude(id=record.id).exclude(status=PayrollRecord.Status.APPROVED).exists()
         reconciliation = None
+        reconciliation_totals = None
         if is_last_record:
             reconciliation = PayrollReconciliation.validate(period)
+            reconciliation_totals = {key: (str(value) if isinstance(value, Decimal) else value) for key, value in reconciliation['totals'].items()}
             if not reconciliation['ok']:
                 return JsonResponse({
                     'detail': 'Payroll reconciliation failed; approval is blocked until the period is corrected.',
                     'errors': reconciliation['errors'],
-                    'reconciliation': reconciliation['totals'],
+                    'reconciliation': reconciliation_totals,
                 }, status=409)
         record.status = PayrollRecord.Status.APPROVED
         record.save(update_fields=('status', 'updated_at'))
         if is_last_record:
             period.approved_by = request.user
             period.status = PayrollPeriod.Status.APPROVED
-            period.confidence_summary = {**(period.confidence_summary or {}), 'reconciliation': reconciliation}
+            period.confidence_summary = {**(period.confidence_summary or {}), 'reconciliation': {**reconciliation, 'totals': reconciliation_totals}}
             period.save(update_fields=('approved_by', 'status', 'confidence_summary', 'updated_at'))
     record_audit(organization=membership.organization, actor=request.user, action='payroll.approved', entity=record, details={'period_id': str(period.id), 'period_approved': period.status == PayrollPeriod.Status.APPROVED})
     return JsonResponse({'id': str(record.id), 'status': record.status, 'period_status': period.status, 'approved_by': request.user.get_username() if period.approved_by_id else None})
