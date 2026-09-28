@@ -8,7 +8,7 @@ class Migration(migrations.Migration):
         ('auth', '0012_alter_user_first_name_max_length'),
         ('workforce', '0003_shifttemplate_organization'),
         ('organization', '0003_costcenter_department_employmenttype_position'),
-        ('employees', '0002_employees_employeeassignment'),
+        ('employees', '0001_initial'),
     ]
 
     operations = [
