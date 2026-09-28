@@ -43,6 +43,15 @@ class StatutoryRuleRegressionTests(TestCase):
         ee, er = PhilippinePayrollRules.philhealth(Decimal('150000'))
         self.assertEqual(ee, Decimal('2500.00'))
 
+    def test_effective_wage_order_can_be_selected_by_date(self):
+        PayrollWageRate.objects.create(organization=self.org, region_code='NCR', category='NON_AGRICULTURE', daily_rate=Decimal('695.00'), effective_from=date(2025, 7, 18), wage_order='NCR-26')
+        PayrollWageRate.objects.create(organization=self.org, region_code='NCR', category='NON_AGRICULTURE', daily_rate=Decimal('755.00'), effective_from=date(2026, 7, 25), wage_order='NCR-27')
+        old = PayrollPeriod.objects.create(organization=self.org, name='Old', start_date=date(2026, 7, 1), end_date=date(2026, 7, 24), frequency=PayrollPeriod.Frequency.MONTHLY)
+        new = PayrollPeriod.objects.create(organization=self.org, name='New', start_date=date(2026, 7, 25), end_date=date(2026, 8, 24), frequency=PayrollPeriod.Frequency.MONTHLY)
+        self.employee.payroll_profile = __import__('apps.payroll.models', fromlist=['PayrollProfile']).PayrollProfile.objects.create(employee=self.employee, wage_region='NCR', wage_category='NON_AGRICULTURE')
+        self.assertEqual(PayrollCalculator._wage_rate_for_employee(self.employee, old).daily_rate, Decimal('695.00'))
+        self.assertEqual(PayrollCalculator._wage_rate_for_employee(self.employee, new).daily_rate, Decimal('755.00'))
+
     def test_mwe_without_effective_regional_rate_blocks_preflight(self):
         self.employee.payroll_profile = None
         from apps.payroll.models import PayrollProfile
