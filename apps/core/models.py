@@ -27,3 +27,6 @@ class AuditEvent(BaseModel):
 
 	def __str__(self):
 		return f'{self.action} {self.entity_type} {self.entity_id}'
+
+
+undefined
