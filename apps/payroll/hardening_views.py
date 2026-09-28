@@ -84,9 +84,11 @@ def approve_payroll(request, record_id):
             return JsonResponse({'detail': 'Maker/checker separation: the payroll processor cannot approve the same payroll.'}, status=409)
         if record.status != PayrollRecord.Status.DRAFT:
             return JsonResponse({'detail': 'Only draft payroll records can be approved.'}, status=409)
-        record.status = PayrollRecord.Status.APPROVED
-        record.save(update_fields=('status', 'updated_at'))
-        if not PayrollRecord.objects.filter(payroll_period=period).exclude(status=PayrollRecord.Status.APPROVED).exists():
+        is_last_record = not PayrollRecord.objects.filter(
+            payroll_period=period,
+        ).exclude(id=record.id).exclude(status=PayrollRecord.Status.APPROVED).exists()
+        reconciliation = None
+        if is_last_record:
             reconciliation = PayrollReconciliation.validate(period)
             if not reconciliation['ok']:
                 return JsonResponse({
@@ -94,6 +96,9 @@ def approve_payroll(request, record_id):
                     'errors': reconciliation['errors'],
                     'reconciliation': reconciliation['totals'],
                 }, status=409)
+        record.status = PayrollRecord.Status.APPROVED
+        record.save(update_fields=('status', 'updated_at'))
+        if is_last_record:
             period.approved_by = request.user
             period.status = PayrollPeriod.Status.APPROVED
             period.confidence_summary = {**(period.confidence_summary or {}), 'reconciliation': reconciliation}
