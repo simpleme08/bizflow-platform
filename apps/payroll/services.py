@@ -6,6 +6,7 @@ from django.utils import timezone
 
 from apps.attendance.models import AttendanceRecord
 from apps.leave.models import LeaveApplication
+from apps.workforce.scheduling import resolve_schedule
 
 from .models import PayrollHoliday, PayrollRecord, PayrollWageRate
 
@@ -182,14 +183,26 @@ class PayrollCalculator:
         return holiday
 
     @classmethod
+    def _is_rest_day(cls, attendance):
+        try:
+            return resolve_schedule(attendance.employee, attendance.attendance_date)['kind'] == 'REST'
+        except Exception:
+            return False
+
+    @classmethod
     def _holiday_premium(cls, attendance, daily_rate):
         holiday = cls._holiday_for_attendance(attendance)
         if holiday is None or holiday.kind == PayrollHoliday.Kind.SPECIAL_WORKING or not attendance.time_in or not attendance.time_out:
             return ZERO
+        rest_day = cls._is_rest_day(attendance)
         if holiday.kind == PayrollHoliday.Kind.REGULAR:
-            premium_multiplier = Decimal('2.00') if holiday.is_double else Decimal('1.00')
+            premium_multiplier = Decimal('1.60') if rest_day else Decimal('1.00')
+            if holiday.is_double:
+                premium_multiplier += Decimal('1.00')
         else:
-            premium_multiplier = Decimal('0.50') if holiday.is_double else Decimal('0.30')
+            premium_multiplier = Decimal('0.50') if rest_day else Decimal('0.30')
+            if holiday.is_double:
+                premium_multiplier += Decimal('0.50')
         return cls_money(daily_rate * premium_multiplier)
 
     @classmethod
@@ -200,9 +213,9 @@ class PayrollCalculator:
         if holiday is None or holiday.kind == PayrollHoliday.Kind.SPECIAL_WORKING:
             multiplier = cls.OVERTIME_MULTIPLIER
         elif holiday.kind == PayrollHoliday.Kind.REGULAR:
-            multiplier = cls.REGULAR_HOLIDAY_MULTIPLIER * cls.HOLIDAY_OVERTIME_MULTIPLIER
+            multiplier = (Decimal('2.60') if cls._is_rest_day(attendance) else cls.REGULAR_HOLIDAY_MULTIPLIER) * cls.HOLIDAY_OVERTIME_MULTIPLIER
         else:
-            multiplier = cls.SPECIAL_HOLIDAY_MULTIPLIER * cls.HOLIDAY_OVERTIME_MULTIPLIER
+            multiplier = (Decimal('1.50') if cls._is_rest_day(attendance) else cls.SPECIAL_HOLIDAY_MULTIPLIER) * cls.HOLIDAY_OVERTIME_MULTIPLIER
         return cls_money(Decimal(attendance.overtime_minutes) / Decimal('60') * hourly_rate * multiplier)
 
     @classmethod
