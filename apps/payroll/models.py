@@ -191,6 +191,7 @@ class PayrollRecord(BaseModel):
     commissions = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     bonuses = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     taxable_supplementary = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    tax_classification = models.JSONField(default=dict, blank=True, help_text='Explicit taxable/non-taxable classification snapshot for payroll components.')
     thirteenth_month = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     sss_employee = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     sss_employer = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))

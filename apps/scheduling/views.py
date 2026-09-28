@@ -2,6 +2,7 @@ from django.core.exceptions import ValidationError
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from datetime import date
+from django.utils import timezone
 import json
 
 from apps.organization.context import current_membership
@@ -180,3 +181,171 @@ def delete_assignment(request):
         return JsonResponse({'message': 'Assignment deleted successfully.'})
     except EmployeeAssignment.DoesNotExist:
         return JsonResponse({'detail': 'Assignment not found.'}, status=404)
+
+
+from apps.workforce.models import CoverShift, ScheduleException, ScheduleRule
+from apps.workforce.scheduling import resolve_schedule
+
+
+@require_http_methods(['GET'])
+def get_schedule_calendar(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
+    membership = _membership_for(request)
+    if membership is None or not membership.has_permission('manage_attendance'):
+        return JsonResponse({'detail': 'Access denied.'}, status=403)
+    employee_id, start_raw, end_raw = request.GET.get('employee_id'), request.GET.get('start_date'), request.GET.get('end_date')
+    if not all((employee_id, start_raw, end_raw)):
+        return JsonResponse({'detail': 'employee_id, start_date and end_date are required.'}, status=400)
+    try:
+        employee = Employee.objects.get(id=employee_id, organization=membership.organization)
+        start, end = date.fromisoformat(start_raw), date.fromisoformat(end_raw)
+    except (Employee.DoesNotExist, ValueError):
+        return JsonResponse({'detail': 'Invalid employee or date range.'}, status=400)
+    if end < start or (end - start).days > 366:
+        return JsonResponse({'detail': 'Date range must be valid and no longer than 366 days.'}, status=400)
+    rows, current = [], start
+    while current <= end:
+        resolved = resolve_schedule(employee, current)
+        rows.append({
+            'date': current.isoformat(),
+            'kind': resolved['kind'],
+            'shift_id': str(resolved['shift'].id) if resolved['shift'] else None,
+            'shift': resolved['shift'].name if resolved['shift'] else None,
+            'cover_shift_id': str(resolved['cover_shift'].id) if resolved['cover_shift'] else None,
+            'client_id': str(resolved['client'].id) if resolved['client'] else None,
+            'site_id': str(resolved['client_site'].id) if resolved['client_site'] else None,
+        })
+        current = current.fromordinal(current.toordinal() + 1)
+    return JsonResponse({'schedule': rows})
+
+
+@require_http_methods(['POST'])
+def schedule_rule_api(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
+    membership = _membership_for(request)
+    if membership is None or not membership.has_permission('manage_attendance'):
+        return JsonResponse({'detail': 'Access denied.'}, status=403)
+    try:
+        data = json.loads(request.body)
+        employee = Employee.objects.get(id=data['employee_id'], organization=membership.organization)
+        shift = _tenant_shift_queryset(membership.organization).get(id=data['shift_id'])
+        rule = ScheduleRule(
+            employee=employee,
+            shift_template=shift,
+            effective_from=date.fromisoformat(data['effective_from']),
+            effective_to=date.fromisoformat(data['effective_to']) if data.get('effective_to') else None,
+            pattern=data.get('pattern', ScheduleRule.Pattern.WEEKLY),
+            weekdays=data.get('weekdays', []),
+            cycle_weeks=int(data.get('cycle_weeks', 1)),
+            rotation_shifts=data.get('rotation_shifts', []),
+            rest_days=data.get('rest_days', []),
+            priority=int(data.get('priority', 0)),
+        )
+        rule.full_clean()
+        rule.save()
+    except (KeyError, ValueError, Employee.DoesNotExist, ShiftTemplate.DoesNotExist, ValidationError) as exc:
+        return JsonResponse({'detail': 'Invalid schedule rule.', 'errors': getattr(exc, 'message_dict', str(exc))}, status=400)
+    record_audit(organization=membership.organization, actor=request.user, action='scheduling.rule_created', entity=rule)
+    return JsonResponse({'id': str(rule.id), 'status': 'created'})
+
+
+@require_http_methods(['POST'])
+def schedule_exception_api(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
+    membership = _membership_for(request)
+    if membership is None or not membership.has_permission('manage_attendance'):
+        return JsonResponse({'detail': 'Access denied.'}, status=403)
+    try:
+        data = json.loads(request.body)
+        employee = Employee.objects.get(id=data['employee_id'], organization=membership.organization)
+        shift = _tenant_shift_queryset(membership.organization).filter(id=data.get('shift_id')).first() if data.get('shift_id') else None
+        exception = ScheduleException(
+            employee=employee,
+            work_date=date.fromisoformat(data['work_date']),
+            shift_template=shift,
+            is_rest_day=bool(data.get('is_rest_day', False)),
+            reason=str(data.get('reason', '')).strip(),
+            approved=False,
+        )
+        exception.full_clean()
+        exception.save()
+    except (KeyError, ValueError, Employee.DoesNotExist, ValidationError) as exc:
+        return JsonResponse({'detail': 'Invalid schedule exception.', 'errors': getattr(exc, 'message_dict', str(exc))}, status=400)
+    record_audit(organization=membership.organization, actor=request.user, action='scheduling.exception_created', entity=exception)
+    return JsonResponse({'id': str(exception.id), 'status': 'PENDING'})
+
+
+@require_http_methods(['POST'])
+def schedule_exception_decision(request, exception_id):
+    if not request.user.is_authenticated:
+        return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
+    membership = _membership_for(request)
+    if membership is None or not membership.has_permission('manage_attendance'):
+        return JsonResponse({'detail': 'Access denied.'}, status=403)
+    try:
+        data = json.loads(request.body)
+        exception = ScheduleException.objects.get(id=exception_id, employee__organization=membership.organization)
+        approved = bool(data.get('approved'))
+        exception.approved = approved
+        exception.approved_by = request.user if approved else None
+        exception.save(update_fields=('approved', 'approved_by', 'updated_at'))
+    except (json.JSONDecodeError, ScheduleException.DoesNotExist):
+        return JsonResponse({'detail': 'Schedule exception not found or invalid JSON.'}, status=400)
+    record_audit(organization=membership.organization, actor=request.user, action='scheduling.exception_decision', entity=exception, details={'approved': approved})
+    return JsonResponse({'status': 'APPROVED' if approved else 'REJECTED'})
+
+
+@require_http_methods(['POST'])
+def cover_shift_api(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
+    membership = _membership_for(request)
+    if membership is None or not membership.has_permission('manage_attendance'):
+        return JsonResponse({'detail': 'Access denied.'}, status=403)
+    try:
+        data = json.loads(request.body)
+        employee = Employee.objects.get(id=data['employee_id'], organization=membership.organization)
+        shift = _tenant_shift_queryset(membership.organization).get(id=data['shift_id'])
+        client = Client.objects.filter(id=data.get('client_id'), organization=membership.organization).first() if data.get('client_id') else None
+        site = ClientSite.objects.filter(id=data.get('site_id'), client=client).first() if data.get('site_id') and client else None
+        cover = CoverShift(
+            employee=employee,
+            work_date=date.fromisoformat(data['work_date']),
+            shift_template=shift,
+            client=client,
+            client_site=site,
+            reason=str(data.get('reason', '')).strip(),
+            requested_by=request.user,
+        )
+        cover.full_clean()
+        cover.save()
+    except (KeyError, ValueError, Employee.DoesNotExist, ShiftTemplate.DoesNotExist, ValidationError) as exc:
+        return JsonResponse({'detail': 'Invalid cover shift.', 'errors': getattr(exc, 'message_dict', str(exc))}, status=400)
+    record_audit(organization=membership.organization, actor=request.user, action='scheduling.cover_shift_requested', entity=cover)
+    return JsonResponse({'id': str(cover.id), 'status': cover.status})
+
+
+@require_http_methods(['POST'])
+def cover_shift_decision(request, cover_shift_id):
+    if not request.user.is_authenticated:
+        return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
+    membership = _membership_for(request)
+    if membership is None or not membership.has_permission('manage_attendance'):
+        return JsonResponse({'detail': 'Access denied.'}, status=403)
+    try:
+        data = json.loads(request.body)
+        cover = CoverShift.objects.select_for_update().get(id=cover_shift_id, employee__organization=membership.organization)
+        if cover.requested_by_id == request.user.id:
+            return JsonResponse({'detail': 'The requester cannot approve their own cover shift.'}, status=409)
+        approved = bool(data.get('approved'))
+        cover.status = CoverShift.Status.APPROVED if approved else CoverShift.Status.REJECTED
+        cover.approved_by = request.user if approved else None
+        cover.approved_at = timezone.now() if approved else None
+        cover.save(update_fields=('status', 'approved_by', 'approved_at', 'updated_at'))
+    except (json.JSONDecodeError, CoverShift.DoesNotExist):
+        return JsonResponse({'detail': 'Cover shift not found or invalid JSON.'}, status=400)
+    record_audit(organization=membership.organization, actor=request.user, action='scheduling.cover_shift_decision', entity=cover, details={'approved': approved})
+    return JsonResponse({'status': cover.status})
