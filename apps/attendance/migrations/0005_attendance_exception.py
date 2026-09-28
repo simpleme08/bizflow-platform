@@ -19,6 +19,6 @@ class Migration(migrations.Migration):
                 ('attendance', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='exceptions', to='attendance.attendancerecord')),
                 ('resolved_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='resolved_attendance_exceptions', to=settings.AUTH_USER_MODEL)),
             ],
-            options={'constraints':[models.UniqueConstraint(fields=('attendance','code'),name='unique_attendance_exception_code')], 'indexes':[models.Index(fields=('status','created_at'),name='attendance_exception_status_idx')]},
+            options={'constraints':[models.UniqueConstraint(fields=('attendance','code'),name='unique_attendance_exception_code')], 'indexes':[models.Index(fields=('status','created_at'),name='attn_exc_status_idx')]},
         ),
     ]
