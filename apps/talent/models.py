@@ -33,9 +33,6 @@ class Candidate(BaseModel):
     source = models.CharField(max_length=80, blank=True)
     resume_url = models.URLField(blank=True)
     notes = models.TextField(blank=True)
-    required_document_types = models.JSONField(default=list, blank=True)
-    required_clearances = models.JSONField(default=list, blank=True)
-
     class Meta:
         constraints = [models.UniqueConstraint(fields=('organization', 'email'), name='unique_candidate_email_per_org')]
         ordering = ('last_name', 'first_name')
