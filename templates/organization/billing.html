@@ -1,5 +1,20 @@
-<!doctype html><html><body><h1>{{ organization.brand_name|default:organization.name }} billing</h1><p>Plan: <span id="plan">Loading…</span></p><p>Subscription: <span id="status">Loading…</span></p><p>Active employees: <span id="usage">Loading…</span></p><h2>Plans</h2><button onclick="checkout('STARTER')">Starter</button><button onclick="checkout('GROWTH')">Growth</button><button onclick="checkout('BUSINESS')">Business</button><p id="message"></p><script>
-async function load(){const r=await fetch('/api/subscription/');const d=await r.json();if(r.ok){plan.textContent=d.plan.name;status.textContent=d.subscription.status;usage.textContent=d.usage.active_employees+' / '+d.plan.employee_limit;}else message.textContent=d.detail||'Unable to load billing.'}
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Billing | BizFlow HRIS</title>
+<link rel="stylesheet" href="/static/adminlte/plugins/fontawesome-free/css/all.min.css"><link rel="stylesheet" href="/static/adminlte/dist/css/adminlte.min.css"><link rel="stylesheet" href="/static/css/custom.css"></head>
+<body>
+<header class="floot-topbar"><div class="floot-topbar-inner"><a class="floot-brand" href="/workspace/"><span class="floot-brand-mark"><i class="fas fa-users"></i></span>BizFlow</a><span style="flex:1"></span><a href="/workspace/" style="color:#dce8f5;font-size:.72rem;font-weight:800;text-decoration:none">Workspace</a></div></header>
+<main class="floot-shell">
+<a class="floot-back" href="/workspace/"><i class="fas fa-arrow-left"></i> Back to workspace</a>
+<section class="floot-hero"><div><div class="floot-eyebrow">Workspace administration</div><h1>Billing</h1><p class="page-subtitle">Review your plan, usage, and available subscription options.</p></div><span class="floot-status"><i class="fas fa-credit-card"></i> Subscription</span></section>
+<div class="floot-grid">
+<section class="floot-panel"><div class="section-label" style="margin-top:0">Current subscription</div><div class="floot-grid-3"><div class="floot-stat"><span class="floot-stat-label">Plan</span><strong class="floot-stat-value" id="plan" style="font-size:1.25rem">Loading…</strong></div><div class="floot-stat"><span class="floot-stat-label">Status</span><strong class="floot-stat-value" id="status" style="font-size:1.25rem">Loading…</strong></div><div class="floot-stat"><span class="floot-stat-label">Active employees</span><strong class="floot-stat-value" id="usage" style="font-size:1.25rem">Loading…</strong></div></div></section>
+<section class="floot-panel"><div class="section-label" style="margin-top:0">Plans</div><div class="floot-grid-3"><button class="btn btn-outline-primary" onclick="checkout('STARTER')"><i class="fas fa-seedling mr-1"></i>Starter</button><button class="btn btn-outline-primary" onclick="checkout('GROWTH')"><i class="fas fa-chart-line mr-1"></i>Growth</button><button class="btn btn-primary" onclick="checkout('BUSINESS')"><i class="fas fa-building mr-1"></i>Business</button></div><p id="message" class="text-muted mt-3 mb-0"></p></section>
+</div>
+</main>
+<script>
+async function load(){const r=await fetch('/api/subscription/');const d=await r.json();if(r.ok){plan.textContent=d.plan.name;status.textContent=d.subscription.status;usage.textContent=d.usage.active_employees+' / '+d.plan.employee_limit}else message.textContent=d.detail||'Unable to load billing.'}
 async function checkout(planCode){message.textContent='Starting checkout…';const r=await fetch('/api/billing/checkout/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':document.cookie.split('csrftoken=')[1]?.split(';')[0]||''},body:JSON.stringify({plan_code:planCode})});const d=await r.json();message.textContent=r.ok?'Checkout created. Complete payment using the provider payment flow.':(d.detail||'Checkout failed.')}
 load();
-</script></body></html>
+</script>
+</body></html>
