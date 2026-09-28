@@ -65,6 +65,7 @@ class ScheduleRule(BaseModel):
     pattern = models.CharField(max_length=20, choices=Pattern.choices, default=Pattern.WEEKLY)
     weekdays = models.JSONField(default=list)
     cycle_weeks = models.PositiveIntegerField(default=1)
+    rotation_shifts = models.JSONField(default=list, blank=True, help_text='Ordered shift UUIDs used by rotating cycles.')
     rest_days = models.JSONField(default=list)
     priority = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
