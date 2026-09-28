@@ -59,6 +59,6 @@ class WorkforceSchedulingHardeningTests(TestCase):
         self.assertEqual(resolved['shift'], self.night)
 
     def test_split_attendance_segments_are_unique_per_segment(self):
-        first = AttendanceRecord.objects.create(employee=self.employee, attendance_date=date(2026, 9, 21), segment_number=1, time_in=None, time_out=None, status=AttendanceRecord.Status.PRESENT)
-        second = AttendanceRecord.objects.create(employee=self.employee, attendance_date=date(2026, 9, 21), segment_number=2, time_in=None, time_out=None, status=AttendanceRecord.Status.PRESENT)
+        first = AttendanceRecord.objects.create(employee=self.employee, attendance_date=date(2026, 9, 21), segment_number=1, clock_in_mode=AttendanceRecord.ClockInMode.UNSCHEDULED, time_in=None, time_out=None, status=AttendanceRecord.Status.PRESENT)
+        second = AttendanceRecord.objects.create(employee=self.employee, attendance_date=date(2026, 9, 21), segment_number=2, clock_in_mode=AttendanceRecord.ClockInMode.UNSCHEDULED, time_in=None, time_out=None, status=AttendanceRecord.Status.PRESENT)
         self.assertNotEqual(first.id, second.id)
