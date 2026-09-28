@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
@@ -92,3 +93,23 @@ class AttendanceRecord(BaseModel):
 
     def __str__(self):
         return f'{self.employee} - {self.attendance_date}'
+
+
+class AttendanceException(BaseModel):
+    class Status(models.TextChoices):
+        OPEN = 'OPEN', 'Open'
+        RESOLVED = 'RESOLVED', 'Resolved'
+        WAIVED = 'WAIVED', 'Waived'
+
+    attendance = models.ForeignKey(AttendanceRecord, on_delete=models.CASCADE, related_name='exceptions')
+    code = models.CharField(max_length=40)
+    details = models.JSONField(default=dict, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.OPEN)
+    resolved_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name='resolved_attendance_exceptions')
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=('attendance', 'code'), name='unique_attendance_exception_code'),
+        ]
+        indexes = [models.Index(fields=('status', 'created_at'), name='attendance_exception_status_idx')]
