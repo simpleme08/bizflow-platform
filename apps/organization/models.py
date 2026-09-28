@@ -25,6 +25,8 @@ class Organization(BaseModel):
     trial_ends_at = models.DateTimeField(null=True, blank=True)
     billing_customer_id = models.CharField(max_length=120, blank=True)
     overage_rate = models.DecimalField(max_digits=10, decimal_places=2, default=50)
+    audit_retention_days = models.PositiveIntegerField(default=3650)
+    document_retention_days = models.PositiveIntegerField(default=3650)
 
     class Meta:
         ordering = ('name',)
