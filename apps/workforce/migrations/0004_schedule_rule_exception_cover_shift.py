@@ -65,6 +65,6 @@ class Migration(migrations.Migration):
                 ('requested_by', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='requested_cover_shifts', to=settings.AUTH_USER_MODEL)),
                 ('shift_template', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='cover_shifts', to='workforce.shifttemplate')),
             ],
-            options={'constraints': [models.UniqueConstraint(fields=('employee', 'work_date'), name='unique_cover_shift_employee_date')], 'indexes': [models.Index(fields=['employee', 'work_date', 'status'], name='cover_shift_emp_date_status_idx')]},
+            options={'constraints': [models.UniqueConstraint(fields=('employee', 'work_date'), name='unique_cover_shift_employee_date')], 'indexes': [models.Index(fields=['employee', 'work_date', 'status'], name='cover_shift_emp_dt_status')]},
         ),
     ]
