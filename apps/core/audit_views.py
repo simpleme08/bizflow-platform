@@ -1,8 +1,9 @@
 import csv
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_GET
+from django.utils.dateparse import parse_datetime
 
 from .models import AuditEvent
 from apps.organization.context import current_membership
@@ -30,15 +31,20 @@ def audit_api(request):
         events = events.filter(actor__username__icontains=actor)
     if search:
         events = events.filter(details__icontains=search)
+    if since:
+        parsed_since = parse_datetime(since)
+        if parsed_since is None:
+            return JsonResponse({'detail': 'Invalid since datetime. Use ISO-8601.'}, status=400)
+        events = events.filter(created_at__gte=parsed_since)
+    if until:
+        parsed_until = parse_datetime(until)
+        if parsed_until is None:
+            return JsonResponse({'detail': 'Invalid until datetime. Use ISO-8601.'}, status=400)
+        events = events.filter(created_at__lte=parsed_until)
     try:
-        if since:
-            events = events.filter(created_at__gte=datetime.fromisoformat(since))
-        if until:
-            events = events.filter(created_at__lte=datetime.fromisoformat(until))
+        limit = min(max(int(request.GET.get('limit', '100')), 1), 500)
     except ValueError:
-        return JsonResponse({'detail': 'Invalid since/until datetime. Use ISO-8601.'}, status=400)
-
-    limit = min(max(int(request.GET.get('limit', '100')), 1), 500)
+        return JsonResponse({'detail': 'limit must be an integer between 1 and 500.'}, status=400)
     if request.GET.get('format') == 'csv':
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename="audit-log.csv"'
