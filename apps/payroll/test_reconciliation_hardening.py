@@ -34,7 +34,7 @@ class PayrollReconciliationHardeningTests(TestCase):
             frequency=PayrollPeriod.Frequency.SEMI_MONTHLY,
         )
         first_values = PayrollCalculator._statutory_for_period(self.employee, first, Decimal('12345.67'))
-        PayrollRecord.objects.create(employee=self.employee, payroll_period=first, **first_values)
+        PayrollRecord.objects.create(employee=self.employee, payroll_period=first, status=PayrollRecord.Status.APPROVED, **first_values)
         second_values = PayrollCalculator._statutory_for_period(self.employee, second, Decimal('12345.67'))
         monthly = PayrollCalculator._statutory_for_period(self.employee, PayrollPeriod(organization=self.org, start_date=date(2026,1,1), end_date=date(2026,1,31), frequency=PayrollPeriod.Frequency.MONTHLY), Decimal('12345.67'))
         self.assertEqual(first_values['sss_employee'] + second_values['sss_employee'], monthly['sss_employee'])
