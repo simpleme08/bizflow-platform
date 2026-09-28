@@ -185,7 +185,20 @@ class PayrollCalculator:
     @classmethod
     def _is_rest_day(cls, attendance):
         try:
-            return resolve_schedule(attendance.employee, attendance.attendance_date)['kind'] == 'REST'
+            resolved = resolve_schedule(attendance.employee, attendance.attendance_date)
+            if resolved['kind'] != 'REST':
+                return False
+            # With no explicit workforce schedule, legacy assignment-based
+            # attendance remains a working day. An explicit exception/rule
+            # returning REST is still authoritative.
+            from apps.workforce.models import CoverShift, ScheduleException, ScheduleRule
+            if CoverShift.objects.filter(employee=attendance.employee, work_date=attendance.attendance_date, status=CoverShift.Status.APPROVED).exists():
+                return False
+            if ScheduleException.objects.filter(employee=attendance.employee, work_date=attendance.attendance_date, approved=True).exists():
+                return True
+            if ScheduleRule.objects.filter(employee=attendance.employee, is_active=True, effective_from__lte=attendance.attendance_date).filter(models_q_effective_to(attendance.attendance_date)).exists():
+                return True
+            return False
         except Exception:
             return False
 
