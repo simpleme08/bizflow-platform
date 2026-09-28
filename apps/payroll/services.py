@@ -349,8 +349,14 @@ class PayrollCalculator:
                 for field, label in (('sss_number', 'SSS'), ('philhealth_number', 'PhilHealth'), ('pagibig_number', 'Pag-IBIG'), ('tin', 'TIN')):
                     if not getattr(profile, field):
                         warnings.append(f'{employee.employee_number}: missing {label} number')
-                if profile.minimum_wage_earner and not cls._wage_rate_for_employee(employee, period):
-                    warnings.append(f'{employee.employee_number}: MWE flag is set but no exact organization/global wage rate is configured')
+                if profile.minimum_wage_earner:
+                    wage_rate = cls._wage_rate_for_employee(employee, period)
+                    if wage_rate is None:
+                        errors.append(f'{employee.employee_number}: MWE flag requires an effective regional wage rate before payroll processing')
+                    else:
+                        salary = cls._salary_for_period(employee, period)
+                        if salary and (salary.basic_salary / cls.WORKING_DAYS) < wage_rate.daily_rate:
+                            errors.append(f'{employee.employee_number}: salary daily rate is below the configured regional minimum wage rate {wage_rate.daily_rate}')
             try:
                 cls.calculate(employee, period)
             except ValueError as exc:
