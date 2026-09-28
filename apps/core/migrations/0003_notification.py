@@ -23,6 +23,6 @@ class Migration(migrations.Migration):
                 ('organization', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='notifications', to='organization.organization')),
                 ('recipient', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='notifications', to=settings.AUTH_USER_MODEL)),
             ],
-            options={'indexes':[models.Index(fields=('status','created_at'),name='notification_status_created_idx')]},
+            options={'indexes':[models.Index(fields=('status','created_at'),name='notif_status_created_idx')]},
         ),
     ]
