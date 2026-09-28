@@ -52,8 +52,8 @@
 - [x] Support multiple work segments in one date where operationally required; the current one-record-per-employee-per-date model is insufficient for split/double shifts.
 - [x] Reconcile cover/unscheduled punches before payroll approval with a visible exception queue.
 - [x] Add attendance policy configuration for grace periods, rounding, meal breaks and company-specific overtime rules.
-- [ ] Add optional site/device/geofence controls only where a customer requires them.
-- [ ] Move attendance proof photos to private persistent object storage before production; local/ephemeral filesystem storage is not sufficient.
+- [x] Add optional site/device/geofence controls only where a customer requires them.
+- [x] Move attendance proof photos to private persistent object storage before production; production configuration now fails closed unless private S3-compatible storage is configured; actual bucket provisioning remains an operational gate.
 - [x] Establish photo retention, deletion and privacy controls.
 
 ### Payroll Confidence Engine
