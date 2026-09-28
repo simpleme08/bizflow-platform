@@ -163,5 +163,7 @@ def offboarding_status(request, record_id):
         item.save(update_fields=('status', 'updated_at'))
         record_audit(organization=membership.organization, actor=request.user, action='offboarding.status_changed', entity=item, details={'status': target})
         return JsonResponse({'id': str(item.id), 'status': item.status})
-    except (OffboardingRecord.DoesNotExist, json.JSONDecodeError):
-        return JsonResponse({'detail': 'Offboarding record not found or invalid JSON.'}, status=404)
+    except OffboardingRecord.DoesNotExist:
+        return JsonResponse({'detail': 'Offboarding record not found.'}, status=404)
+    except json.JSONDecodeError:
+        return JsonResponse({'detail': 'Invalid JSON.'}, status=400)
