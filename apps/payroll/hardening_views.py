@@ -8,6 +8,7 @@ from apps.organization.models import OrganizationMembership
 from .completion import settle_loans_for_record
 from .hardening import PayrollConfidence
 from .models import PayrollPeriod, PayrollRecord
+from .reconciliation import PayrollReconciliation
 from .views import _membership
 
 
@@ -86,9 +87,17 @@ def approve_payroll(request, record_id):
         record.status = PayrollRecord.Status.APPROVED
         record.save(update_fields=('status', 'updated_at'))
         if not PayrollRecord.objects.filter(payroll_period=period).exclude(status=PayrollRecord.Status.APPROVED).exists():
+            reconciliation = PayrollReconciliation.validate(period)
+            if not reconciliation['ok']:
+                return JsonResponse({
+                    'detail': 'Payroll reconciliation failed; approval is blocked until the period is corrected.',
+                    'errors': reconciliation['errors'],
+                    'reconciliation': reconciliation['totals'],
+                }, status=409)
             period.approved_by = request.user
             period.status = PayrollPeriod.Status.APPROVED
-            period.save(update_fields=('approved_by', 'status', 'updated_at'))
+            period.confidence_summary = {**(period.confidence_summary or {}), 'reconciliation': reconciliation}
+            period.save(update_fields=('approved_by', 'status', 'confidence_summary', 'updated_at'))
     record_audit(organization=membership.organization, actor=request.user, action='payroll.approved', entity=record, details={'period_id': str(period.id), 'period_approved': period.status == PayrollPeriod.Status.APPROVED})
     return JsonResponse({'id': str(record.id), 'status': record.status, 'period_status': period.status, 'approved_by': request.user.get_username() if period.approved_by_id else None})
 
