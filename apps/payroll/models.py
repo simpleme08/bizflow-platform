@@ -52,6 +52,9 @@ class PayrollProfile(BaseModel):
     minimum_wage_earner = models.BooleanField(default=False)
     wage_region = models.CharField(max_length=20, blank=True)
     wage_category = models.CharField(max_length=40, blank=True, default='NON_AGRICULTURE')
+    bank_name = models.CharField(max_length=120, blank=True)
+    bank_account_name = models.CharField(max_length=150, blank=True)
+    bank_account_number = models.CharField(max_length=40, blank=True)
 
 
 class PayrollWageRate(BaseModel):
