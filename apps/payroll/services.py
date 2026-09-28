@@ -316,6 +316,26 @@ class PayrollCalculator:
         }
 
     @classmethod
+    def thirteenth_month_audit(cls, employee, year):
+        records = PayrollRecord.objects.filter(
+            employee=employee,
+            payroll_period__end_date__year=year,
+            status__in=(PayrollRecord.Status.APPROVED, PayrollRecord.Status.PAID),
+        ).select_related('payroll_period').order_by('payroll_period__end_date')
+        rows = [
+            {
+                'period': record.payroll_period.name,
+                'start_date': record.payroll_period.start_date.isoformat(),
+                'end_date': record.payroll_period.end_date.isoformat(),
+                'basic_pay': str(record.basic_pay),
+            }
+            for record in records
+        ]
+        earned_basic = sum((record.basic_pay for record in records), ZERO)
+        computed = PhilippinePayrollRules.money(earned_basic / Decimal('12'))
+        return {'year': year, 'earned_basic_salary': str(PhilippinePayrollRules.money(earned_basic)), 'thirteenth_month': str(computed), 'periods': rows}
+
+    @classmethod
     def thirteenth_month(cls, employee, year):
         records = PayrollRecord.objects.filter(employee=employee, payroll_period__end_date__year=year, status__in=(PayrollRecord.Status.APPROVED, PayrollRecord.Status.PAID))
         basic = sum((record.basic_pay for record in records), ZERO)
