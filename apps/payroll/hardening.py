@@ -159,6 +159,17 @@ class PayrollConfidence:
                     'other_deductions', 'gross_pay', 'net_pay',
                 )
             }
+            record.tax_classification = {
+                'base_pay': {'taxable': True, 'amount': str(record.basic_pay)},
+                'allowances': {'taxable': True, 'amount': str(record.allowances)},
+                'overtime': {'taxable': True, 'amount': str(record.overtime_pay)},
+                'holiday_pay': {'taxable': True, 'amount': str(record.holiday_pay)},
+                'night_differential': {'taxable': True, 'amount': str(record.night_differential)},
+                'commissions': {'taxable': True, 'amount': str(record.commissions)},
+                'bonuses': {'taxable': True, 'amount': str(record.bonuses)},
+                'thirteenth_month': {'taxable_above_exemption': True, 'amount': str(record.thirteenth_month)},
+                'statutory_employee': {'taxable': False, 'amount': str(record.statutory_deductions)},
+            }
             record.calculation_rule_version = rule_set.version if rule_set else ''
             record.calculation_input_hash = cls._hash(snapshot)
             record.calculation_output_hash = cls._hash(output)
