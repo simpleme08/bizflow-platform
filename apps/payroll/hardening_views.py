@@ -5,6 +5,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 
 from apps.core.services import record_audit
+from apps.core.notifications import queue_notification
 from apps.organization.models import OrganizationMembership
 
 from .completion import settle_loans_for_record
@@ -108,6 +109,8 @@ def approve_payroll(request, record_id):
             period.confidence_summary = {**(period.confidence_summary or {}), 'reconciliation': {**reconciliation, 'totals': reconciliation_totals}}
             period.save(update_fields=('approved_by', 'status', 'confidence_summary', 'updated_at'))
     record_audit(organization=membership.organization, actor=request.user, action='payroll.approved', entity=record, details={'period_id': str(period.id), 'period_approved': period.status == PayrollPeriod.Status.APPROVED})
+    if period.status == PayrollPeriod.Status.APPROVED:
+        queue_notification(organization=membership.organization, recipient=record.employee.user, event='payroll.released', subject='Payroll approved', body=f'Your payroll for {period.name} has been approved and is ready for payment.')
     return JsonResponse({'id': str(record.id), 'status': record.status, 'period_status': period.status, 'approved_by': request.user.get_username() if period.approved_by_id else None})
 
 
@@ -137,4 +140,5 @@ def mark_payroll_paid(request, record_id):
             period.paid_by = request.user
             period.save(update_fields=('status', 'paid_by', 'updated_at'))
     record_audit(organization=membership.organization, actor=request.user, action='payroll.paid', entity=record, details={'period_id': str(period.id), 'paid_by': request.user.get_username()})
+    queue_notification(organization=membership.organization, recipient=record.employee.user, event='payroll.paid', subject='Payroll paid', body=f'Your payroll for {period.name} has been marked paid. Net pay: {record.net_pay}.')
     return JsonResponse({'id': str(record.id), 'status': record.status, 'period_status': period.status, 'paid_by': request.user.get_username() if period.paid_by_id else None})
