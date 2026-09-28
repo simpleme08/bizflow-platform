@@ -50,4 +50,4 @@ class Notification(BaseModel):
     sent_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        indexes = [models.Index(fields=('status', 'created_at'), name='notification_status_created_idx')]
+        indexes = [models.Index(fields=('status', 'created_at'), name='notif_status_created_idx')]
