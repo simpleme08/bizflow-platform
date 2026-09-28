@@ -118,7 +118,7 @@ class PayrollCalculatorTests(TestCase):
 
     def test_annual_tax_reconciliation_reports_year_end_adjustment(self):
         annual_period = PayrollPeriod.objects.create(organization=self.employee.organization, name='Annual Test', start_date=date(2026, 12, 1), end_date=date(2026, 12, 31), frequency=PayrollPeriod.Frequency.MONTHLY)
-        PayrollRecord.objects.create(employee=self.employee, payroll_period=annual_period, basic_pay=Decimal('300000.00'), gross_pay=Decimal('300000.00'), net_pay=Decimal('300000.00'))
+        PayrollRecord.objects.create(employee=self.employee, payroll_period=annual_period, basic_pay=Decimal('300000.00'), gross_pay=Decimal('300000.00'), net_pay=Decimal('300000.00'), status=PayrollRecord.Status.APPROVED)
         result = PayrollCalculator.annual_tax_reconciliation(self.employee, 2026)
         self.assertEqual(result['taxable_income'], Decimal('300000.00'))
         self.assertEqual(result['taxable_thirteenth_month'], Decimal('0.00'))
