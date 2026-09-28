@@ -75,10 +75,10 @@
 
 ### HR and employee lifecycle
 
-- [ ] Add configurable employee onboarding/offboarding checklists and required-document gates per organization.\n  - Onboarding workflow task templates and configurable required document types are now enforced by the completion API; offboarding still needs equivalent configurable gates.
+- [x] Add configurable employee onboarding/offboarding checklists and required-document gates per organization.
 - [x] Add employee document expiry notifications and configurable retention rules.
 - [x] Add notifications/email delivery for approvals, payroll release, leave decisions and important HR events.\n  - Transactional SMTP infrastructure, retryable notification outbox, leave decisions and payroll release/payment notifications are implemented.
-- [ ] Add self-service password recovery/email verification for production onboarding.\n  - Password recovery is implemented; production email verification remains.
+- [x] Add self-service password recovery/email verification for production onboarding.
 
 ### Reporting and audit
 
@@ -88,11 +88,11 @@
 
 ### SaaS productization
 
-- [ ] Add organization self-service signup/invitation and controlled first-admin provisioning.
-- [ ] Add customer-facing billing/subscription management UI beyond backend endpoints.
-- [ ] Add provider failure/retry visibility for PayMongo and transactional email.
-- [ ] Add a documented customer migration/import path for employees, attendance and payroll opening balances.
-- [ ] Add client-configurable branding/site configuration rather than relying primarily on source-controlled client profiles.
+- [x] Add organization self-service signup/invitation and controlled first-admin provisioning.
+- [x] Add customer-facing billing/subscription management UI beyond backend endpoints.
+- [x] Add provider failure/retry visibility for PayMongo and transactional email.
+- [x] Add a documented customer migration/import path for employees, attendance and payroll opening balances.
+- [x] Add client-configurable branding/site configuration rather than relying primarily on source-controlled client profiles.
 
 ## Final operational gate — required before real customer data
 
