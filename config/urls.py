@@ -21,7 +21,7 @@ from apps.payroll.disbursement_views import payroll_disbursement_export
 from apps.payroll.summary import payroll_summary_api
 from apps.reports.views import reports_api, reports_page
 from apps.ess.views import ess_api, ess_page
-from apps.accounts.views import login_page, organization_select
+from apps.accounts.views import login_page, organization_select, signup, verify_email
 from apps.core.views import health, readiness, website
 from apps.core.audit_views import audit_api, retention_status
 from apps.scheduling.views import scheduling_page, get_shifts, get_clients, get_assignable_employees, get_employee_schedule, assign_shift, delete_assignment, get_schedule_calendar, schedule_rule_api, schedule_exception_api, schedule_exception_decision, cover_shift_api, cover_shift_decision
@@ -34,7 +34,7 @@ urlpatterns = [
     path('health/', health, name='health'), path('ready/', readiness, name='readiness'),
     path('admin/', admin.site.urls), path('', website, name='website'), path('workspace/', dashboard_page, name='workspace'),
     path('employees/', employee_directory_page, name='employees-page'), path('attendance/', attendance_page, name='attendance-page'), path('clock/', clock_page, name='clock-page'),
-    path('clock/login/', clock_login, name='clock-login'), path('clock/action/', clock_action, name='clock-action'), path('login/', login_page, name='login'),
+    path('clock/login/', clock_login, name='clock-login'), path('signup/', signup, name='signup'), path('verify-email/<str:token>/', verify_email, name='verify-email'), path('clock/action/', clock_action, name='clock-action'), path('login/', login_page, name='login'),
     path('password-reset/', auth_views.PasswordResetView.as_view(template_name='registration/password_reset_form.html', email_template_name='registration/password_reset_email.html', subject_template_name='registration/password_reset_subject.txt', success_url='/password-reset/done/'), name='password_reset'),
     path('password-reset/done/', auth_views.PasswordResetDoneView.as_view(template_name='registration/password_reset_done.html'), name='password_reset_done'),
     path('password-reset/confirm/<uidb64>/<token>/', auth_views.PasswordResetConfirmView.as_view(template_name='registration/password_reset_confirm.html', success_url='/password-reset/complete/'), name='password_reset_confirm'),
