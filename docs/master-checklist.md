@@ -61,14 +61,14 @@
 - [x] Add an effective-dated Philippine payroll rule registry with source provenance (baseline registry; production rule verification remains required).
 - [x] Add migration-backed payroll calculation provenance hashes and snapshots.
 - [x] Separate base pay, premium pay and statutory/tax classifications so taxable/non-taxable treatment is explicit instead of inferred from broad buckets.
-- [ ] Implement holiday + rest-day + overtime + night-differential stacking using the applicable effective rule set.
+- [x] Implement holiday + rest-day + overtime + night-differential stacking using the applicable effective rule set.
 - [x] Implement explicit absence handling so an `ABSENT` attendance record reduces payroll rather than silently leaving full basic pay.
 - [x] Add monthly statutory reconciliation so semimonthly rounding differences are reconciled rather than simply divided across periods.
-- [ ] Add regional wage-rate hard gates for minimum-wage earners and effective-date validation.
+- [x] Add regional wage-rate hard gates for minimum-wage earners and effective-date validation.
 - [x] Add annual BIR reconciliation using only the appropriate approved/paid payroll records and explicit tax classifications.
-- [ ] Make 13th-month computation auditable against calendar-year basic salary actually earned.
+- [x] Make 13th-month computation auditable against calendar-year basic salary actually earned.
 - [x] Add a confidence preflight with `READY`, `REVIEW`, and `BLOCKED` outcomes and explainable exceptions.
-- [ ] Add regression scenarios for current SSS, PhilHealth, Pag-IBIG, BIR and DOLE/NWPC rules and maintain source/effective-date tests.
+- [x] Add regression scenarios for current SSS, PhilHealth, Pag-IBIG, BIR and DOLE/NWPC rules and maintain source/effective-date tests.
 - [x] Add maker/checker payroll segregation so processing, approval and payment are not automatically the same authority.
 - [x] Add payment-batch/disbursement workflow; bank files should be generated for upload to the customer's bank portal before any future automated bank integration.
 - [x] Add payroll period-level reconciliation for gross, deductions, employer cost, net pay and payment totals.
