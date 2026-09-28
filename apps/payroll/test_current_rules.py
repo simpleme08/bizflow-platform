@@ -27,6 +27,16 @@ class StatutoryRuleRegressionTests(TestCase):
         self.assertEqual(ee, Decimal('1750.00'))
         self.assertEqual(er, Decimal('3530.00'))
 
+    def test_pagibig_employee_and_employer_cap(self):
+        ee, er = PhilippinePayrollRules.pagibig(Decimal('10000'))
+        self.assertEqual(ee, Decimal('100.00'))
+        self.assertEqual(er, Decimal('100.00'))
+
+    def test_bir_2023_onwards_annual_table(self):
+        from apps.payroll.services import PhilippineWithholdingTax
+        self.assertEqual(PhilippineWithholdingTax.annual_tax(Decimal('250000')), Decimal('0.00'))
+        self.assertEqual(PhilippineWithholdingTax.annual_tax(Decimal('400000')), Decimal('22500.00'))
+
     def test_2025_philhealth_floor_and_ceiling(self):
         ee, er = PhilippinePayrollRules.philhealth(Decimal('5000'))
         self.assertEqual(ee, Decimal('250.00'))
