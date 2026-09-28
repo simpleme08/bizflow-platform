@@ -96,6 +96,14 @@ jobs:
           BIZFLOW_STORAGE_BUCKET: bizflow-ci
           BIZFLOW_STORAGE_ENDPOINT: https://storage.example.com
           BIZFLOW_STORAGE_REGION: ap-southeast-1
+          EMAIL_BACKEND: django.core.mail.backends.smtp.EmailBackend
+          EMAIL_HOST: smtp.example.com
+          EMAIL_PORT: '587'
+          EMAIL_HOST_USER: ci@example.com
+          EMAIL_HOST_PASSWORD: ci-password
+          EMAIL_USE_TLS: 'True'
+          EMAIL_USE_SSL: 'False'
+          DEFAULT_FROM_EMAIL: no-reply@example.com
         run: python manage.py check --deploy
       - name: Verify production cache connectivity
         env:
@@ -117,4 +125,12 @@ jobs:
           BIZFLOW_STORAGE_BUCKET: bizflow-ci
           BIZFLOW_STORAGE_ENDPOINT: https://storage.example.com
           BIZFLOW_STORAGE_REGION: ap-southeast-1
+          EMAIL_BACKEND: django.core.mail.backends.smtp.EmailBackend
+          EMAIL_HOST: smtp.example.com
+          EMAIL_PORT: '587'
+          EMAIL_HOST_USER: ci@example.com
+          EMAIL_HOST_PASSWORD: ci-password
+          EMAIL_USE_TLS: 'True'
+          EMAIL_USE_SSL: 'False'
+          DEFAULT_FROM_EMAIL: no-reply@example.com
         run: python manage.py shell -c "from django.core.cache import cache; cache.set('ci-production-cache-check', 'ok', 30); assert cache.get('ci-production-cache-check') == 'ok'"

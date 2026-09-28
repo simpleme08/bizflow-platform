@@ -71,20 +71,20 @@
 - [ ] Add regression scenarios for current SSS, PhilHealth, Pag-IBIG, BIR and DOLE/NWPC rules and maintain source/effective-date tests.
 - [x] Add maker/checker payroll segregation so processing, approval and payment are not automatically the same authority.
 - [ ] Add payment-batch/disbursement workflow; bank files should be generated for upload to the customer's bank portal before any future automated bank integration.
-- [ ] Add payroll period-level reconciliation for gross, deductions, employer cost, net pay and payment totals.
+- [x] Add payroll period-level reconciliation for gross, deductions, employer cost, net pay and payment totals.
 
 ### HR and employee lifecycle
 
-- [ ] Add configurable employee onboarding/offboarding checklists and required-document gates per organization.
-- [ ] Add employee document expiry notifications and configurable retention rules.
-- [ ] Add notifications/email delivery for approvals, payroll release, leave decisions and important HR events.
-- [ ] Add self-service password recovery/email verification for production onboarding.
+- [ ] Add configurable employee onboarding/offboarding checklists and required-document gates per organization.\n  - Onboarding workflow task templates and configurable required document types are now enforced by the completion API; offboarding still needs equivalent configurable gates.
+- [x] Add employee document expiry notifications and configurable retention rules.
+- [ ] Add notifications/email delivery for approvals, payroll release, leave decisions and important HR events.\n  - Transactional SMTP infrastructure and password-reset email are configured; event-specific notification delivery remains.
+- [ ] Add self-service password recovery/email verification for production onboarding.\n  - Password recovery is implemented; production email verification remains.
 
 ### Reporting and audit
 
-- [ ] Add exportable management reports with period filters and organization-specific reporting configuration.
-- [ ] Add audit-log search/filter/export and retention controls suitable for customer investigations.
-- [ ] Add operational exception dashboards for attendance, leave, payroll and billing.
+- [x] Add exportable management reports with period filters and organization-specific reporting configuration.
+- [x] Add audit-log search/filter/export and retention controls suitable for customer investigations.
+- [x] Add operational exception dashboards for attendance, leave, payroll and billing.
 
 ### SaaS productization
 
