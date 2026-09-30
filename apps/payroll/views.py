@@ -48,7 +48,9 @@ def my_payroll_api(request):
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
     membership = _membership(request, 'view_payroll')
     if membership is None:
-        return JsonResponse({'detail': 'No active organization membership found.'}, status=403)
+        membership = current_membership(request)
+        if membership is None or membership.role != membership.Role.EMPLOYEE:
+            return JsonResponse({'detail': 'No active organization membership found.'}, status=403)
     try:
         employee = request.user.employee_profile
     except AttributeError:
