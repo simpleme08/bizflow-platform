@@ -39,6 +39,14 @@ def _eligible(employee, start_date=None):
 def leave_page(request):
     if not request.user.is_authenticated:
         return redirect('login')
+    membership = current_membership(request)
+    if membership is None:
+        memberships = request.user.organization_memberships.filter(is_active=True, organization__is_active=True).select_related('organization')
+        if memberships.count() == 1:
+            membership = memberships.first()
+            request.session['active_organization_id'] = str(membership.organization_id)
+    if membership is None:
+        return redirect('organization-select')
     from apps.accounts.views import workspace_url_for_user
     return render(request, 'leave/leave.html', {'workspace_url': workspace_url_for_user(request)})
 
