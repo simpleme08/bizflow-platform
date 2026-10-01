@@ -202,6 +202,38 @@ class Command(BaseCommand):
                 },
             )
 
+        # Historical leave examples: approved and rejected requests plus the three pending requests above.
+        leave_examples = (
+            ("EMP-000001", date(2026, 8, 10), date(2026, 8, 11), LeaveApplication.Status.APPROVED, "Family vacation — approved demo history."),
+            ("EMP-000003", date(2026, 8, 24), date(2026, 8, 24), LeaveApplication.Status.REJECTED, "Personal appointment — rejected demo history."),
+        )
+        for employee_number, start, end, status, reason in leave_examples:
+            employee = Employee.objects.get(employee_number=employee_number)
+            application, _ = LeaveApplication.objects.update_or_create(
+                employee=employee,
+                leave_type=leave_type,
+                start_date=start,
+                end_date=end,
+                defaults={
+                    "total_days": Decimal((end - start).days + 1),
+                    "reason": reason,
+                    "status": status,
+                    "approver": hr_user,
+                    "approved_at": timezone.now(),
+                    "remarks": "Demo historical workflow record.",
+                },
+            )
+            if status == LeaveApplication.Status.APPROVED:
+                EmployeeLeaveBalance.objects.update_or_create(
+                    employee=employee,
+                    leave_type=leave_type,
+                    year=2026,
+                    defaults={
+                        "credits": leave_type.annual_credits,
+                        "used": Decimal((end - start).days + 1),
+                    },
+                )
+
         self.stdout.write(self.style.SUCCESS(
             "Complete inspection demo ready: organization, roles, employees, assignments, "
             f"{len(workdays)} historical workdays, leave balances/history, 3 paid payroll periods, "
