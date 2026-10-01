@@ -156,3 +156,18 @@ h1,h2,h3,h4,h5,h6{
   html{scroll-behavior:auto}
   .module-card,.dashboard-card,.stat-card,.floot-panel,.floot-stat,.btn,button{transition:none!important}
 }
+
+/* Bootstrap-compatible utility primitives used by the Floot-aligned module pages. */
+.alert{padding:11px 14px;border:1px solid var(--biz-line);border-radius:10px;background:#f8fafc;color:var(--biz-ink);font-size:.72rem}
+.alert-success{background:var(--biz-success-soft);border-color:#bfe8d3;color:#176b45}
+.alert-danger{background:var(--biz-danger-soft);border-color:#fecdd3;color:#9f1239}
+.alert-warning{background:var(--biz-warning-soft);border-color:#f4d58e;color:#8b5b13}
+.alert-info{background:var(--biz-accent-soft);border-color:#b9def4;color:#126dbb}
+.list-group{display:grid;gap:8px}
+.list-group-item{padding:11px 13px;border:1px solid var(--biz-line)!important;border-radius:11px!important;background:#fff;color:var(--biz-ink)}
+.btn-success{background:var(--biz-success)!important;border-color:var(--biz-success)!important;color:#fff!important}
+.btn-outline-danger{background:#fff!important;border:1px solid #f2a0ae!important;color:#a91436!important}
+.btn-xs{padding:5px 8px!important;font-size:.62rem!important}
+.btn-sm{padding:7px 11px!important;font-size:.68rem!important}
+.mt-2{margin-top:.5rem!important}.mb-2{margin-bottom:.5rem!important}.mb-1{margin-bottom:.25rem!important}
+.d-block{display:block!important}.px-0{padding-left:0!important;padding-right:0!important}
