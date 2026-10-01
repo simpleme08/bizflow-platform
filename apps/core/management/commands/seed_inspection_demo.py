@@ -21,7 +21,7 @@ class Command(BaseCommand):
         if not os.environ.get("BIZFLOW_DEMO_PASSWORD"):
             raise CommandError("Set BIZFLOW_DEMO_PASSWORD before running seed_inspection_demo.")
 
-        call_command("seed_demo")
+        # Inspection seeding is an explicit demo workflow. Always synchronize demo account passwords\n        # with the configured BIZFLOW_DEMO_PASSWORD so repeated runs cannot leave stale credentials.\n        previous_reset = os.environ.get("BIZFLOW_DEMO_RESET_PASSWORDS")\n        os.environ["BIZFLOW_DEMO_RESET_PASSWORDS"] = "true"\n        try:\n            call_command("seed_demo")\n        finally:\n            if previous_reset is None:\n                os.environ.pop("BIZFLOW_DEMO_RESET_PASSWORDS", None)\n            else:\n                os.environ["BIZFLOW_DEMO_RESET_PASSWORDS"] = previous_reset
 
         User = get_user_model()
         organization = Employee.objects.get(employee_number="EMP-000001").organization
