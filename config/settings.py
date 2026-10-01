@@ -9,7 +9,7 @@ from urllib.parse import unquote, urlparse
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 ENVIRONMENT = os.getenv('DJANGO_ENV', 'development').lower()
-DEBUG = os.getenv('DJANGO_DEBUG', 'False').lower() in ('1', 'true', 'yes')
+DEBUG = os.getenv('DJANGO_DEBUG', 'True' if ENVIRONMENT != 'production' else 'False').lower() in ('1', 'true', 'yes')
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', '')
 if not SECRET_KEY:
     if ENVIRONMENT == 'production':
