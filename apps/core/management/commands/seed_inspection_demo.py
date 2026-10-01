@@ -158,25 +158,43 @@ class Command(BaseCommand):
                 gross = half + overtime
                 statutory = Decimal("0.00")
                 net = gross - late - other - statutory
-                PayrollRecord.objects.update_or_create(
+                defaults = {
+                    "basic_pay": half,
+                    "overtime_pay": overtime,
+                    "gross_pay": gross,
+                    "late_deduction": late,
+                    "other_deductions": other,
+                    "net_pay": net,
+                    "status": status,
+                    "calculation_rule_version": "DEMO-2026",
+                    "calculation_snapshot": {
+                        "demo": True,
+                        "synthetic": True,
+                        "period": f"{start_date.isoformat()}:{end_date.isoformat()}",
+                    },
+                }
+                existing = PayrollRecord.objects.filter(
                     employee=employee,
                     payroll_period=period,
-                    defaults={
-                        "basic_pay": half,
-                        "overtime_pay": overtime,
-                        "gross_pay": gross,
-                        "late_deduction": late,
-                        "other_deductions": other,
-                        "net_pay": net,
-                        "status": status,
-                        "calculation_rule_version": "DEMO-2026",
-                        "calculation_snapshot": {
-                            "demo": True,
-                            "synthetic": True,
-                            "period": f"{start_date.isoformat()}:{end_date.isoformat()}",
-                        },
-                    },
-                )
+                ).first()
+                if existing is None:
+                    PayrollRecord.objects.create(
+                        employee=employee,
+                        payroll_period=period,
+                        **defaults,
+                    )
+                elif existing.status != PayrollRecord.Status.PAID or status != PayrollRecord.Status.PAID:
+                    # Draft/open records may be refreshed. Approved/paid records are
+                    # immutable financially; only lifecycle status may advance.
+                    if existing.status == PayrollRecord.Status.PAID:
+                        continue
+                    if status == PayrollRecord.Status.PAID:
+                        existing.status = PayrollRecord.Status.PAID
+                        existing.save(update_fields=["status"])
+                    else:
+                        for field, value in defaults.items():
+                            setattr(existing, field, value)
+                        existing.save()
 
         leave_type = LeaveType.objects.get(code="VL")
         pending_requests = (
