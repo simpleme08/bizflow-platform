@@ -1,7 +1,7 @@
 from django.core.exceptions import ValidationError
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
-from datetime import date
+from datetime import date, datetime
 from django.utils import timezone
 import json
 
@@ -505,6 +505,6 @@ def import_shift_assignments(request):
             for row_number, assignment, employee in prepared:
                 assignment.save()
                 record_audit(organization=membership.organization, actor=request.user, action='scheduling.bulk_assign_shift', entity=assignment, details={'source': uploaded.name, 'row': row_number, 'employee_number': employee.employee_number})
-    except (ValidationError, Exception) as error:
-        return JsonResponse({'detail': f'No assignments were imported because saving failed: {str(error)}'}, status=400)
+    except Exception:
+        return JsonResponse({'detail': 'No assignments were imported because saving failed. Check the workbook and try again.'}, status=400)
     return JsonResponse({'imported': len(prepared), 'source': uploaded.name, 'message': f'Successfully imported {len(prepared)} shift assignment(s).'})
