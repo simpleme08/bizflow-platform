@@ -31,7 +31,7 @@ def scheduling_page(request):
         return JsonResponse({'detail': 'Access denied. Requires scheduling permissions.'}, status=403)
     from django.shortcuts import render
     from apps.accounts.views import workspace_url_for_user
-    return render(request, 'scheduling/schedule.html', {'workspace_url': workspace_url_for_user(request.user)})
+    return render(request, 'scheduling/schedule.html', {'workspace_url': workspace_url_for_user(request.user), 'can_bulk_assign_shifts': _can_bulk_assign_shifts(membership)})
 
 
 def _tenant_shift_queryset(organization):
