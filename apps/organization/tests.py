@@ -38,6 +38,23 @@ class OrganizationMembershipTests(TestCase):
 		self.assertTrue(membership.has_permission('manage_payroll'))
 		self.assertFalse(membership.has_permission('manage_organization'))
 
+	def test_sme_role_is_limited_to_operations_and_reports(self):
+		membership = OrganizationMembership.objects.create(
+			organization=self.organization,
+			user=self.user,
+			role=OrganizationMembership.Role.SME,
+		)
+
+		self.assertTrue(membership.has_permission('view_employees'))
+		self.assertTrue(membership.has_permission('view_attendance'))
+		self.assertTrue(membership.has_permission('manage_attendance'))
+		self.assertTrue(membership.has_permission('view_reports'))
+		self.assertFalse(membership.has_permission('approve_leave'))
+		self.assertFalse(membership.has_permission('view_payroll'))
+		self.assertFalse(membership.has_permission('manage_payroll'))
+		self.assertFalse(membership.has_permission('approve_payroll'))
+		self.assertFalse(membership.has_permission('pay_payroll'))
+
 	def test_employee_role_is_limited_to_self_service(self):
 		membership = OrganizationMembership.objects.create(
 			organization=self.organization,
