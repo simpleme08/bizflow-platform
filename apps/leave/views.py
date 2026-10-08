@@ -47,6 +47,8 @@ def leave_page(request):
             request.session['active_organization_id'] = str(membership.organization_id)
     if membership is None:
         return redirect('organization-select')
+    if not membership.has_permission('approve_leave') and not membership.has_permission('submit_leave'):
+        return JsonResponse({'detail': 'Leave access is not available for this account.'}, status=403)
     from apps.accounts.views import workspace_url_for_user
     return render(request, 'leave/leave.html', {'workspace_url': workspace_url_for_user(request)})
 
