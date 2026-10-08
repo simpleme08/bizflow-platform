@@ -1,4 +1,4 @@
-# HR demo readiness — September 2026
+# HR demo readiness — October 2026
 
 This document is the practical gate for demonstrating BizFlow HRIS to an HR stakeholder. It is intentionally narrower than the production go-live checklist.
 
