@@ -100,3 +100,83 @@ class ShiftSchedulingTests(TestCase):
         other_employee = Employee.objects.create(employee_number='OTHER-001', user=User.objects.create_user(username='other', password='EmpPass123!'), organization=other_org, first_name='Other', last_name='Employee', is_active=True, status=Employee.Status.REGULAR)
         response = self.client.post('/api/scheduling/assign/', content_type='application/json', data={'employee_id': str(other_employee.id), 'shift_id': str(self.shift_day.id), 'start_date': '2026-09-01'})
         self.assertEqual(response.status_code, 400)
+
+
+class BulkShiftAssignmentImportTests(TestCase):
+    def setUp(self):
+        from io import BytesIO
+        from openpyxl import Workbook
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.BytesIO = BytesIO
+        self.Workbook = Workbook
+        self.SimpleUploadedFile = SimpleUploadedFile
+        self.organization = Organization.objects.create(slug='bulk-shifts', name='Bulk Shift Org')
+        self.user = User.objects.create_user(username='hr-bulk', password='TestPass123!')
+        OrganizationMembership.objects.create(user=self.user, organization=self.organization, role=OrganizationMembership.Role.HR)
+        self.employee = Employee.objects.create(
+            employee_number='EMP-BULK-01',
+            user=User.objects.create_user(username='bulk-employee'),
+            organization=self.organization,
+            first_name='Alex',
+            last_name='Worker',
+            is_active=True,
+            status=Employee.Status.REGULAR,
+        )
+        self.shift = ShiftTemplate.objects.create(name='Bulk Day Shift', start_time='08:00', end_time='17:00')
+
+    def workbook_upload(self, rows, filename='assignments.xlsx'):
+        workbook = self.Workbook()
+        sheet = workbook.active
+        sheet.append(['Employee Number', 'Shift Name', 'Start Date', 'End Date', 'Client Code', 'Site Name', 'Primary'])
+        for row in rows:
+            sheet.append(row)
+        buffer = self.BytesIO()
+        workbook.save(buffer)
+        return self.SimpleUploadedFile(filename, buffer.getvalue(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+    def test_hr_can_download_template_and_import_shift_assignments(self):
+        self.client.login(username='hr-bulk', password='TestPass123!')
+        template_response = self.client.get('/api/scheduling/assignment-template/')
+        self.assertEqual(template_response.status_code, 200)
+        self.assertIn('spreadsheetml', template_response['Content-Type'])
+        response = self.client.post('/api/scheduling/assignment-import/', {
+            'file': self.workbook_upload([['EMP-BULK-01', 'Bulk Day Shift', date(2026, 10, 12), None, None, None, 'TRUE']])
+        })
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()['imported'], 1)
+        assignment = EmployeeAssignment.objects.get(employee=self.employee)
+        self.assertEqual(assignment.shift_template, self.shift)
+        self.assertEqual(assignment.start_date, date(2026, 10, 12))
+        self.assertTrue(assignment.is_primary)
+
+    def test_sme_can_import_shift_assignments(self):
+        sme = User.objects.create_user(username='sme-bulk', password='TestPass123!')
+        OrganizationMembership.objects.create(user=sme, organization=self.organization, role=OrganizationMembership.Role.SME)
+        self.client.login(username='sme-bulk', password='TestPass123!')
+        response = self.client.post('/api/scheduling/assignment-import/', {
+            'file': self.workbook_upload([['EMP-BULK-01', 'Bulk Day Shift', date(2026, 10, 13), None, None, None, 'FALSE']])
+        })
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()['imported'], 1)
+
+    def test_invalid_row_prevents_all_assignments_from_being_saved(self):
+        self.client.login(username='hr-bulk', password='TestPass123!')
+        response = self.client.post('/api/scheduling/assignment-import/', {
+            'file': self.workbook_upload([
+                ['EMP-BULK-01', 'Bulk Day Shift', date(2026, 10, 14), None, None, None, 'TRUE'],
+                ['UNKNOWN-EMP', 'Bulk Day Shift', date(2026, 10, 15), None, None, None, 'FALSE'],
+            ])
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(len(response.json()['errors']), 1)
+        self.assertFalse(EmployeeAssignment.objects.filter(employee=self.employee).exists())
+
+    def test_employee_cannot_import_shift_assignments(self):
+        employee_user = User.objects.create_user(username='employee-bulk', password='TestPass123!')
+        OrganizationMembership.objects.create(user=employee_user, organization=self.organization, role=OrganizationMembership.Role.EMPLOYEE)
+        self.client.login(username='employee-bulk', password='TestPass123!')
+        response = self.client.post('/api/scheduling/assignment-import/', {
+            'file': self.workbook_upload([['EMP-BULK-01', 'Bulk Day Shift', date(2026, 10, 16), None, None, None, 'FALSE']])
+        })
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(EmployeeAssignment.objects.filter(employee=self.employee).exists())
