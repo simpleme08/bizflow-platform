@@ -80,6 +80,8 @@ def my_leave_api(request):
         end_date = date.fromisoformat(payload['end_date'])
         if end_date < start_date:
             raise ValueError
+        if start_date.year != end_date.year:
+            return JsonResponse({'detail': 'Leave requests cannot cross calendar years; submit separate requests for each year.'}, status=400)
         if not _eligible(employee, start_date) or (employee.separation_date and end_date >= employee.separation_date):
             return JsonResponse({'detail': 'Leave dates must fall within the employee active employment period.'}, status=409)
         total_days = Decimal((end_date - start_date).days + 1)
@@ -117,7 +119,11 @@ def leave_api(request):
         leave_type = LeaveType.objects.get(id=payload['leave_type_id'], is_active=True)
         start_date = date.fromisoformat(payload['start_date'])
         end_date = date.fromisoformat(payload['end_date'])
-        if end_date < start_date or not _eligible(employee, start_date) or (employee.separation_date and end_date >= employee.separation_date):
+        if end_date < start_date:
+            raise ValueError
+        if start_date.year != end_date.year:
+            return JsonResponse({'detail': 'Leave requests cannot cross calendar years; submit separate requests for each year.'}, status=400)
+        if not _eligible(employee, start_date) or (employee.separation_date and end_date >= employee.separation_date):
             raise ValueError
         total_days = Decimal((end_date - start_date).days + 1)
         balance, _ = EmployeeLeaveBalance.objects.get_or_create(employee=employee, leave_type=leave_type, year=start_date.year, defaults={'credits': leave_type.annual_credits})
