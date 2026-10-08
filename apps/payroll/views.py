@@ -25,6 +25,9 @@ def _membership(request, permission=None):
 def payroll_page(request):
     if not request.user.is_authenticated:
         return redirect('login')
+    membership = current_membership(request)
+    if membership is None or not membership.has_permission('view_payroll'):
+        return JsonResponse({'detail': 'Payroll access is not available for this account.'}, status=403)
     from apps.accounts.views import workspace_url_for_user
     return render(request, 'payroll/payroll.html', {'workspace_url': workspace_url_for_user(request)})
 
