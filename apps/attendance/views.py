@@ -185,6 +185,12 @@ def record_attendance(request):
     except Employee.DoesNotExist: return JsonResponse({'detail':'Employee was not found in your organization.'},status=404)
     assignment=employee.assignments.filter(start_date__lte=attendance_date).filter(Q(end_date__isnull=True)|Q(end_date__gte=attendance_date)).order_by('-is_primary','-start_date').select_related('shift_template').first()
     if assignment is None: return JsonResponse({'detail':'Employee has no active assignment for this date.'},status=400)
+    status = payload.get('status', AttendanceRecord.Status.PRESENT)
+    if status not in {choice.value for choice in AttendanceRecord.Status}:
+        return JsonResponse({'detail':'Invalid attendance status.'},status=400)
+    remarks = payload.get('remarks', '')
+    if not isinstance(remarks, str):
+        return JsonResponse({'detail':'remarks must be text.'},status=400)
     def parse_datetime(field_name):
         value=payload.get(field_name)
         if not value: return None
@@ -193,7 +199,7 @@ def record_attendance(request):
     except (TypeError,ValueError): return JsonResponse({'detail':'time_in and time_out must be ISO datetime values.'},status=400)
     if time_in and timezone.localtime(time_in).date()!=attendance_date: return JsonResponse({'detail':'time_in must use the attendance date in Asia/Manila.'},status=400)
     if time_in and time_out and time_out<=time_in: return JsonResponse({'detail':'time_out must be later than time_in.'},status=400)
-    record,_=AttendanceRecord.objects.update_or_create(employee=employee,attendance_date=attendance_date,defaults={'assignment':assignment,'clock_shift':assignment.shift_template,'clock_in_mode':AttendanceRecord.ClockInMode.SCHEDULED,'time_in':time_in,'time_out':time_out,'status':payload.get('status',AttendanceRecord.Status.PRESENT),'remarks':payload.get('remarks','')}); AttendanceCalculator.update_record(record); record_audit(organization=membership.organization,actor=request.user,action='attendance.recorded',entity=record,details={'employee':record.employee.employee_number,'attendance_date':attendance_date.isoformat()}); return JsonResponse({'id':str(record.id),'employee_id':str(employee.id),'attendance_date':attendance_date.isoformat(),'status':record.status,'late_minutes':record.late_minutes,'undertime_minutes':record.undertime_minutes,'overtime_minutes':record.overtime_minutes},status=201)
+    record,_=AttendanceRecord.objects.update_or_create(employee=employee,attendance_date=attendance_date,defaults={'assignment':assignment,'clock_shift':assignment.shift_template,'clock_in_mode':AttendanceRecord.ClockInMode.SCHEDULED,'time_in':time_in,'time_out':time_out,'status':status,'remarks':remarks}); AttendanceCalculator.update_record(record); record_audit(organization=membership.organization,actor=request.user,action='attendance.recorded',entity=record,details={'employee':record.employee.employee_number,'attendance_date':attendance_date.isoformat()}); return JsonResponse({'id':str(record.id),'employee_id':str(employee.id),'attendance_date':attendance_date.isoformat(),'status':record.status,'late_minutes':record.late_minutes,'undertime_minutes':record.undertime_minutes,'overtime_minutes':record.overtime_minutes},status=201)
 
 
 @require_http_methods(['GET'])
