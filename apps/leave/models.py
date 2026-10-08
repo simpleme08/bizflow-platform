@@ -93,10 +93,16 @@ class LeaveApplication(BaseModel):
 			self.approved_at = application.approved_at
 
 	def reject(self, approver, remarks=''):
-		if self.status != self.Status.PENDING:
-			raise ValidationError('Only pending leave applications can be rejected.')
-		self.status = self.Status.REJECTED
-		self.approver = approver
-		self.remarks = remarks
-		self.approved_at = timezone.now()
-		self.save(update_fields=('status', 'approver', 'remarks', 'approved_at', 'updated_at'))
+		with transaction.atomic():
+			application = LeaveApplication.objects.select_for_update().get(pk=self.pk)
+			if application.status != self.Status.PENDING:
+				raise ValidationError('Only pending leave applications can be rejected.')
+			application.status = self.Status.REJECTED
+			application.approver = approver
+			application.remarks = remarks
+			application.approved_at = timezone.now()
+			application.save(update_fields=('status', 'approver', 'remarks', 'approved_at', 'updated_at'))
+			self.status = application.status
+			self.approver = application.approver
+			self.remarks = application.remarks
+			self.approved_at = application.approved_at
