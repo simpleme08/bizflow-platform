@@ -25,7 +25,7 @@ The demo seed is designed to start payroll in a **DRAFT/open review state**, so 
 - [x] Recruiting/performance/benefits/offboarding foundations
 - [x] HR Operations: policies, announcements, approvals and timesheets
 - [x] Reports and audit visibility
-- [x] Demo seed command with representative data
+- [x] Demo seed command with representative data, including the SME role
 
 ## Presenter script
 
