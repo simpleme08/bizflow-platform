@@ -63,7 +63,6 @@ def onboarding_api(request):
 
 
 @require_http_methods(['PATCH'])
-@require_http_methods(['PATCH'])
 def onboarding_status_update(request, onboarding_id):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
