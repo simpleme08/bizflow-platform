@@ -196,3 +196,32 @@ class DashboardViewTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()['detail'], 'Invalid attendance status.')
         self.assertFalse(AttendanceRecord.objects.filter(employee=self.assignment.employee, attendance_date=date(2026, 8, 10)).exists())
+
+    def test_ceo_sme_and_hr_can_view_attendance_logs_and_protected_photos(self):
+        today = timezone.localdate()
+        record = AttendanceRecord.objects.create(
+            employee=self.assignment.employee,
+            assignment=self.assignment,
+            attendance_date=today,
+            time_in=timezone.now(),
+            status=AttendanceRecord.Status.PRESENT,
+        )
+        record.clock_in_photo.save('attendance-proof.jpg', self.photo(), save=True)
+        for role in (OrganizationMembership.Role.CEO, OrganizationMembership.Role.SME, OrganizationMembership.Role.HR):
+            with self.subTest(role=role):
+                user = get_user_model().objects.create_user(username=f'viewer-{role.lower()}', password='test-password')
+                OrganizationMembership.objects.create(
+                    organization=self.assignment.employee.organization,
+                    user=user,
+                    role=role,
+                )
+                client = self.client_class()
+                self.assertTrue(client.login(username=user.username, password='test-password'))
+                response = client.get('/api/attendance/logs/')
+                self.assertEqual(response.status_code, 200)
+                rows = response.json()['records']
+                row = next(item for item in rows if item['id'] == str(record.id))
+                self.assertTrue(row['clock_in_photo_url'])
+                photo_response = client.get(row['clock_in_photo_url'])
+                self.assertEqual(photo_response.status_code, 200)
+                self.assertEqual(photo_response['Cache-Control'], 'private, no-store')
