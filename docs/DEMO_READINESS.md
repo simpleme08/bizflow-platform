@@ -4,7 +4,7 @@ This document is the practical gate for demonstrating BizFlow HRIS to an HR stak
 
 ## Demo status
 
-**Current state: DEMO-READY WITH KNOWN GAPS**
+**Current state: DEMO-READY — final Thursday validation gate**
 
 The application has the core HRIS demonstration path: organization/roles, employee records and lifecycle, scheduling/attendance, leave, payroll processing with confidence preflight and maker/checker controls, payslips/reporting, employee self-service, onboarding, talent and HR operations.
 
