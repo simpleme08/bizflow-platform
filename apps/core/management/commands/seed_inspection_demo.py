@@ -253,7 +253,7 @@ class Command(BaseCommand):
                 )
 
         self.stdout.write(self.style.SUCCESS(
-            "Complete inspection demo ready: organization, roles, employees, assignments, "
+            "Complete inspection demo ready: organization, SME/HR/manager/employee roles, employees, assignments, "
             f"{len(workdays)} historical workdays, leave balances/history, 3 paid payroll periods, "
             "and the current open payroll period."
         ))
