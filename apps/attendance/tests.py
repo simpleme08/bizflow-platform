@@ -189,3 +189,10 @@ class DashboardViewTests(TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json()['late_minutes'], 20)
         self.assertEqual(response.json()['overtime_minutes'], 60)
+
+    def test_record_attendance_rejects_invalid_status_without_saving(self):
+        self.client.login(username='manager', password='test-password')
+        response = self.client.post('/api/attendance/', data={'employee_id': str(self.assignment.employee_id), 'attendance_date': '2026-08-10', 'status': 'PAYROLL_APPROVED'}, content_type='application/json')
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()['detail'], 'Invalid attendance status.')
+        self.assertFalse(AttendanceRecord.objects.filter(employee=self.assignment.employee, attendance_date=date(2026, 8, 10)).exists())
