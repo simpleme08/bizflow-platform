@@ -23,6 +23,7 @@
 {% endif %}
 </main><script>
 const bulkForm = document.getElementById('bulk-assignment-form');
+if (bulkForm) {
 bulkForm.addEventListener('submit', async event => {
  event.preventDefault();
  const status = document.getElementById('bulk-assignment-status');
@@ -47,6 +48,7 @@ bulkForm.addEventListener('submit', async event => {
   showAlert(result.message || 'Shift assignments imported successfully.', 'success');
  } catch (error) { status.textContent = 'Upload failed. Check your connection and try again.'; }
 });
+}
 const API_BASE = '/api/scheduling';
 let allEmployees = [];
 let allShifts = [];
