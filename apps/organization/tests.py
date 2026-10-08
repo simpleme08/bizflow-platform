@@ -65,6 +65,7 @@ class OrganizationMembershipTests(TestCase):
 
 		self.assertEqual(self.client.get('/workspace/').status_code, 200)
 		self.assertEqual(self.client.get('/scheduling/').status_code, 200)
+\t\tself.assertEqual(self.client.get('/attendance/').status_code, 200)
 		self.assertEqual(self.client.get('/reports/').status_code, 200)
 		self.assertEqual(self.client.get('/payroll/').status_code, 403)
 		self.assertEqual(self.client.get('/leave/').status_code, 403)
