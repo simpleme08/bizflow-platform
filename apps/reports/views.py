@@ -13,6 +13,8 @@ from apps.payroll.models import PayrollRecord, PayrollPeriod
 def reports_page(request):
     if not request.user.is_authenticated:
         return redirect('login')
+    if membership is None or not membership.has_permission('view_reports'):
+        return JsonResponse({'detail': 'Reports access is not available for this account.'}, status=403)
     from apps.accounts.views import workspace_url_for_user
     return render(request, 'reports/reports.html', {'workspace_url': workspace_url_for_user(request.user)})
 
