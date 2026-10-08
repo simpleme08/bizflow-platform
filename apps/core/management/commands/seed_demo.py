@@ -73,6 +73,7 @@ class Command(BaseCommand):
         accounts = (
             ('demo_superuser', OrganizationMembership.Role.SUPER_USER, 'System', 'Administrator'),
             ('demo_hr', OrganizationMembership.Role.HR, 'Helen', 'Rivera'),
+            ('demo_sme', OrganizationMembership.Role.SME, 'Ramon', 'Mendoza'),
             ('demo_manager', OrganizationMembership.Role.MANAGER, 'Miguel', 'Torres'),
             ('demo_employee', OrganizationMembership.Role.EMPLOYEE, 'Emma', 'Reyes'),
         )
