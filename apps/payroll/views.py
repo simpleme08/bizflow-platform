@@ -36,7 +36,16 @@ def payroll_api(request):
     if membership is None:
         return JsonResponse({'detail': 'No active organization membership found.'}, status=403)
     records = PayrollRecord.objects.filter(employee__organization=membership.organization, payroll_period__organization=membership.organization).select_related('employee', 'payroll_period')
-    return JsonResponse({'records': [{
+    periods = PayrollPeriod.objects.filter(organization=membership.organization).order_by('-end_date', '-start_date')
+    return JsonResponse({'permissions': {
+        'manage_payroll': membership.has_permission('manage_payroll'),
+        'approve_payroll': membership.has_permission('approve_payroll'),
+        'pay_payroll': membership.has_permission('pay_payroll'),
+    }, 'periods': [{
+        'id': str(period.id), 'name': period.name, 'start_date': period.start_date.isoformat(),
+        'end_date': period.end_date.isoformat(), 'status': period.status,
+        'confidence': period.confidence_status,
+    } for period in periods], 'records': [{
         'id': str(record.id), 'employee': f'{record.employee.first_name} {record.employee.last_name}', 'employee_number': record.employee.employee_number,
         'period': record.payroll_period.name, 'basic_pay': str(record.basic_pay), 'overtime_pay': str(record.overtime_pay),
         'gross_pay': str(record.gross_pay), 'total_deductions': str(record.total_deductions), 'employer_contributions': str(record.employer_contributions), 'net_pay': str(record.net_pay), 'status': record.status,
