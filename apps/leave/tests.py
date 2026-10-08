@@ -1,4 +1,5 @@
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
 from django.test import TestCase, Client
 
 from apps.employees.models import Employee
@@ -36,3 +37,24 @@ class LeaveLifecycleIntegrationTests(TestCase):
         response = self.client.post('/api/leave/me/', data={'leave_type_id': str(self.leave_type.id), 'start_date': '2026-09-15', 'end_date': '2026-09-16', 'reason': 'Rest'}, content_type='application/json')
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json()['status'], LeaveApplication.Status.PENDING)
+
+    def test_leave_request_cannot_cross_calendar_years(self):
+        response = self.client.post('/api/leave/me/', data={'leave_type_id': str(self.leave_type.id), 'start_date': '2026-12-31', 'end_date': '2027-01-02', 'reason': 'New year'}, content_type='application/json')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('cannot cross calendar years', response.json()['detail'])
+        self.assertFalse(LeaveApplication.objects.filter(employee=self.employee).exists())
+
+    def test_approved_leave_cannot_be_approved_twice(self):
+        application = LeaveApplication.objects.create(
+            employee=self.employee,
+            leave_type=self.leave_type,
+            start_date='2026-09-15',
+            end_date='2026-09-16',
+            total_days=2,
+            reason='Rest',
+        )
+        application.approve(self.user)
+        with self.assertRaises(ValidationError):
+            application.approve(self.user)
+        balance = EmployeeLeaveBalance.objects.get(employee=self.employee, leave_type=self.leave_type, year=2026)
+        self.assertEqual(balance.used, 2)
