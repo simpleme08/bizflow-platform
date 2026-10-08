@@ -255,3 +255,36 @@ def import_timekeeping(request):
                 record,_=AttendanceRecord.objects.update_or_create(employee=employee,attendance_date=attendance_day,defaults={'assignment':assignment,'clock_shift':assignment.shift_template,'clock_in_mode':AttendanceRecord.ClockInMode.SCHEDULED,'time_in':time_in,'time_out':time_out,'status':status,'remarks':remarks}); record.full_clean(); AttendanceCalculator.update_record(record); imported+=1; record_audit(organization=membership.organization,actor=request.user,action='attendance.imported',entity=record,details={'source':uploaded.name,'row_count':len(prepared)})
     except ValueError as error: return JsonResponse({'detail':f'No records were imported: {error}'},status=400)
     return JsonResponse({'imported':imported,'updated_or_created':imported,'source':uploaded.name})
+
+
+@require_http_methods(['GET'])
+def attendance_logs(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
+    membership = current_membership(request)
+    if membership is None or not membership.has_permission('view_attendance'):
+        return JsonResponse({'detail': 'Attendance log access is not available for this account.'}, status=403)
+    records = (
+        AttendanceRecord.objects
+        .filter(employee__organization=membership.organization)
+        .select_related('employee')
+        .order_by('-attendance_date', '-time_in', '-created_at')[:100]
+    )
+    rows = []
+    for record in records:
+        rows.append({
+            'id': str(record.id),
+            'employee_name': f'{record.employee.first_name} {record.employee.last_name}',
+            'employee_number': record.employee.employee_number,
+            'attendance_date': record.attendance_date.isoformat(),
+            'time_in': timezone.localtime(record.time_in).isoformat() if record.time_in else None,
+            'time_out': timezone.localtime(record.time_out).isoformat() if record.time_out else None,
+            'status': record.status,
+            'late_minutes': record.late_minutes,
+            'undertime_minutes': record.undertime_minutes,
+            'overtime_minutes': record.overtime_minutes,
+            'remarks': record.remarks,
+            'clock_in_photo_url': f'/api/attendance/{record.id}/proof/clock_in/' if record.clock_in_photo else None,
+            'clock_out_photo_url': f'/api/attendance/{record.id}/proof/clock_out/' if record.clock_out_photo else None,
+        })
+    return JsonResponse({'records': rows, 'count': len(rows)})
