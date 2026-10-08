@@ -65,6 +65,7 @@ Before the meeting:
 - seed data only with BIZFLOW_DEMO_PASSWORD supplied outside source control;
 - verify the five core demo roles: HR, SME, Manager, Employee and Super User;
 - verify the HR account can complete the payroll walkthrough;
+- verify the SME account can open People, Attendance, Scheduling and Reports and is denied payroll/leave approval;
 - verify the checker/payment authority is a different user from the payroll processor;
 - verify the employee account cannot see another employee's payroll or profile;
 - run python manage.py check;
