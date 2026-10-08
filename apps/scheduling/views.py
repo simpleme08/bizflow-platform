@@ -462,7 +462,7 @@ def import_shift_assignments(request):
             else:
                 raise ValueError('Primary must be TRUE or FALSE.')
             employee_number = employee_number.strip()
-            key = (employee_number.casefold(), start_day.isoformat())
+            key = (employee_number.casefold(), shift_name.strip().casefold(), start_day.isoformat())
             if key in seen:
                 raise ValueError('Duplicate employee/start-date row in this workbook.')
             seen.add(key)
