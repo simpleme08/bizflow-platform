@@ -40,8 +40,8 @@ The demo seed is designed to start payroll in a **DRAFT/open review state**, so 
 9. Switch to the SME account and show the role-limited workspace: People, Attendance, Shift Scheduling, and Reports. Confirm payroll and leave approval are not exposed to the SME role.
 10. Show Onboarding, Talent and HR Operations as the broader HR platform story.
 11. Close with the product boundary: Philippine payroll rules require current effective-date verification and qualified review before real payroll use.
-9. Show Onboarding, Talent and HR Operations as the broader HR platform story.
-10. Close with the product boundary: Philippine payroll rules require current effective-date verification and qualified review before real payroll use.
+11. Show Onboarding, Talent and HR Operations as the broader HR platform story.
+12. Close with the product boundary: Philippine payroll rules require current effective-date verification and qualified review before real payroll use.
 
 ## Do not claim in the demo
 
