@@ -86,6 +86,20 @@ class ShiftSchedulingTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(EmployeeAssignment.objects.filter(employee=self.employee).count(), 1)
 
+    def test_assign_shift_rejects_string_for_primary_flag(self):
+        response = self.client.post(
+            '/api/scheduling/assign/',
+            content_type='application/json',
+            data={
+                'employee_id': str(self.employee.id),
+                'shift_id': str(self.shift_day.id),
+                'start_date': '2026-10-01',
+                'is_primary': 'false',
+            },
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(EmployeeAssignment.objects.filter(employee=self.employee).exists())
+
     def test_cross_organization_shift_cannot_be_assigned(self):
         other_org = Organization.objects.create(slug='other-org', name='Other Organization')
         other_shift = ShiftTemplate.objects.create(organization=other_org, name='Other Tenant Shift', start_time='09:00', end_time='18:00')
