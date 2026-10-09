@@ -84,7 +84,7 @@ class ShiftSchedulingTests(TestCase):
             },
         )
         self.assertEqual(response.status_code, 400)
-        self.assertTrue(EmployeeAssignment.objects.filter(employee=self.employee).count(), 1)
+        self.assertEqual(EmployeeAssignment.objects.filter(employee=self.employee).count(), 1)
 
     def test_cross_organization_shift_cannot_be_assigned(self):
         other_org = Organization.objects.create(slug='other-org', name='Other Organization')
