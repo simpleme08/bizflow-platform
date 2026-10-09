@@ -119,6 +119,8 @@ def assign_shift(request):
     assignment_id = data.get('assignment_id')
     if not all([employee_id, shift_id, start_date]):
         return JsonResponse({'detail': 'Missing required fields.'}, status=400)
+    if not isinstance(is_primary, bool):
+        return JsonResponse({'detail': 'is_primary must be a boolean.'}, status=400)
     try:
         employee = Employee.objects.get(id=employee_id, organization=membership.organization)
         if employee.status in INELIGIBLE_ASSIGNMENT_STATUSES or not employee.is_active:
