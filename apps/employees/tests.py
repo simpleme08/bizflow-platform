@@ -4,7 +4,7 @@ from django.test import TestCase
 from apps.organization.models import Organization, OrganizationMembership
 from apps.workforce.models import ShiftTemplate
 
-from .models import Employee, EmployeeAssignment, EmploymentHistory
+from .models import Employee, EmployeeAssignment, EmployeeDocument, EmployeeAssignment, EmploymentHistory
 
 
 class EmployeeDirectoryTests(TestCase):
@@ -30,6 +30,25 @@ class EmployeeDirectoryTests(TestCase):
         response = self.client.get(f'/api/employees/{self.employee.id}/')
         self.assertEqual(response.status_code, 200)
         self.assertIn('personal_email', response.json()['employee'])
+
+    def test_general_directory_viewer_cannot_see_sensitive_employee_documents_or_history(self):
+        EmployeeDocument.objects.create(
+            employee=self.employee,
+            document_type='Government ID',
+            name='Private identity document',
+            status='ACTIVE',
+        )
+        EmploymentHistory.objects.create(
+            employee=self.employee,
+            status=EmploymentHistory.Status.REGULAR,
+            effective_date='2026-01-01',
+            reason='Sensitive HR reason',
+        )
+        self.client.login(username='manager', password='password')
+        response = self.client.get(f'/api/employees/{self.employee.id}/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['documents'], [])
+        self.assertEqual(response.json()['history'], [])
 
     def test_manager_cannot_change_lifecycle(self):
         self.client.login(username='manager', password='password')
