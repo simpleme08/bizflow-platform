@@ -17,10 +17,8 @@ from apps.payroll.models import EmployeeSalary, PayrollPeriod, PayrollRecord
 class Command(BaseCommand):
     help = "Seed a complete September 2026 inspection dataset on top of seed_demo."
 
-    def handle(self, *args, **options):
-        if not os.environ.get("BIZFLOW_DEMO_PASSWORD"):
-            raise CommandError("Set BIZFLOW_DEMO_PASSWORD before running seed_inspection_demo.")
-
+    @staticmethod
+    def _seed_demo_with_synced_passwords():
         # Inspection seeding is an explicit demo workflow. Always synchronize demo account passwords
         # with the configured BIZFLOW_DEMO_PASSWORD so repeated runs cannot leave stale credentials.
         previous_reset = os.environ.get("BIZFLOW_DEMO_RESET_PASSWORDS")
@@ -32,6 +30,12 @@ class Command(BaseCommand):
                 os.environ.pop("BIZFLOW_DEMO_RESET_PASSWORDS", None)
             else:
                 os.environ["BIZFLOW_DEMO_RESET_PASSWORDS"] = previous_reset
+
+    def handle(self, *args, **options):
+        if not os.environ.get("BIZFLOW_DEMO_PASSWORD"):
+            raise CommandError("Set BIZFLOW_DEMO_PASSWORD before running seed_inspection_demo.")
+
+        self._seed_demo_with_synced_passwords()
 
         User = get_user_model()
         organization = Employee.objects.get(employee_number="EMP-000001").organization
