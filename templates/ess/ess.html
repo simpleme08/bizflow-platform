@@ -25,11 +25,7 @@
 </style>
 </head>
 <body>
-<header class="floot-topbar"><div class="floot-topbar-inner">
-<a class="floot-brand" href="/ess/"><span class="floot-brand-mark"><i class="fas fa-users"></i></span>BizFlow</a>
-<nav style="display:flex;gap:4px;margin-left:12px"><a href="/workspace/" style="color:#aebed1;text-decoration:none;padding:9px 11px;font-size:.72rem;font-weight:800">Workspace</a><a href="/leave/" style="color:#aebed1;text-decoration:none;padding:9px 11px;font-size:.72rem;font-weight:800">Leave</a><a href="/payroll/" style="color:#aebed1;text-decoration:none;padding:9px 11px;font-size:.72rem;font-weight:800">Payroll</a></nav>
-<span style="flex:1"></span><div class="ess-topbar-actions"><a href="/employee-hub/" style="color:#dce8f5;font-size:.7rem;font-weight:800;text-decoration:none">My HR Hub</a><form action="/logout/" method="post" style="margin:0">{% csrf_token %}<button type="submit" style="background:none;border:0;color:#dce8f5;font-size:.7rem;font-weight:800;cursor:pointer">Sign out</button></form></div>
-</div></header>
+{% include "partials/app_nav.html" with active_page="ess" %}
 <main class="floot-shell">
 <div class="floot-back"><i class="fas fa-user-circle"></i> Employee self-service</div>
 <section class="floot-hero"><div><div class="floot-eyebrow">My workspace</div><h1>Employee Self-Service</h1><p class="page-subtitle">Your profile, attendance, leave, and payroll information in one place.</p></div><span class="floot-status success"><i class="fas fa-user-check"></i> ESS Portal</span></section>
