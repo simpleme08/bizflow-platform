@@ -13,7 +13,7 @@
 </style>
 </head>
 <body>
-<header class="topbar"><div class="topbar-inner"><a class="brand" href="/workspace/"><span class="mark"><i class="fas fa-users"></i></span>BizFlow</a><nav class="nav"><a href="/workspace/">Workspace</a><a href="/employees/">People</a><a href="/attendance/">Attendance</a><a href="/leave/" class="active">Leave</a><a href="/payroll/">Payroll</a><a href="/reports/">Reports</a></nav><div class="spacer"></div><a class="back" href="/workspace/"><i class="fas fa-arrow-left"></i> Workspace</a><span class="user" id="user">Loading…</span></div></header>
+{% include "partials/app_nav.html" with active_page="leave" %}
 <main class="shell">
 <section class="hero"><div><span class="eyebrow">People operations</span><h1 id="title">Leave</h1><p class="subtitle" id="subtitle">Manage leave requests, balances, and approvals from one focused workspace.</p></div><span class="role"><i class="fas fa-shield-alt"></i><span id="role">Loading…</span></span></section>
 <section class="stats"><article class="stat"><span class="stat-label">Total requests</span><b class="stat-value" id="total">—</b></article><article class="stat"><span class="stat-label">Pending</span><b class="stat-value" id="pending">—</b></article><article class="stat"><span class="stat-label">Approved</span><b class="stat-value" id="approved">—</b></article><article class="stat"><span class="stat-label" id="fourthLabel">Available balance</span><b class="stat-value" id="fourth">—</b></article></section>
