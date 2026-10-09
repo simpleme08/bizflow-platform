@@ -136,6 +136,12 @@ class DashboardViewTests(TestCase):
         shift = ShiftTemplate.objects.create(name='Day Shift', start_time=time(8), end_time=time(17))
         self.assignment = EmployeeAssignment.objects.create(employee=employee, shift_template=shift, start_date=date(2026, 1, 1), is_primary=True)
 
+    def photo(self, name='attendance-proof.jpg'):
+        image = Image.new('RGB', (20, 20), 'white')
+        buffer = BytesIO()
+        image.save(buffer, format='JPEG')
+        return SimpleUploadedFile(name, buffer.getvalue(), content_type='image/jpeg')
+
     def test_dashboard_requires_login(self):
         response = self.client.get('/api/dashboard/')
         self.assertEqual(response.status_code, 401)
