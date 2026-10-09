@@ -57,6 +57,9 @@
       const role = document.getElementById('userRole');
       if (role && (data.role || data.membership_role)) role.textContent = data.role || data.membership_role;
     })
-    .catch(function () { userLabel.textContent = 'Account'; });
+    .catch(function () {
+      userLabel.textContent = 'Account';
+      document.querySelectorAll('[data-permission]').forEach(function (link) { link.hidden = true; });
+    });
 })();
 </script>
