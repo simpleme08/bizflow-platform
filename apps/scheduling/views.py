@@ -59,7 +59,7 @@ def get_clients(request):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
     membership = _membership_for(request)
-    if membership is None:
+    if membership is None or not membership.has_permission('manage_attendance'):
         return JsonResponse({'detail': 'Access denied.'}, status=403)
     clients = Client.objects.filter(organization=membership.organization, is_active=True).prefetch_related('sites').order_by('name')
     return JsonResponse({'clients': [{'id': str(client.id), 'name': client.name, 'code': client.code, 'sites': [{'id': str(site.id), 'name': site.name} for site in client.sites.filter(is_active=True).order_by('name')]} for client in clients]})
@@ -365,6 +365,7 @@ def _can_bulk_assign_shifts(membership):
     return membership and membership.has_permission('manage_attendance') and membership.role in (
         OrganizationMembership.Role.HR,
         OrganizationMembership.Role.SME,
+        OrganizationMembership.Role.ADMIN,
         OrganizationMembership.Role.OWNER,
         OrganizationMembership.Role.SUPER_USER,
     )
