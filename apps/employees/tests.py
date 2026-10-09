@@ -4,7 +4,7 @@ from django.test import TestCase
 from apps.organization.models import Organization, OrganizationMembership
 from apps.workforce.models import ShiftTemplate
 
-from .models import Employee, EmployeeAssignment, EmployeeDocument, EmployeeAssignment, EmploymentHistory
+from .models import Employee, EmployeeAssignment, EmployeeDocument, EmploymentHistory
 
 
 class EmployeeDirectoryTests(TestCase):
