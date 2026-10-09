@@ -163,11 +163,15 @@ def apply_payroll_adjustments(request, record_id):
 def payslip(request, record_id):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
-    membership = _membership(request, 'view_payroll')
+    # This endpoint only ever serves the signed-in employee's own approved payslip.
+    # Do not require the HR-wide view_payroll permission for employee self-service.
+    membership = _membership(request)
     if membership is None:
         return JsonResponse({'detail': 'No active organization membership found.'}, status=403)
     try:
         employee = request.user.employee_profile
+        if employee.organization_id != membership.organization_id or not employee.organization.is_active:
+            return JsonResponse({'detail': 'Employee organization access is not available.'}, status=403)
         record = PayrollRecord.objects.select_related('employee', 'payroll_period').get(id=record_id, employee=employee, employee__organization=membership.organization, payroll_period__organization=membership.organization, status__in=(PayrollRecord.Status.APPROVED, PayrollRecord.Status.PAID))
     except (AttributeError, PayrollRecord.DoesNotExist):
         return JsonResponse({'detail': 'Approved payslip was not found.'}, status=404)
