@@ -9,16 +9,16 @@
     </a>
     <nav class="biz-desktop-nav" aria-label="Primary navigation">
       <a href="/workspace/" {% if active_page == "workspace" %}aria-current="page" class="active"{% endif %}>Workspace</a>
-      <a href="/employees/" {% if active_page == "people" %}aria-current="page" class="active"{% endif %}>People</a>
-      <a href="/attendance/" {% if active_page == "attendance" %}aria-current="page" class="active"{% endif %}>Attendance</a>
-      <a href="/scheduling/" {% if active_page == "scheduling" %}aria-current="page" class="active"{% endif %}>Scheduling</a>
-      <a href="/leave/" {% if active_page == "leave" %}aria-current="page" class="active"{% endif %}>Leave</a>
-      <a href="/payroll/" {% if active_page == "payroll" %}aria-current="page" class="active"{% endif %}>Payroll</a>
-      <a href="/onboarding/" {% if active_page == "onboarding" %}aria-current="page" class="active"{% endif %}>Onboarding</a>
-      <a href="/talent/" {% if active_page == "talent" %}aria-current="page" class="active"{% endif %}>Talent</a>
-      <a href="/operations/" {% if active_page == "operations" %}aria-current="page" class="active"{% endif %}>HR Ops</a>
-      <a href="/reports/" {% if active_page == "reports" %}aria-current="page" class="active"{% endif %}>Reports</a>
-      <a href="/ess/" {% if active_page == "ess" %}aria-current="page" class="active"{% endif %}>My ESS</a>
+      <a href="/employees/" data-permission="view_employees" {% if active_page == "people" %}aria-current="page" class="active"{% endif %}>People</a>
+      <a href="/attendance/" data-permission="view_attendance" {% if active_page == "attendance" %}aria-current="page" class="active"{% endif %}>Attendance</a>
+      <a href="/scheduling/" data-permission="manage_attendance" {% if active_page == "scheduling" %}aria-current="page" class="active"{% endif %}>Scheduling</a>
+      <a href="/leave/" data-permission="submit_leave,approve_leave" {% if active_page == "leave" %}aria-current="page" class="active"{% endif %}>Leave</a>
+      <a href="/payroll/" data-permission="view_payroll" {% if active_page == "payroll" %}aria-current="page" class="active"{% endif %}>Payroll</a>
+      <a href="/onboarding/" data-permission="manage_employees" {% if active_page == "onboarding" %}aria-current="page" class="active"{% endif %}>Onboarding</a>
+      <a href="/talent/" data-permission="manage_employees" {% if active_page == "talent" %}aria-current="page" class="active"{% endif %}>Talent</a>
+      <a href="/operations/" data-permission="manage_employees" {% if active_page == "operations" %}aria-current="page" class="active"{% endif %}>HR Ops</a>
+      <a href="/reports/" data-permission="view_reports" {% if active_page == "reports" %}aria-current="page" class="active"{% endif %}>Reports</a>
+      <a href="/ess/" data-permission="view_self" {% if active_page == "ess" %}aria-current="page" class="active"{% endif %}>My ESS</a>
     </nav>
     <div class="biz-nav-spacer"></div>
     <div class="biz-nav-user"><span class="biz-nav-avatar" id="avatar" aria-hidden="true">B</span><span id="user">BizFlow</span></div>
@@ -26,16 +26,16 @@
   </div>
   <nav id="bizMobileNav" class="biz-mobile-nav" aria-label="Mobile navigation" hidden>
     <a href="/workspace/" {% if active_page == "workspace" %}aria-current="page" class="active"{% endif %}>Workspace</a>
-    <a href="/employees/" {% if active_page == "people" %}aria-current="page" class="active"{% endif %}>People</a>
-    <a href="/attendance/" {% if active_page == "attendance" %}aria-current="page" class="active"{% endif %}>Attendance</a>
-    <a href="/scheduling/" {% if active_page == "scheduling" %}aria-current="page" class="active"{% endif %}>Scheduling</a>
-    <a href="/leave/" {% if active_page == "leave" %}aria-current="page" class="active"{% endif %}>Leave</a>
-    <a href="/payroll/" {% if active_page == "payroll" %}aria-current="page" class="active"{% endif %}>Payroll</a>
-    <a href="/onboarding/" {% if active_page == "onboarding" %}aria-current="page" class="active"{% endif %}>Onboarding</a>
-    <a href="/talent/" {% if active_page == "talent" %}aria-current="page" class="active"{% endif %}>Talent</a>
-    <a href="/operations/" {% if active_page == "operations" %}aria-current="page" class="active"{% endif %}>HR Ops</a>
-    <a href="/reports/" {% if active_page == "reports" %}aria-current="page" class="active"{% endif %}>Reports</a>
-    <a href="/ess/" {% if active_page == "ess" %}aria-current="page" class="active"{% endif %}>My ESS</a>
+    <a href="/employees/" data-permission="view_employees" {% if active_page == "people" %}aria-current="page" class="active"{% endif %}>People</a>
+    <a href="/attendance/" data-permission="view_attendance" {% if active_page == "attendance" %}aria-current="page" class="active"{% endif %}>Attendance</a>
+    <a href="/scheduling/" data-permission="manage_attendance" {% if active_page == "scheduling" %}aria-current="page" class="active"{% endif %}>Scheduling</a>
+    <a href="/leave/" data-permission="submit_leave,approve_leave" {% if active_page == "leave" %}aria-current="page" class="active"{% endif %}>Leave</a>
+    <a href="/payroll/" data-permission="view_payroll" {% if active_page == "payroll" %}aria-current="page" class="active"{% endif %}>Payroll</a>
+    <a href="/onboarding/" data-permission="manage_employees" {% if active_page == "onboarding" %}aria-current="page" class="active"{% endif %}>Onboarding</a>
+    <a href="/talent/" data-permission="manage_employees" {% if active_page == "talent" %}aria-current="page" class="active"{% endif %}>Talent</a>
+    <a href="/operations/" data-permission="manage_employees" {% if active_page == "operations" %}aria-current="page" class="active"{% endif %}>HR Ops</a>
+    <a href="/reports/" data-permission="view_reports" {% if active_page == "reports" %}aria-current="page" class="active"{% endif %}>Reports</a>
+    <a href="/ess/" data-permission="view_self" {% if active_page == "ess" %}aria-current="page" class="active"{% endif %}>My ESS</a>
   </nav>
 </header>
 <script>
@@ -47,6 +47,11 @@
     .then(function (response) { if (!response.ok) throw new Error('Profile unavailable'); return response.json(); })
     .then(function (data) {
       const name = data.full_name || data.name || data.username || data.user?.username || 'Account';
+      const permissions = Array.isArray(data.permissions) ? data.permissions : [];
+      document.querySelectorAll('[data-permission]').forEach(function (link) {
+        const required = link.getAttribute('data-permission').split(',').map(function (item) { return item.trim(); });
+        if (!required.some(function (permission) { return permissions.includes(permission); })) link.hidden = true;
+      });
       userLabel.textContent = name;
       if (avatar) avatar.textContent = name.trim().charAt(0).toUpperCase() || 'B';
       const role = document.getElementById('userRole');
