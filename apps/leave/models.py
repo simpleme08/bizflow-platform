@@ -72,6 +72,14 @@ class LeaveApplication(BaseModel):
 			).get(pk=self.pk)
 			if application.status != self.Status.PENDING:
 				raise ValidationError('Only pending leave applications can be approved.')
+			conflicting_approved = LeaveApplication.objects.filter(
+				employee=application.employee,
+				status=self.Status.APPROVED,
+				start_date__lte=application.end_date,
+				end_date__gte=application.start_date,
+			).exclude(pk=application.pk).exists()
+			if conflicting_approved:
+				raise ValidationError('This leave request overlaps an already approved leave request.')
 			if application.start_date.year != application.end_date.year:
 				raise ValidationError('Leave requests cannot cross calendar years; submit separate requests for each year.')
 			balance, _ = EmployeeLeaveBalance.objects.select_for_update().get_or_create(
