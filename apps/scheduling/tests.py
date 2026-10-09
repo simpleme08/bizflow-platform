@@ -171,6 +171,21 @@ class BulkShiftAssignmentImportTests(TestCase):
         self.assertEqual(len(response.json()['errors']), 1)
         self.assertFalse(EmployeeAssignment.objects.filter(employee=self.employee).exists())
 
+    def test_import_rejects_workbooks_over_1000_rows(self):
+        self.client.login(username='hr-bulk', password='TestPass123!')
+        rows = [['EMP-BULK-01', 'Bulk Day Shift', date(2026, 10, 20), None, None, None, 'FALSE'] for _ in range(1001)]
+        response = self.client.post('/api/scheduling/assignment-import/', {'file': self.workbook_upload(rows)})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('1,000 assignment rows', response.json()['detail'])
+        self.assertFalse(EmployeeAssignment.objects.filter(employee=self.employee).exists())
+
+    def test_employee_cannot_download_shift_assignment_template(self):
+        employee_user = User.objects.create_user(username='template-employee', password='TestPass123!')
+        OrganizationMembership.objects.create(user=employee_user, organization=self.organization, role=OrganizationMembership.Role.EMPLOYEE)
+        self.client.login(username='template-employee', password='TestPass123!')
+        response = self.client.get('/api/scheduling/assignment-template/')
+        self.assertEqual(response.status_code, 403)
+
     def test_employee_cannot_import_shift_assignments(self):
         employee_user = User.objects.create_user(username='employee-bulk', password='TestPass123!')
         OrganizationMembership.objects.create(user=employee_user, organization=self.organization, role=OrganizationMembership.Role.EMPLOYEE)
