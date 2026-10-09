@@ -1,9 +1,14 @@
-from django.core.exceptions import ValidationError
-from django.http import JsonResponse
-from django.views.decorators.http import require_http_methods
 from datetime import date, datetime
-from django.utils import timezone
+from io import BytesIO
 import json
+
+from django.core.exceptions import ValidationError
+from django.db import transaction
+from django.http import HttpResponse, JsonResponse
+from django.utils import timezone
+from django.views.decorators.http import require_http_methods
+from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Font, PatternFill
 
 from apps.organization.context import current_membership
 from apps.organization.models import OrganizationMembership
@@ -352,11 +357,6 @@ def cover_shift_decision(request, cover_shift_id):
 
 
 # Excel-based bulk shift assignment for HR and SME.
-from io import BytesIO
-from django.http import HttpResponse
-from django.db import transaction
-from openpyxl import Workbook, load_workbook
-from openpyxl.styles import Font, PatternFill
 
 SHIFT_ASSIGNMENT_HEADERS = ('Employee Number', 'Shift Name', 'Start Date', 'End Date', 'Client Code', 'Site Name', 'Primary')
 
@@ -416,7 +416,12 @@ def import_shift_assignments(request):
         if headers != SHIFT_ASSIGNMENT_HEADERS:
             workbook.close()
             return JsonResponse({'detail': f'Headers must be exactly: {", ".join(SHIFT_ASSIGNMENT_HEADERS)}.'}, status=400)
-        raw_rows = list(sheet.iter_rows(min_row=2, values_only=True))
+        raw_rows = []
+        for row in sheet.iter_rows(min_row=2, values_only=True):
+            if len(raw_rows) >= 1000:
+                workbook.close()
+                return JsonResponse({'detail': 'A workbook may contain at most 1,000 assignment rows. Split larger uploads into separate files.'}, status=400)
+            raw_rows.append(row)
         workbook.close()
     except Exception:
         return JsonResponse({'detail': 'The workbook could not be read. Download and use the supplied template.'}, status=400)
