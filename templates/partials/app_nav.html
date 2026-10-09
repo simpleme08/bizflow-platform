@@ -1,0 +1,57 @@
+{% comment %}Shared responsive navigation for all authenticated BizFlow pages.{% endcomment %}
+<header class="biz-app-header">
+  <div class="biz-app-header-inner">
+    <button class="biz-nav-toggle" type="button" aria-label="Toggle navigation" aria-controls="bizMobileNav" aria-expanded="false" onclick="const menu=document.getElementById('bizMobileNav');const open=menu.hidden;menu.hidden=!open;this.setAttribute('aria-expanded',String(open));">
+      <i class="fas fa-bars" aria-hidden="true"></i>
+    </button>
+    <a class="biz-app-brand" href="/workspace/" aria-label="BizFlow workspace">
+      <span class="biz-app-brand-mark"><i class="fas fa-users" aria-hidden="true"></i></span><span>BizFlow</span>
+    </a>
+    <nav class="biz-desktop-nav" aria-label="Primary navigation">
+      <a href="/workspace/" {% if active_page == "workspace" %}aria-current="page" class="active"{% endif %}>Workspace</a>
+      <a href="/employees/" {% if active_page == "people" %}aria-current="page" class="active"{% endif %}>People</a>
+      <a href="/attendance/" {% if active_page == "attendance" %}aria-current="page" class="active"{% endif %}>Attendance</a>
+      <a href="/scheduling/" {% if active_page == "scheduling" %}aria-current="page" class="active"{% endif %}>Scheduling</a>
+      <a href="/leave/" {% if active_page == "leave" %}aria-current="page" class="active"{% endif %}>Leave</a>
+      <a href="/payroll/" {% if active_page == "payroll" %}aria-current="page" class="active"{% endif %}>Payroll</a>
+      <a href="/onboarding/" {% if active_page == "onboarding" %}aria-current="page" class="active"{% endif %}>Onboarding</a>
+      <a href="/talent/" {% if active_page == "talent" %}aria-current="page" class="active"{% endif %}>Talent</a>
+      <a href="/operations/" {% if active_page == "operations" %}aria-current="page" class="active"{% endif %}>HR Ops</a>
+      <a href="/reports/" {% if active_page == "reports" %}aria-current="page" class="active"{% endif %}>Reports</a>
+      <a href="/ess/" {% if active_page == "ess" %}aria-current="page" class="active"{% endif %}>My ESS</a>
+    </nav>
+    <div class="biz-nav-spacer"></div>
+    <div class="biz-nav-user"><span class="biz-nav-avatar" id="avatar" aria-hidden="true">B</span><span id="user">BizFlow</span></div>
+    <form class="biz-nav-signout" action="/logout/" method="post">{% csrf_token %}<button type="submit">Sign out</button></form>
+  </div>
+  <nav id="bizMobileNav" class="biz-mobile-nav" aria-label="Mobile navigation" hidden>
+    <a href="/workspace/" {% if active_page == "workspace" %}aria-current="page" class="active"{% endif %}>Workspace</a>
+    <a href="/employees/" {% if active_page == "people" %}aria-current="page" class="active"{% endif %}>People</a>
+    <a href="/attendance/" {% if active_page == "attendance" %}aria-current="page" class="active"{% endif %}>Attendance</a>
+    <a href="/scheduling/" {% if active_page == "scheduling" %}aria-current="page" class="active"{% endif %}>Scheduling</a>
+    <a href="/leave/" {% if active_page == "leave" %}aria-current="page" class="active"{% endif %}>Leave</a>
+    <a href="/payroll/" {% if active_page == "payroll" %}aria-current="page" class="active"{% endif %}>Payroll</a>
+    <a href="/onboarding/" {% if active_page == "onboarding" %}aria-current="page" class="active"{% endif %}>Onboarding</a>
+    <a href="/talent/" {% if active_page == "talent" %}aria-current="page" class="active"{% endif %}>Talent</a>
+    <a href="/operations/" {% if active_page == "operations" %}aria-current="page" class="active"{% endif %}>HR Ops</a>
+    <a href="/reports/" {% if active_page == "reports" %}aria-current="page" class="active"{% endif %}>Reports</a>
+    <a href="/ess/" {% if active_page == "ess" %}aria-current="page" class="active"{% endif %}>My ESS</a>
+  </nav>
+</header>
+<script>
+(function () {
+  const userLabel = document.getElementById('user');
+  const avatar = document.getElementById('avatar');
+  if (!userLabel) return;
+  fetch('/api/me/', { headers: { Accept: 'application/json' }, credentials: 'same-origin' })
+    .then(function (response) { if (!response.ok) throw new Error('Profile unavailable'); return response.json(); })
+    .then(function (data) {
+      const name = data.full_name || data.name || data.username || data.user?.username || 'Account';
+      userLabel.textContent = name;
+      if (avatar) avatar.textContent = name.trim().charAt(0).toUpperCase() || 'B';
+      const role = document.getElementById('userRole');
+      if (role && (data.role || data.membership_role)) role.textContent = data.role || data.membership_role;
+    })
+    .catch(function () { userLabel.textContent = 'Account'; });
+})();
+</script>
