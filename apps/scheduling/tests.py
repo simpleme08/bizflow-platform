@@ -66,6 +66,26 @@ class ShiftSchedulingTests(TestCase):
         self.assertEqual(assignment.client, self.client_obj)
         self.assertTrue(assignment.is_primary)
 
+    def test_duplicate_overlapping_shift_assignment_is_rejected(self):
+        EmployeeAssignment.objects.create(
+            employee=self.employee,
+            shift_template=self.shift_day,
+            start_date=date(2026, 9, 1),
+            end_date=date(2026, 9, 30),
+        )
+        response = self.client.post(
+            '/api/scheduling/assign/',
+            content_type='application/json',
+            data={
+                'employee_id': str(self.employee.id),
+                'shift_id': str(self.shift_day.id),
+                'start_date': '2026-09-15',
+                'end_date': '2026-10-15',
+            },
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertTrue(EmployeeAssignment.objects.filter(employee=self.employee).count(), 1)
+
     def test_cross_organization_shift_cannot_be_assigned(self):
         other_org = Organization.objects.create(slug='other-org', name='Other Organization')
         other_shift = ShiftTemplate.objects.create(organization=other_org, name='Other Tenant Shift', start_time='09:00', end_time='18:00')
