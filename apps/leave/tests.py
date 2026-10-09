@@ -78,6 +78,31 @@ class LeaveLifecycleIntegrationTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(LeaveApplication.objects.filter(employee=self.employee).count(), 1)
 
+    def test_overlapping_pending_leave_cannot_be_approved_after_another_is_approved(self):
+        first = LeaveApplication.objects.create(
+            employee=self.employee,
+            leave_type=self.leave_type,
+            start_date='2026-09-15',
+            end_date='2026-09-17',
+            total_days=3,
+            reason='First request',
+        )
+        second = LeaveApplication.objects.create(
+            employee=self.employee,
+            leave_type=self.leave_type,
+            start_date='2026-09-16',
+            end_date='2026-09-18',
+            total_days=3,
+            reason='Overlapping request',
+        )
+        first.approve(self.user)
+        with self.assertRaisesMessage(ValidationError, 'overlaps an already approved'):
+            second.approve(self.user)
+        second.refresh_from_db()
+        self.assertEqual(second.status, LeaveApplication.Status.PENDING)
+        balance = EmployeeLeaveBalance.objects.get(employee=self.employee, leave_type=self.leave_type, year=2026)
+        self.assertEqual(balance.used, 3)
+
     def test_approved_leave_cannot_be_approved_twice(self):
         application = LeaveApplication.objects.create(
             employee=self.employee,
