@@ -197,3 +197,6 @@ h1,h2,h3,h4,h5,h6{
 @media(max-width:980px){.biz-nav-toggle{display:inline-flex;align-items:center;justify-content:center}.biz-desktop-nav{display:none}.biz-mobile-nav:not([hidden]){display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}.biz-nav-spacer{flex:1}.biz-app-header-inner{width:calc(100% - 24px)}}
 @media(max-width:620px){.biz-app-header-inner{min-height:62px}.biz-app-header{min-height:62px}.biz-nav-user{max-width:34px}.biz-nav-user #user{display:none}.biz-nav-signout button{padding:8px}.biz-mobile-nav:not([hidden]){grid-template-columns:repeat(2,minmax(0,1fr));padding:8px 12px}}
 @media(prefers-reduced-motion:reduce){.biz-desktop-nav a,.biz-mobile-nav a{transition:none}}
+
+/* Ensure permission-filtered links stay hidden inside flex navigation containers. */
+.biz-desktop-nav [hidden],.biz-mobile-nav [hidden]{display:none!important}
