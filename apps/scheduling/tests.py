@@ -41,6 +41,13 @@ class ShiftSchedulingTests(TestCase):
         self.assertNotIn(str(other_shift.id), shift_ids)
 
 
+    def test_employee_cannot_list_client_sites_through_scheduling_api(self):
+        employee_user = User.objects.create_user(username='client-list-employee', password='EmpPass123!')
+        OrganizationMembership.objects.create(user=employee_user, organization=self.organization, role=OrganizationMembership.Role.EMPLOYEE)
+        self.client.login(username='client-list-employee', password='EmpPass123!')
+        response = self.client.get('/api/scheduling/clients/')
+        self.assertEqual(response.status_code, 403)
+
     def test_get_employees_returns_active_only(self):
         Employee.objects.create(employee_number='EMP-002', user=User.objects.create_user(username='emp2', password='EmpPass123!'), organization=self.organization, first_name='Jane', last_name='Smith', is_active=False, status=Employee.Status.SEPARATED)
         response = self.client.get('/api/scheduling/employees/')
