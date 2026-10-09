@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="/static/css/custom.css">
 </head>
 <body>
-<header class="floot-topbar"><div class="floot-topbar-inner"><a class="floot-brand" href="{{ workspace_url }}"><span class="floot-brand-mark"><i class="fas fa-users"></i></span>BizFlow</a><span style="flex:1"></span><a href="{{ workspace_url }}" style="color:#dce8f5;font-size:.72rem;font-weight:800;text-decoration:none">Workspace</a></div></header>
+{% include "partials/app_nav.html" with active_page="people" %}
 <main class="floot-shell">
 <a class="floot-back" href="{{ workspace_url }}"><i class="fas fa-arrow-left"></i> Back to workspace</a>
 <section class="floot-hero"><div><div class="floot-eyebrow">People operations</div><h1>Employee Directory</h1><p class="page-subtitle">People and active assignments in your organization.</p></div><span class="floot-status"><i class="fas fa-users"></i> Workforce</span></section>
