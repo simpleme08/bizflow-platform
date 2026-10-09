@@ -76,7 +76,11 @@ def employee_profile_api(request, employee_id):
             return JsonResponse({'detail': 'Permission denied.'}, status=403)
 
     private = is_self or (membership is not None and membership.organization_id == employee.organization_id and membership.has_permission('manage_employees'))
-    return JsonResponse({'employee': _employee_payload(employee, private), 'history': [{'id': str(h.id), 'status': h.status, 'effective_date': h.effective_date.isoformat(), 'end_date': h.end_date.isoformat() if h.end_date else None, 'department': h.department.name if h.department else None, 'position': h.position.title if h.position else None, 'employment_type': h.employment_type.name if h.employment_type else None, 'manager': str(h.manager_id) if h.manager_id else None, 'reason': h.reason} for h in employee.employment_history.all()], 'documents': [{'id': str(d.id), 'type': d.document_type, 'name': d.name, 'issued_date': d.issued_date.isoformat() if d.issued_date else None, 'expiry_date': d.expiry_date.isoformat() if d.expiry_date else None, 'required': d.is_required, 'status': d.status} for d in employee.documents.all()]})
+    # Employee documents and detailed employment history contain sensitive HR data.
+    # Self-service users and HR personnel may see them; general directory viewers may not.
+    history = [{'id': str(h.id), 'status': h.status, 'effective_date': h.effective_date.isoformat(), 'end_date': h.end_date.isoformat() if h.end_date else None, 'department': h.department.name if h.department else None, 'position': h.position.title if h.position else None, 'employment_type': h.employment_type.name if h.employment_type else None, 'manager': str(h.manager_id) if h.manager_id else None, 'reason': h.reason} for h in employee.employment_history.all()] if private else []
+    documents = [{'id': str(d.id), 'type': d.document_type, 'name': d.name, 'issued_date': d.issued_date.isoformat() if d.issued_date else None, 'expiry_date': d.expiry_date.isoformat() if d.expiry_date else None, 'required': d.is_required, 'status': d.status} for d in employee.documents.all()] if private else []
+    return JsonResponse({'employee': _employee_payload(employee, private), 'history': history, 'documents': documents})
 
 
 def employee_lifecycle_api(request, employee_id):
