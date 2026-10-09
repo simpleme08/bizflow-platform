@@ -86,8 +86,25 @@ def my_leave_api(request):
             return JsonResponse({'detail': 'Leave dates must fall within the employee active employment period.'}, status=409)
         total_days = Decimal((end_date - start_date).days + 1)
         balance, _ = EmployeeLeaveBalance.objects.get_or_create(employee=employee, leave_type=leave_type, year=start_date.year, defaults={'credits': leave_type.annual_credits})
-        if balance.remaining < total_days:
-            return JsonResponse({'detail': 'Insufficient leave balance.'}, status=400)
+        overlapping = LeaveApplication.objects.filter(
+            employee=employee,
+            status__in=(LeaveApplication.Status.PENDING, LeaveApplication.Status.APPROVED),
+            start_date__lte=end_date,
+            end_date__gte=start_date,
+        ).exists()
+        if overlapping:
+            return JsonResponse({'detail': 'You already have a pending or approved leave request overlapping these dates.'}, status=409)
+        pending_days = sum(
+            LeaveApplication.objects.filter(
+                employee=employee,
+                leave_type=leave_type,
+                start_date__year=start_date.year,
+                status=LeaveApplication.Status.PENDING,
+            ).values_list('total_days', flat=True),
+            Decimal('0.00'),
+        )
+        if balance.remaining - pending_days < total_days:
+            return JsonResponse({'detail': 'Insufficient leave balance after accounting for pending requests.'}, status=400)
         application = LeaveApplication.objects.create(employee=employee, leave_type=leave_type, start_date=start_date, end_date=end_date, total_days=total_days, reason=payload.get('reason', ''))
     except (KeyError, TypeError, ValueError, json.JSONDecodeError, LeaveType.DoesNotExist):
         return JsonResponse({'detail': 'Provide a valid leave type and date range.'}, status=400)
@@ -127,8 +144,25 @@ def leave_api(request):
             raise ValueError
         total_days = Decimal((end_date - start_date).days + 1)
         balance, _ = EmployeeLeaveBalance.objects.get_or_create(employee=employee, leave_type=leave_type, year=start_date.year, defaults={'credits': leave_type.annual_credits})
-        if balance.remaining < total_days:
-            return JsonResponse({'detail': 'Insufficient leave balance.'}, status=400)
+        overlapping = LeaveApplication.objects.filter(
+            employee=employee,
+            status__in=(LeaveApplication.Status.PENDING, LeaveApplication.Status.APPROVED),
+            start_date__lte=end_date,
+            end_date__gte=start_date,
+        ).exists()
+        if overlapping:
+            return JsonResponse({'detail': 'You already have a pending or approved leave request overlapping these dates.'}, status=409)
+        pending_days = sum(
+            LeaveApplication.objects.filter(
+                employee=employee,
+                leave_type=leave_type,
+                start_date__year=start_date.year,
+                status=LeaveApplication.Status.PENDING,
+            ).values_list('total_days', flat=True),
+            Decimal('0.00'),
+        )
+        if balance.remaining - pending_days < total_days:
+            return JsonResponse({'detail': 'Insufficient leave balance after accounting for pending requests.'}, status=400)
         application = LeaveApplication.objects.create(employee=employee, leave_type=leave_type, start_date=start_date, end_date=end_date, total_days=total_days, reason=payload.get('reason', ''))
     except (KeyError, TypeError, ValueError, LeaveType.DoesNotExist, AttributeError, Employee.DoesNotExist, json.JSONDecodeError):
         return JsonResponse({'detail': 'Provide a valid leave type, date range, and employee profile.'}, status=400)
