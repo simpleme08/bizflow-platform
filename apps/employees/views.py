@@ -132,5 +132,11 @@ def employee_lifecycle_api(request, employee_id):
 def employee_directory_page(request):
     if not request.user.is_authenticated:
         return redirect('login')
+    membership = _membership_for(request)
+    if membership is None:
+        return redirect('organization-select')
+    if not (membership.has_permission('view_employees') or membership.has_permission('manage_employees')):
+        from apps.accounts.views import workspace_url_for_user
+        return redirect(workspace_url_for_user(request.user))
     from apps.accounts.views import workspace_url_for_user
     return render(request, 'employees/directory.html', {'workspace_url': workspace_url_for_user(request.user)})
