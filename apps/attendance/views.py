@@ -51,7 +51,7 @@ def _cell_datetime(attendance_date, value):
 
 def _dashboard_sections(membership):
     sections = [('employee_directory','Employee Directory','View people, assignments, and organization structure.','view_employees'),('attendance','Attendance','Review and manage daily attendance records.','view_attendance'),('scheduling','Shift Scheduling','Create and assign shift schedules to employees.','manage_attendance'),('leave','Leave Approvals','Review and approve employee leave requests.','approve_leave'),('payroll','Payroll','Review payroll data and compensation operations.','view_payroll'),('reports','Reports','Open workforce and operational reports.','view_reports'),('onboarding','Onboarding','Track new-hire onboarding steps and completion status.','manage_employees'),('talent','Talent Lifecycle','Manage recruiting, performance, benefits, and offboarding.','manage_employees'),('operations','HR Operations','Manage documents, announcements, workflows, projects, and external connectors.','manage_employees'),('ess','Employee Self-Service','View your own profile, attendance, leave, and approved payroll.','view_self')]
-    return [{'key': k, 'name': n, 'description': d} for k,n,d,p in sections if membership.has_permission(p)]
+    return [{'key': k, 'name': n, 'description': d} for k,n,d,p in sections if membership.has_permission(p) or (p == 'view_employees' and membership.has_permission('manage_employees')) or (p == 'view_attendance' and membership.has_permission('manage_attendance'))]
 
 
 def _is_maintenance_user(request, membership): return request.user.is_superuser or membership.role == OrganizationMembership.Role.SUPER_USER
