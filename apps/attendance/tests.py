@@ -213,7 +213,7 @@ class DashboardViewTests(TestCase):
             status=AttendanceRecord.Status.PRESENT,
         )
         record.clock_in_photo.save('attendance-proof.jpg', self.photo(), save=True)
-        for role in (OrganizationMembership.Role.CEO, OrganizationMembership.Role.SME, OrganizationMembership.Role.HR):
+        for role in (OrganizationMembership.Role.CEO, OrganizationMembership.Role.SME, OrganizationMembership.Role.HR, OrganizationMembership.Role.ADMIN):
             with self.subTest(role=role):
                 user = get_user_model().objects.create_user(username=f'viewer-{role.lower()}', password='test-password')
                 OrganizationMembership.objects.create(
