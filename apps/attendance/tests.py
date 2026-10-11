@@ -163,6 +163,20 @@ class DashboardViewTests(TestCase):
         self.assertEqual([section['key'] for section in data['sections']], ['employee_directory', 'attendance', 'scheduling', 'leave'])
         self.assertEqual({key: value for key, value in data.items() if key not in ('role', 'role_label', 'is_maintenance_user', 'sections')}, {'date': today.isoformat(), 'active_employee_count': 1, 'today_attendance_count': 1, 'today_present_count': 1, 'today_absent_count': 0, 'records': [{'employee_number': 'EMP-000001', 'employee_name': 'Juan Cruz', 'status': 'PRESENT', 'late_minutes': 12, 'undertime_minutes': 0, 'overtime_minutes': 0}]})
 
+    def test_management_roles_see_modules_they_manage(self):
+        membership = self.user.organization_memberships.get()
+        membership.role = OrganizationMembership.Role.ADMIN
+        membership.save(update_fields=['role'])
+        self.client.login(username='manager', password='test-password')
+
+        response = self.client.get('/api/dashboard/')
+        self.assertEqual(response.status_code, 200)
+        keys = {section['key'] for section in response.json()['sections']}
+        self.assertIn('employee_directory', keys)
+        self.assertIn('attendance', keys)
+        self.assertIn('scheduling', keys)
+        self.assertIn('onboarding', keys)
+
     def test_dashboard_excludes_other_organizations(self):
         other_user = get_user_model().objects.create_user(username='other')
         other_organization = Organization.objects.create(name='Other Corporation', slug='other')
