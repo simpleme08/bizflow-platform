@@ -25,6 +25,21 @@ class EmployeeDirectoryTests(TestCase):
         self.assertEqual(response.json()['employees'][0]['name'], 'Juan Cruz')
         self.assertEqual(response.json()['employees'][0]['assignments'][0]['shift'], 'Day')
 
+    def test_hr_can_access_employee_directory_and_profile(self):
+        User = get_user_model()
+        hr = User.objects.create_user(username='hr-directory', password='password')
+        OrganizationMembership.objects.create(organization=self.organization, user=hr, role='HR')
+        self.client.login(username='hr-directory', password='password')
+
+        directory = self.client.get('/api/employees/')
+        self.assertEqual(directory.status_code, 200)
+        self.assertEqual(directory.json()['employees'][0]['name'], 'Juan Cruz')
+
+        profile = self.client.get(f'/api/employees/{self.employee.id}/')
+        self.assertEqual(profile.status_code, 200)
+        self.assertIn('documents', profile.json())
+        self.assertIn('history', profile.json())
+
     def test_self_profile_is_available(self):
         self.client.login(username='juan', password='password')
         response = self.client.get(f'/api/employees/{self.employee.id}/')
