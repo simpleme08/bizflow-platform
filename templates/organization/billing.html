@@ -3,7 +3,7 @@
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Billing | BizFlow HRIS</title>
 <link rel="stylesheet" href="/static/adminlte/plugins/fontawesome-free/css/all.min.css"><link rel="stylesheet" href="/static/adminlte/dist/css/adminlte.min.css"><link rel="stylesheet" href="/static/css/custom.css"></head>
 <body>
-<header class="floot-topbar"><div class="floot-topbar-inner"><a class="floot-brand" href="/workspace/"><span class="floot-brand-mark"><i class="fas fa-users"></i></span>BizFlow</a><span style="flex:1"></span><a href="/workspace/" style="color:#dce8f5;font-size:.72rem;font-weight:800;text-decoration:none">Workspace</a></div></header>
+{% include "partials/app_nav.html" with active_page="billing" %}
 <main class="floot-shell">
 <a class="floot-back" href="/workspace/"><i class="fas fa-arrow-left"></i> Back to workspace</a>
 <section class="floot-hero"><div><div class="floot-eyebrow">Workspace administration</div><h1>Billing</h1><p class="page-subtitle">Review your plan, usage, and available subscription options.</p></div><span class="floot-status"><i class="fas fa-credit-card"></i> Subscription</span></section>
