@@ -240,12 +240,19 @@ function editAssignment(assignmentId) {
 document.getElementById('clientSelect').addEventListener('change', updateSites);
 
 document.getElementById('employeeSelect').addEventListener('change', () => {
-	loadAssignments();
-	// Reset form when employee changes
+	// Reset assignment fields without resetting the employee selector itself.
+	// Calling form.reset() alone returns employeeSelect to its blank first option,
+	// making it appear impossible to select an employee.
+	const employeeSelect = document.getElementById('employeeSelect');
+	const selectedEmployeeId = employeeSelect.value;
 	document.getElementById('assignForm').reset();
+	employeeSelect.value = selectedEmployeeId;
+	const startDate = document.getElementById('startDate');
+	if (startDate) startDate.value = new Date().toISOString().split('T')[0];
 	const input = document.getElementById('assignmentId');
 	if (input) input.value = '';
-	document.querySelector('#assignForm button').textContent = 'Assign Shift';
+	document.querySelector('#assignForm button').textContent = 'Assign shift';
+	loadAssignments();
 });
 
 document.getElementById('assignForm').addEventListener('submit', async (e) => {
@@ -286,10 +293,14 @@ document.getElementById('assignForm').addEventListener('submit', async (e) => {
 		}
 		const data = await res.json();
 		showAlert(`Shift ${data.status === 'created' ? 'assigned' : 'updated'} successfully!`, 'success');
+		const employeeSelect = document.getElementById('employeeSelect');
+		const selectedEmployeeId = employeeSelect.value;
 		document.getElementById('assignForm').reset();
+		employeeSelect.value = selectedEmployeeId;
+		document.getElementById('startDate').value = new Date().toISOString().split('T')[0];
 		const input = document.getElementById('assignmentId');
 		if (input) input.value = '';
-		document.querySelector('#assignForm button').textContent = 'Assign Shift';
+		document.querySelector('#assignForm button').textContent = 'Assign shift';
 		loadAssignments();
 	} catch (error) {
 		showAlert(`Error saving assignment: ${error.message}`, 'error');
