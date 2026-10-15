@@ -143,6 +143,36 @@ class ShiftSchedulingTests(TestCase):
         self.assertEqual(response.status_code, 400)
 
 
+    def test_hr_and_sme_can_load_assignable_employees(self):
+        for role, username in (
+            (OrganizationMembership.Role.HR, 'hr-schedule-list'),
+            (OrganizationMembership.Role.SME, 'sme-schedule-list'),
+        ):
+            with self.subTest(role=role):
+                user = User.objects.create_user(username=username, password='TestPass123!')
+                OrganizationMembership.objects.create(
+                    user=user,
+                    organization=self.organization,
+                    role=role,
+                )
+                self.client.force_login(user)
+                response = self.client.get('/api/scheduling/employees/')
+                self.assertEqual(response.status_code, 200, response.content)
+                self.assertEqual(
+                    [row['id'] for row in response.json()['employees']],
+                    [str(self.employee.id)],
+                )
+
+    def test_employee_selection_does_not_reset_after_change(self):
+        # Regression guard for the scheduling page's former change handler:
+        # form.reset() cleared the employee dropdown immediately after selection.
+        from pathlib import Path
+        template_path = Path(__file__).resolve().parents[2] / 'templates' / 'scheduling' / 'schedule.html'
+        template = template_path.read_text(encoding='utf-8')
+        self.assertIn('const selectedEmployeeId = employeeSelect.value;', template)
+        self.assertIn('employeeSelect.value = selectedEmployeeId;', template)
+
+
 class BulkShiftAssignmentImportTests(TestCase):
     def setUp(self):
         from io import BytesIO
