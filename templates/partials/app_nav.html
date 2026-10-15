@@ -37,6 +37,8 @@
     <a href="/talent/" data-permission="manage_employees" {% if active_page == "talent" %}aria-current="page" class="active"{% endif %}>Talent</a>
     <a href="/operations/" data-permission="manage_employees" {% if active_page == "operations" %}aria-current="page" class="active"{% endif %}>HR Ops</a>
     <a href="/reports/" data-permission="view_reports" {% if active_page == "reports" %}aria-current="page" class="active"{% endif %}>Reports</a>
+    <a href="/employee-hub/" data-permission="view_self" {% if active_page == "employee-hub" %}aria-current="page" class="active"{% endif %}>Employee Hub</a>
+    <a href="/billing/" data-permission="manage_organization" {% if active_page == "billing" %}aria-current="page" class="active"{% endif %}>Billing</a>
     <a href="/ess/" data-permission="view_self" {% if active_page == "ess" %}aria-current="page" class="active"{% endif %}>My ESS</a>
   </nav>
 </header>
