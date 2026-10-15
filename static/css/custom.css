@@ -200,3 +200,30 @@ h1,h2,h3,h4,h5,h6{
 
 /* Ensure permission-filtered links stay hidden inside flex navigation containers. */
 .biz-desktop-nav [hidden],.biz-mobile-nav [hidden]{display:none!important}
+
+
+/* Final responsive consistency pass: remove browser-default offsets and prevent
+   long module navigation/tables from pushing content out of alignment. */
+html,body{width:100%;min-height:100%;margin:0!important}
+body{overflow-x:hidden}
+main,section,article,aside,header,footer,nav,form{min-width:0}
+img,svg,video,canvas{max-width:100%}
+input,select,textarea,button{max-width:100%;font:inherit}
+textarea{resize:vertical}
+label{line-height:1.45}
+p,li,td,th{overflow-wrap:anywhere}
+.table-wrap,.table-responsive,.table-container{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{max-width:100%}
+.biz-app-header-inner{max-width:1380px}
+@media(max-width:1320px){
+  .biz-desktop-nav{display:none!important}
+  .biz-nav-toggle{display:inline-flex;align-items:center;justify-content:center}
+  .biz-mobile-nav:not([hidden]){display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}
+}
+@media(max-width:620px){
+  .biz-mobile-nav:not([hidden]){grid-template-columns:repeat(2,minmax(0,1fr))}
+  .floot-panel,.floot-stat{padding:14px}
+  .panel-head,.head,.card-header{gap:10px;flex-wrap:wrap}
+  .schedule-actions,.floot-actions{align-items:stretch}
+  .schedule-actions>*{max-width:100%}
+}
