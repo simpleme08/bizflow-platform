@@ -179,10 +179,15 @@ DEFAULT_EMAIL_BACKEND = (
     if ENVIRONMENT == 'production' and SMTP_CONFIGURED
     else 'django.core.mail.backends.console.EmailBackend'
 )
-EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', DEFAULT_EMAIL_BACKEND).strip()
-if EMAIL_BACKEND == 'django.core.mail.backends.smtp.EmailBackend' and not SMTP_CONFIGURED:
-    raise RuntimeError('SMTP email backend selected but EMAIL_HOST, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD, and DEFAULT_FROM_EMAIL must be configured')
-if EMAIL_USE_TLS and EMAIL_USE_SSL:
+REQUESTED_EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', '').strip()
+# An incomplete SMTP configuration should disable outbound email, not prevent
+# the web application and static assets from deploying. Once all SMTP fields
+# are present, the configured backend can be selected normally.
+if not SMTP_CONFIGURED:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+else:
+    EMAIL_BACKEND = REQUESTED_EMAIL_BACKEND or DEFAULT_EMAIL_BACKEND
+if EMAIL_BACKEND == 'django.core.mail.backends.smtp.EmailBackend' and EMAIL_USE_TLS and EMAIL_USE_SSL:
     raise RuntimeError('EMAIL_USE_TLS and EMAIL_USE_SSL cannot both be enabled')
 
 LOGGING = {
