@@ -66,29 +66,51 @@ class LeaveApplication(BaseModel):
 			raise ValidationError('Leave duration must be greater than zero.')
 
 	def approve(self, approver):
-		if self.status != self.Status.PENDING:
-			raise ValidationError('Only pending leave applications can be approved.')
 		with transaction.atomic():
+			application = LeaveApplication.objects.select_for_update().select_related(
+				'employee', 'leave_type'
+			).get(pk=self.pk)
+			if application.status != self.Status.PENDING:
+				raise ValidationError('Only pending leave applications can be approved.')
+			conflicting_approved = LeaveApplication.objects.filter(
+				employee=application.employee,
+				status=self.Status.APPROVED,
+				start_date__lte=application.end_date,
+				end_date__gte=application.start_date,
+			).exclude(pk=application.pk).exists()
+			if conflicting_approved:
+				raise ValidationError('This leave request overlaps an already approved leave request.')
+			if application.start_date.year != application.end_date.year:
+				raise ValidationError('Leave requests cannot cross calendar years; submit separate requests for each year.')
 			balance, _ = EmployeeLeaveBalance.objects.select_for_update().get_or_create(
-				employee=self.employee,
-				leave_type=self.leave_type,
-				year=self.start_date.year,
-				defaults={'credits': self.leave_type.annual_credits},
+				employee=application.employee,
+				leave_type=application.leave_type,
+				year=application.start_date.year,
+				defaults={'credits': application.leave_type.annual_credits},
 			)
-			if balance.remaining < self.total_days:
+			if balance.remaining < application.total_days:
 				raise ValidationError('The employee does not have enough leave balance to approve this request.')
-			balance.used += self.total_days
+			balance.used += application.total_days
 			balance.save(update_fields=('used', 'updated_at'))
-			self.status = self.Status.APPROVED
-			self.approver = approver
-			self.approved_at = timezone.now()
-			self.save(update_fields=('status', 'approver', 'approved_at', 'updated_at'))
+			application.status = self.Status.APPROVED
+			application.approver = approver
+			application.approved_at = timezone.now()
+			application.save(update_fields=('status', 'approver', 'approved_at', 'updated_at'))
+			self.status = application.status
+			self.approver = application.approver
+			self.approved_at = application.approved_at
 
 	def reject(self, approver, remarks=''):
-		if self.status != self.Status.PENDING:
-			raise ValidationError('Only pending leave applications can be rejected.')
-		self.status = self.Status.REJECTED
-		self.approver = approver
-		self.remarks = remarks
-		self.approved_at = timezone.now()
-		self.save(update_fields=('status', 'approver', 'remarks', 'approved_at', 'updated_at'))
+		with transaction.atomic():
+			application = LeaveApplication.objects.select_for_update().get(pk=self.pk)
+			if application.status != self.Status.PENDING:
+				raise ValidationError('Only pending leave applications can be rejected.')
+			application.status = self.Status.REJECTED
+			application.approver = approver
+			application.remarks = remarks
+			application.approved_at = timezone.now()
+			application.save(update_fields=('status', 'approver', 'remarks', 'approved_at', 'updated_at'))
+			self.status = application.status
+			self.approver = application.approver
+			self.remarks = application.remarks
+			self.approved_at = application.approved_at

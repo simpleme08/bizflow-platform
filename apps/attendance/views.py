@@ -51,7 +51,7 @@ def _cell_datetime(attendance_date, value):
 
 def _dashboard_sections(membership):
     sections = [('employee_directory','Employee Directory','View people, assignments, and organization structure.','view_employees'),('attendance','Attendance','Review and manage daily attendance records.','view_attendance'),('scheduling','Shift Scheduling','Create and assign shift schedules to employees.','manage_attendance'),('leave','Leave Approvals','Review and approve employee leave requests.','approve_leave'),('payroll','Payroll','Review payroll data and compensation operations.','view_payroll'),('reports','Reports','Open workforce and operational reports.','view_reports'),('onboarding','Onboarding','Track new-hire onboarding steps and completion status.','manage_employees'),('talent','Talent Lifecycle','Manage recruiting, performance, benefits, and offboarding.','manage_employees'),('operations','HR Operations','Manage documents, announcements, workflows, projects, and external connectors.','manage_employees'),('ess','Employee Self-Service','View your own profile, attendance, leave, and approved payroll.','view_self')]
-    return [{'key': k, 'name': n, 'description': d} for k,n,d,p in sections if membership.has_permission(p)]
+    return [{'key': k, 'name': n, 'description': d} for k,n,d,p in sections if membership.has_permission(p) or (p == 'view_employees' and membership.has_permission('manage_employees')) or (p == 'view_attendance' and membership.has_permission('manage_attendance'))]
 
 
 def _is_maintenance_user(request, membership): return request.user.is_superuser or membership.role == OrganizationMembership.Role.SUPER_USER
@@ -64,7 +64,11 @@ def dashboard_page(request):
     return render(request, 'dashboard.html')
 
 def attendance_page(request):
-    if not request.user.is_authenticated: return redirect('login')
+    if not request.user.is_authenticated:
+        return redirect('login')
+    membership = current_membership(request)
+    if membership is None or not (membership.has_permission('view_attendance') or membership.has_permission('manage_attendance')):
+        return JsonResponse({'detail': 'Attendance access is not available for this account.'}, status=403)
     from apps.accounts.views import workspace_url_for_user
     return render(request, 'attendance/attendance.html', {'workspace_url': workspace_url_for_user(request.user)})
 
@@ -181,6 +185,12 @@ def record_attendance(request):
     except Employee.DoesNotExist: return JsonResponse({'detail':'Employee was not found in your organization.'},status=404)
     assignment=employee.assignments.filter(start_date__lte=attendance_date).filter(Q(end_date__isnull=True)|Q(end_date__gte=attendance_date)).order_by('-is_primary','-start_date').select_related('shift_template').first()
     if assignment is None: return JsonResponse({'detail':'Employee has no active assignment for this date.'},status=400)
+    status = payload.get('status', AttendanceRecord.Status.PRESENT)
+    if status not in {choice.value for choice in AttendanceRecord.Status}:
+        return JsonResponse({'detail':'Invalid attendance status.'},status=400)
+    remarks = payload.get('remarks', '')
+    if not isinstance(remarks, str):
+        return JsonResponse({'detail':'remarks must be text.'},status=400)
     def parse_datetime(field_name):
         value=payload.get(field_name)
         if not value: return None
@@ -189,7 +199,7 @@ def record_attendance(request):
     except (TypeError,ValueError): return JsonResponse({'detail':'time_in and time_out must be ISO datetime values.'},status=400)
     if time_in and timezone.localtime(time_in).date()!=attendance_date: return JsonResponse({'detail':'time_in must use the attendance date in Asia/Manila.'},status=400)
     if time_in and time_out and time_out<=time_in: return JsonResponse({'detail':'time_out must be later than time_in.'},status=400)
-    record,_=AttendanceRecord.objects.update_or_create(employee=employee,attendance_date=attendance_date,defaults={'assignment':assignment,'clock_shift':assignment.shift_template,'clock_in_mode':AttendanceRecord.ClockInMode.SCHEDULED,'time_in':time_in,'time_out':time_out,'status':payload.get('status',AttendanceRecord.Status.PRESENT),'remarks':payload.get('remarks','')}); AttendanceCalculator.update_record(record); record_audit(organization=membership.organization,actor=request.user,action='attendance.recorded',entity=record,details={'employee':record.employee.employee_number,'attendance_date':attendance_date.isoformat()}); return JsonResponse({'id':str(record.id),'employee_id':str(employee.id),'attendance_date':attendance_date.isoformat(),'status':record.status,'late_minutes':record.late_minutes,'undertime_minutes':record.undertime_minutes,'overtime_minutes':record.overtime_minutes},status=201)
+    record,_=AttendanceRecord.objects.update_or_create(employee=employee,attendance_date=attendance_date,defaults={'assignment':assignment,'clock_shift':assignment.shift_template,'clock_in_mode':AttendanceRecord.ClockInMode.SCHEDULED,'time_in':time_in,'time_out':time_out,'status':status,'remarks':remarks}); AttendanceCalculator.update_record(record); record_audit(organization=membership.organization,actor=request.user,action='attendance.recorded',entity=record,details={'employee':record.employee.employee_number,'attendance_date':attendance_date.isoformat()}); return JsonResponse({'id':str(record.id),'employee_id':str(employee.id),'attendance_date':attendance_date.isoformat(),'status':record.status,'late_minutes':record.late_minutes,'undertime_minutes':record.undertime_minutes,'overtime_minutes':record.overtime_minutes},status=201)
 
 
 @require_http_methods(['GET'])
@@ -245,3 +255,36 @@ def import_timekeeping(request):
                 record,_=AttendanceRecord.objects.update_or_create(employee=employee,attendance_date=attendance_day,defaults={'assignment':assignment,'clock_shift':assignment.shift_template,'clock_in_mode':AttendanceRecord.ClockInMode.SCHEDULED,'time_in':time_in,'time_out':time_out,'status':status,'remarks':remarks}); record.full_clean(); AttendanceCalculator.update_record(record); imported+=1; record_audit(organization=membership.organization,actor=request.user,action='attendance.imported',entity=record,details={'source':uploaded.name,'row_count':len(prepared)})
     except ValueError as error: return JsonResponse({'detail':f'No records were imported: {error}'},status=400)
     return JsonResponse({'imported':imported,'updated_or_created':imported,'source':uploaded.name})
+
+
+@require_http_methods(['GET'])
+def attendance_logs(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
+    membership = current_membership(request)
+    if membership is None or not (membership.has_permission('view_attendance') or membership.has_permission('manage_attendance')):
+        return JsonResponse({'detail': 'Attendance log access is not available for this account.'}, status=403)
+    records = (
+        AttendanceRecord.objects
+        .filter(employee__organization=membership.organization)
+        .select_related('employee')
+        .order_by('-attendance_date', '-time_in', '-created_at')[:100]
+    )
+    rows = []
+    for record in records:
+        rows.append({
+            'id': str(record.id),
+            'employee_name': f'{record.employee.first_name} {record.employee.last_name}',
+            'employee_number': record.employee.employee_number,
+            'attendance_date': record.attendance_date.isoformat(),
+            'time_in': timezone.localtime(record.time_in).isoformat() if record.time_in else None,
+            'time_out': timezone.localtime(record.time_out).isoformat() if record.time_out else None,
+            'status': record.status,
+            'late_minutes': record.late_minutes,
+            'undertime_minutes': record.undertime_minutes,
+            'overtime_minutes': record.overtime_minutes,
+            'remarks': record.remarks,
+            'clock_in_photo_url': f'/api/attendance/{record.id}/proof/clock_in/' if record.clock_in_photo else None,
+            'clock_out_photo_url': f'/api/attendance/{record.id}/proof/clock_out/' if record.clock_out_photo else None,
+        })
+    return JsonResponse({'records': rows, 'count': len(rows)})

@@ -50,7 +50,7 @@ def employee_directory(request):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
     membership = _membership_for(request)
-    if membership is None or not membership.has_permission('view_employees'):
+    if membership is None or not (membership.has_permission('view_employees') or membership.has_permission('manage_employees')):
         return JsonResponse({'detail': 'No active organization membership found.'}, status=403)
     employees = Employee.objects.filter(organization=membership.organization, is_active=True).select_related('department', 'position', 'employment_type', 'manager').prefetch_related('assignments__shift_template', 'assignments__client', 'assignments__client_site')
     return JsonResponse({'employees': [_employee_payload(employee) for employee in employees]})
@@ -72,11 +72,15 @@ def employee_profile_api(request, employee_id):
     else:
         if membership is None or membership.organization_id != employee.organization_id:
             return JsonResponse({'detail': 'Employee not found.'}, status=404)
-        if not membership.has_permission('view_employees'):
+        if not (membership.has_permission('view_employees') or membership.has_permission('manage_employees')):
             return JsonResponse({'detail': 'Permission denied.'}, status=403)
 
     private = is_self or (membership is not None and membership.organization_id == employee.organization_id and membership.has_permission('manage_employees'))
-    return JsonResponse({'employee': _employee_payload(employee, private), 'history': [{'id': str(h.id), 'status': h.status, 'effective_date': h.effective_date.isoformat(), 'end_date': h.end_date.isoformat() if h.end_date else None, 'department': h.department.name if h.department else None, 'position': h.position.title if h.position else None, 'employment_type': h.employment_type.name if h.employment_type else None, 'manager': str(h.manager_id) if h.manager_id else None, 'reason': h.reason} for h in employee.employment_history.all()], 'documents': [{'id': str(d.id), 'type': d.document_type, 'name': d.name, 'issued_date': d.issued_date.isoformat() if d.issued_date else None, 'expiry_date': d.expiry_date.isoformat() if d.expiry_date else None, 'required': d.is_required, 'status': d.status} for d in employee.documents.all()]})
+    # Employee documents and detailed employment history contain sensitive HR data.
+    # Self-service users and HR personnel may see them; general directory viewers may not.
+    history = [{'id': str(h.id), 'status': h.status, 'effective_date': h.effective_date.isoformat(), 'end_date': h.end_date.isoformat() if h.end_date else None, 'department': h.department.name if h.department else None, 'position': h.position.title if h.position else None, 'employment_type': h.employment_type.name if h.employment_type else None, 'manager': str(h.manager_id) if h.manager_id else None, 'reason': h.reason} for h in employee.employment_history.all()] if private else []
+    documents = [{'id': str(d.id), 'type': d.document_type, 'name': d.name, 'issued_date': d.issued_date.isoformat() if d.issued_date else None, 'expiry_date': d.expiry_date.isoformat() if d.expiry_date else None, 'required': d.is_required, 'status': d.status} for d in employee.documents.all()] if private else []
+    return JsonResponse({'employee': _employee_payload(employee, private), 'history': history, 'documents': documents})
 
 
 def employee_lifecycle_api(request, employee_id):
@@ -128,5 +132,11 @@ def employee_lifecycle_api(request, employee_id):
 def employee_directory_page(request):
     if not request.user.is_authenticated:
         return redirect('login')
+    membership = _membership_for(request)
+    if membership is None:
+        return redirect('organization-select')
+    if not (membership.has_permission('view_employees') or membership.has_permission('manage_employees')):
+        from apps.accounts.views import workspace_url_for_user
+        return redirect(workspace_url_for_user(request.user))
     from apps.accounts.views import workspace_url_for_user
     return render(request, 'employees/directory.html', {'workspace_url': workspace_url_for_user(request.user)})

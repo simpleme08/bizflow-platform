@@ -33,7 +33,7 @@ def attendance_proof(request, record_id, proof_type):
         return JsonResponse({'detail': 'Attendance record was not found in your organization.'}, status=404)
 
     is_owner = record.employee.user_id == request.user.id
-    can_manage = request.user.is_superuser or membership.has_permission('view_attendance')
+    can_manage = request.user.is_superuser or (membership.has_permission('view_attendance') or membership.has_permission('manage_attendance'))
     if not (is_owner or can_manage):
         return JsonResponse({'detail': 'You do not have access to this attendance proof.'}, status=403)
 

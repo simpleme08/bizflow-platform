@@ -38,6 +38,38 @@ class OrganizationMembershipTests(TestCase):
 		self.assertTrue(membership.has_permission('manage_payroll'))
 		self.assertFalse(membership.has_permission('manage_organization'))
 
+	def test_sme_role_is_limited_to_operations_and_reports(self):
+		membership = OrganizationMembership.objects.create(
+			organization=self.organization,
+			user=self.user,
+			role=OrganizationMembership.Role.SME,
+		)
+
+		self.assertTrue(membership.has_permission('view_employees'))
+		self.assertTrue(membership.has_permission('view_attendance'))
+		self.assertTrue(membership.has_permission('manage_attendance'))
+		self.assertTrue(membership.has_permission('view_reports'))
+		self.assertFalse(membership.has_permission('approve_leave'))
+		self.assertFalse(membership.has_permission('view_payroll'))
+		self.assertFalse(membership.has_permission('manage_payroll'))
+		self.assertFalse(membership.has_permission('approve_payroll'))
+		self.assertFalse(membership.has_permission('pay_payroll'))
+
+	def test_sme_workspace_exposes_operational_modules_and_denies_sensitive_modules(self):
+		OrganizationMembership.objects.create(
+			organization=self.organization,
+			user=self.user,
+			role=OrganizationMembership.Role.SME,
+		)
+		self.client.login(username='owner', password='test-password')
+
+		self.assertEqual(self.client.get('/workspace/').status_code, 200)
+		self.assertEqual(self.client.get('/scheduling/').status_code, 200)
+		self.assertEqual(self.client.get('/attendance/').status_code, 200)
+		self.assertEqual(self.client.get('/reports/').status_code, 200)
+		self.assertEqual(self.client.get('/payroll/').status_code, 403)
+		self.assertEqual(self.client.get('/leave/').status_code, 403)
+
 	def test_employee_role_is_limited_to_self_service(self):
 		membership = OrganizationMembership.objects.create(
 			organization=self.organization,

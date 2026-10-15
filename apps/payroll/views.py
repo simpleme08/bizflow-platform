@@ -25,6 +25,9 @@ def _membership(request, permission=None):
 def payroll_page(request):
     if not request.user.is_authenticated:
         return redirect('login')
+    membership = current_membership(request)
+    if membership is None or not membership.has_permission('view_payroll'):
+        return JsonResponse({'detail': 'Payroll access is not available for this account.'}, status=403)
     from apps.accounts.views import workspace_url_for_user
     return render(request, 'payroll/payroll.html', {'workspace_url': workspace_url_for_user(request)})
 
@@ -36,7 +39,16 @@ def payroll_api(request):
     if membership is None:
         return JsonResponse({'detail': 'No active organization membership found.'}, status=403)
     records = PayrollRecord.objects.filter(employee__organization=membership.organization, payroll_period__organization=membership.organization).select_related('employee', 'payroll_period')
-    return JsonResponse({'records': [{
+    periods = PayrollPeriod.objects.filter(organization=membership.organization).order_by('-end_date', '-start_date')
+    return JsonResponse({'permissions': {
+        'manage_payroll': membership.has_permission('manage_payroll'),
+        'approve_payroll': membership.has_permission('approve_payroll'),
+        'pay_payroll': membership.has_permission('pay_payroll'),
+    }, 'periods': [{
+        'id': str(period.id), 'name': period.name, 'start_date': period.start_date.isoformat(),
+        'end_date': period.end_date.isoformat(), 'status': period.status,
+        'confidence': period.confidence_status,
+    } for period in periods], 'records': [{
         'id': str(record.id), 'employee': f'{record.employee.first_name} {record.employee.last_name}', 'employee_number': record.employee.employee_number,
         'period': record.payroll_period.name, 'basic_pay': str(record.basic_pay), 'overtime_pay': str(record.overtime_pay),
         'gross_pay': str(record.gross_pay), 'total_deductions': str(record.total_deductions), 'employer_contributions': str(record.employer_contributions), 'net_pay': str(record.net_pay), 'status': record.status,
@@ -48,7 +60,9 @@ def my_payroll_api(request):
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
     membership = _membership(request, 'view_payroll')
     if membership is None:
-        return JsonResponse({'detail': 'No active organization membership found.'}, status=403)
+        membership = current_membership(request)
+        if membership is None or membership.role != membership.Role.EMPLOYEE:
+            return JsonResponse({'detail': 'No active organization membership found.'}, status=403)
     try:
         employee = request.user.employee_profile
     except AttributeError:
@@ -149,11 +163,15 @@ def apply_payroll_adjustments(request, record_id):
 def payslip(request, record_id):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
-    membership = _membership(request, 'view_payroll')
+    # This endpoint only ever serves the signed-in employee's own approved payslip.
+    # Do not require the HR-wide view_payroll permission for employee self-service.
+    membership = _membership(request)
     if membership is None:
         return JsonResponse({'detail': 'No active organization membership found.'}, status=403)
     try:
         employee = request.user.employee_profile
+        if employee.organization_id != membership.organization_id or not employee.organization.is_active:
+            return JsonResponse({'detail': 'Employee organization access is not available.'}, status=403)
         record = PayrollRecord.objects.select_related('employee', 'payroll_period').get(id=record_id, employee=employee, employee__organization=membership.organization, payroll_period__organization=membership.organization, status__in=(PayrollRecord.Status.APPROVED, PayrollRecord.Status.PAID))
     except (AttributeError, PayrollRecord.DoesNotExist):
         return JsonResponse({'detail': 'Approved payslip was not found.'}, status=404)

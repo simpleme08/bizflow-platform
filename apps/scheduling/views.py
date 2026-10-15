@@ -1,9 +1,14 @@
-from django.core.exceptions import ValidationError
-from django.http import JsonResponse
-from django.views.decorators.http import require_http_methods
-from datetime import date
-from django.utils import timezone
+from datetime import date, datetime
+from io import BytesIO
 import json
+
+from django.core.exceptions import ValidationError
+from django.db import transaction
+from django.http import HttpResponse, JsonResponse
+from django.utils import timezone
+from django.views.decorators.http import require_http_methods
+from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Font, PatternFill
 
 from apps.organization.context import current_membership
 from apps.organization.models import OrganizationMembership
@@ -31,7 +36,7 @@ def scheduling_page(request):
         return JsonResponse({'detail': 'Access denied. Requires scheduling permissions.'}, status=403)
     from django.shortcuts import render
     from apps.accounts.views import workspace_url_for_user
-    return render(request, 'scheduling/schedule.html', {'workspace_url': workspace_url_for_user(request.user)})
+    return render(request, 'scheduling/schedule.html', {'workspace_url': workspace_url_for_user(request.user), 'can_bulk_assign_shifts': _can_bulk_assign_shifts(membership)})
 
 
 def _tenant_shift_queryset(organization):
@@ -54,7 +59,7 @@ def get_clients(request):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
     membership = _membership_for(request)
-    if membership is None:
+    if membership is None or not membership.has_permission('manage_attendance'):
         return JsonResponse({'detail': 'Access denied.'}, status=403)
     clients = Client.objects.filter(organization=membership.organization, is_active=True).prefetch_related('sites').order_by('name')
     return JsonResponse({'clients': [{'id': str(client.id), 'name': client.name, 'code': client.code, 'sites': [{'id': str(site.id), 'name': site.name} for site in client.sites.filter(is_active=True).order_by('name')]} for client in clients]})
@@ -114,6 +119,8 @@ def assign_shift(request):
     assignment_id = data.get('assignment_id')
     if not all([employee_id, shift_id, start_date]):
         return JsonResponse({'detail': 'Missing required fields.'}, status=400)
+    if not isinstance(is_primary, bool):
+        return JsonResponse({'detail': 'is_primary must be a boolean.'}, status=400)
     try:
         employee = Employee.objects.get(id=employee_id, organization=membership.organization)
         if employee.status in INELIGIBLE_ASSIGNMENT_STATUSES or not employee.is_active:
@@ -349,3 +356,163 @@ def cover_shift_decision(request, cover_shift_id):
         return JsonResponse({'detail': 'Cover shift not found or invalid JSON.'}, status=400)
     record_audit(organization=membership.organization, actor=request.user, action='scheduling.cover_shift_decision', entity=cover, details={'approved': approved})
     return JsonResponse({'status': cover.status})
+
+
+# Excel-based bulk shift assignment for HR and SME.
+
+SHIFT_ASSIGNMENT_HEADERS = ('Employee Number', 'Shift Name', 'Start Date', 'End Date', 'Client Code', 'Site Name', 'Primary')
+
+
+def _can_bulk_assign_shifts(membership):
+    return membership and membership.has_permission('manage_attendance') and membership.role in (
+        OrganizationMembership.Role.HR,
+        OrganizationMembership.Role.SME,
+        OrganizationMembership.Role.ADMIN,
+        OrganizationMembership.Role.OWNER,
+        OrganizationMembership.Role.SUPER_USER,
+    )
+
+
+@require_http_methods(['GET'])
+def shift_assignment_template(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
+    membership = _membership_for(request)
+    if not _can_bulk_assign_shifts(membership):
+        return JsonResponse({'detail': 'HR or SME access is required to download this template.'}, status=403)
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = 'Shift Assignments'
+    sheet.append(SHIFT_ASSIGNMENT_HEADERS)
+    sheet.append(['EMP-000001', 'Day Shift', timezone.localdate(), None, '', '', 'TRUE'])
+    for cell in sheet[1]:
+        cell.font = Font(bold=True, color='FFFFFF')
+        cell.fill = PatternFill('solid', fgColor='1F4E78')
+    sheet['C2'].number_format = sheet['D2'].number_format = 'yyyy-mm-dd'
+    for column, width in zip('ABCDEFG', (22, 28, 16, 16, 18, 24, 12)):
+        sheet.column_dimensions[column].width = width
+    sheet.freeze_panes = 'A2'
+    buffer = BytesIO()
+    workbook.save(buffer)
+    response = HttpResponse(buffer.getvalue(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = 'attachment; filename="bizflow-shift-assignment-template.xlsx"'
+    return response
+
+
+@require_http_methods(['POST'])
+def import_shift_assignments(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
+    membership = _membership_for(request)
+    if not _can_bulk_assign_shifts(membership):
+        return JsonResponse({'detail': 'HR or SME access is required to upload shift assignments.'}, status=403)
+    uploaded = request.FILES.get('file')
+    if uploaded is None or not uploaded.name.lower().endswith('.xlsx'):
+        return JsonResponse({'detail': 'Upload an .xlsx shift assignment workbook.'}, status=400)
+    if uploaded.size > 5 * 1024 * 1024:
+        return JsonResponse({'detail': 'The workbook must be 5 MB or smaller.'}, status=400)
+    try:
+        workbook = load_workbook(uploaded, read_only=True, data_only=True)
+        sheet = workbook.active
+        header_row = next(sheet.iter_rows(min_row=1, max_row=1, values_only=True), None)
+        headers = tuple(value.strip() if isinstance(value, str) else value for value in (header_row or ()))
+        if headers != SHIFT_ASSIGNMENT_HEADERS:
+            workbook.close()
+            return JsonResponse({'detail': f'Headers must be exactly: {", ".join(SHIFT_ASSIGNMENT_HEADERS)}.'}, status=400)
+        raw_rows = []
+        for row in sheet.iter_rows(min_row=2, values_only=True):
+            if len(raw_rows) >= 1000:
+                workbook.close()
+                return JsonResponse({'detail': 'A workbook may contain at most 1,000 assignment rows. Split larger uploads into separate files.'}, status=400)
+            raw_rows.append(row)
+        workbook.close()
+    except Exception:
+        return JsonResponse({'detail': 'The workbook could not be read. Download and use the supplied template.'}, status=400)
+
+    errors, prepared, seen = [], [], set()
+    for row_number, row in enumerate(raw_rows, start=2):
+        values = list(row) + [None] * (len(SHIFT_ASSIGNMENT_HEADERS) - len(row))
+        if not any(value not in (None, '') for value in values):
+            continue
+        try:
+            employee_number, shift_name, start_value, end_value, client_code, site_name, primary_value = values[:7]
+            if not isinstance(employee_number, str) or not employee_number.strip():
+                raise ValueError('Employee Number is required.')
+            if not isinstance(shift_name, str) or not shift_name.strip():
+                raise ValueError('Shift Name is required.')
+            def parse_excel_date(value, field, required=False):
+                if value in (None, ''):
+                    if required:
+                        raise ValueError(f'{field} is required.')
+                    return None
+                if isinstance(value, datetime):
+                    return value.date()
+                if isinstance(value, date):
+                    return value
+                if isinstance(value, str):
+                    try:
+                        return date.fromisoformat(value.strip())
+                    except ValueError:
+                        raise ValueError(f'{field} must be an Excel date or YYYY-MM-DD.')
+                raise ValueError(f'{field} must be an Excel date or YYYY-MM-DD.')
+            start_day = parse_excel_date(start_value, 'Start Date', required=True)
+            end_day = parse_excel_date(end_value, 'End Date')
+            if end_day and end_day < start_day:
+                raise ValueError('End Date cannot be before Start Date.')
+            if isinstance(primary_value, bool):
+                is_primary = primary_value
+            elif primary_value in (None, ''):
+                is_primary = False
+            elif str(primary_value).strip().upper() in ('TRUE', 'YES', 'Y', '1'):
+                is_primary = True
+            elif str(primary_value).strip().upper() in ('FALSE', 'NO', 'N', '0'):
+                is_primary = False
+            else:
+                raise ValueError('Primary must be TRUE or FALSE.')
+            employee_number = employee_number.strip()
+            key = (employee_number.casefold(), shift_name.strip().casefold(), start_day.isoformat())
+            if key in seen:
+                raise ValueError('Duplicate employee/start-date row in this workbook.')
+            seen.add(key)
+            employee = Employee.objects.filter(employee_number=employee_number, organization=membership.organization, is_active=True).exclude(status__in=INELIGIBLE_ASSIGNMENT_STATUSES).first()
+            if employee is None:
+                raise ValueError('Active eligible employee was not found in this organization.')
+            shift = _tenant_shift_queryset(membership.organization).filter(name__iexact=shift_name.strip()).first()
+            if shift is None:
+                raise ValueError('Shift Name was not found in this organization.')
+            if employee.separation_date and start_day >= employee.separation_date:
+                raise ValueError('Shift cannot start on or after the employee separation date.')
+            client = None
+            site = None
+            if client_code not in (None, ''):
+                client = Client.objects.filter(organization=membership.organization, code__iexact=str(client_code).strip(), is_active=True).first()
+                if client is None:
+                    raise ValueError('Client Code was not found in this organization.')
+            if site_name not in (None, ''):
+                if client is None:
+                    raise ValueError('Client Code is required when Site Name is supplied.')
+                site = ClientSite.objects.filter(client=client, name__iexact=str(site_name).strip(), is_active=True).first()
+                if site is None:
+                    raise ValueError('Site Name was not found under the selected client.')
+            if EmployeeAssignment.objects.filter(employee=employee, start_date=start_day, shift_template=shift).exists():
+                raise ValueError('This employee already has this shift assignment starting on this date.')
+            assignment = EmployeeAssignment(employee=employee, shift_template=shift, client=client, client_site=site, start_date=start_day, end_date=end_day, is_primary=is_primary)
+            assignment.full_clean()
+            prepared.append((row_number, assignment, employee))
+        except (TypeError, ValueError, ValidationError) as error:
+            detail = '; '.join(error.messages) if isinstance(error, ValidationError) else str(error)
+            errors.append({'row': row_number, 'detail': detail})
+
+    if not prepared and not errors:
+        return JsonResponse({'detail': 'The workbook contains no assignment rows.'}, status=400)
+    if errors:
+        return JsonResponse({'detail': 'No assignments were imported. Fix the listed rows and upload the workbook again.', 'errors': errors}, status=400)
+
+    try:
+        with transaction.atomic():
+            for row_number, assignment, employee in prepared:
+                assignment.save()
+                record_audit(organization=membership.organization, actor=request.user, action='scheduling.bulk_assign_shift', entity=assignment, details={'source': uploaded.name, 'row': row_number, 'employee_number': employee.employee_number})
+    except Exception:
+        return JsonResponse({'detail': 'No assignments were imported because saving failed. Check the workbook and try again.'}, status=400)
+    return JsonResponse({'imported': len(prepared), 'source': uploaded.name, 'message': f'Successfully imported {len(prepared)} shift assignment(s).'})

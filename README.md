@@ -81,7 +81,7 @@ For a disposable local/demo database:
 python manage.py seed_demo
 ```
 
-The seed is intended for demonstrations and creates representative organizations, users, employees and module data. **Do not run it against a real production HR database.** Demo seeding is explicitly disabled in production and requires a password supplied through an environment variable.
+The seed is intended for demonstrations and creates representative organizations, users, employees, role accounts (including SME) and module data. **Do not run it against a real production HR database.** Demo seeding is explicitly disabled in production and requires a password supplied through an environment variable.
 
 ## Timekeeping import
 

@@ -164,6 +164,12 @@ class PayrollCalculatorTests(TestCase):
             PayrollCalculator.process_period(other_period, self.employee.organization)
 
     def test_employee_can_download_only_approved_payslip(self):
+        membership, _ = OrganizationMembership.objects.update_or_create(
+            organization=self.employee.organization,
+            user=self.employee.user,
+            defaults={'role': OrganizationMembership.Role.EMPLOYEE, 'is_active': True},
+        )
+        self.assertFalse(membership.has_permission('view_payroll'))
         PayrollCalculator.process_period(self.period, self.employee.organization)
         record = PayrollRecord.objects.get(employee=self.employee, payroll_period=self.period)
         record.status = PayrollRecord.Status.APPROVED

@@ -2,6 +2,7 @@ import json
 from datetime import date
 from decimal import Decimal
 
+from django.db import transaction
 from django.http import JsonResponse
 from django.core.exceptions import ValidationError
 from django.shortcuts import redirect, render
@@ -39,6 +40,16 @@ def _eligible(employee, start_date=None):
 def leave_page(request):
     if not request.user.is_authenticated:
         return redirect('login')
+    membership = current_membership(request)
+    if membership is None:
+        memberships = request.user.organization_memberships.filter(is_active=True, organization__is_active=True).select_related('organization')
+        if memberships.count() == 1:
+            membership = memberships.first()
+            request.session['active_organization_id'] = str(membership.organization_id)
+    if membership is None:
+        return redirect('organization-select')
+    if not membership.has_permission('approve_leave') and not membership.has_permission('submit_leave'):
+        return JsonResponse({'detail': 'Leave access is not available for this account.'}, status=403)
     from apps.accounts.views import workspace_url_for_user
     return render(request, 'leave/leave.html', {'workspace_url': workspace_url_for_user(request)})
 
@@ -70,13 +81,34 @@ def my_leave_api(request):
         end_date = date.fromisoformat(payload['end_date'])
         if end_date < start_date:
             raise ValueError
+        if start_date.year != end_date.year:
+            return JsonResponse({'detail': 'Leave requests cannot cross calendar years; submit separate requests for each year.'}, status=400)
         if not _eligible(employee, start_date) or (employee.separation_date and end_date >= employee.separation_date):
             return JsonResponse({'detail': 'Leave dates must fall within the employee active employment period.'}, status=409)
         total_days = Decimal((end_date - start_date).days + 1)
-        balance, _ = EmployeeLeaveBalance.objects.get_or_create(employee=employee, leave_type=leave_type, year=start_date.year, defaults={'credits': leave_type.annual_credits})
-        if balance.remaining < total_days:
-            return JsonResponse({'detail': 'Insufficient leave balance.'}, status=400)
-        application = LeaveApplication.objects.create(employee=employee, leave_type=leave_type, start_date=start_date, end_date=end_date, total_days=total_days, reason=payload.get('reason', ''))
+        with transaction.atomic():
+            balance, _ = EmployeeLeaveBalance.objects.get_or_create(employee=employee, leave_type=leave_type, year=start_date.year, defaults={'credits': leave_type.annual_credits})
+            balance = EmployeeLeaveBalance.objects.select_for_update().get(pk=balance.pk)
+            overlapping = LeaveApplication.objects.filter(
+                employee=employee,
+                status__in=(LeaveApplication.Status.PENDING, LeaveApplication.Status.APPROVED),
+                start_date__lte=end_date,
+                end_date__gte=start_date,
+            ).exists()
+            if overlapping:
+                return JsonResponse({'detail': 'You already have a pending or approved leave request overlapping these dates.'}, status=409)
+            pending_days = sum(
+                LeaveApplication.objects.filter(
+                    employee=employee,
+                    leave_type=leave_type,
+                    start_date__year=start_date.year,
+                    status=LeaveApplication.Status.PENDING,
+                ).values_list('total_days', flat=True),
+                Decimal('0.00'),
+            )
+            if balance.remaining - pending_days < total_days:
+                return JsonResponse({'detail': 'Insufficient leave balance after accounting for pending requests.'}, status=400)
+            application = LeaveApplication.objects.create(employee=employee, leave_type=leave_type, start_date=start_date, end_date=end_date, total_days=total_days, reason=payload.get('reason', ''))
     except (KeyError, TypeError, ValueError, json.JSONDecodeError, LeaveType.DoesNotExist):
         return JsonResponse({'detail': 'Provide a valid leave type and date range.'}, status=400)
     record_audit(organization=employee.organization, actor=request.user, action='leave.submitted', entity=application)
@@ -107,13 +139,36 @@ def leave_api(request):
         leave_type = LeaveType.objects.get(id=payload['leave_type_id'], is_active=True)
         start_date = date.fromisoformat(payload['start_date'])
         end_date = date.fromisoformat(payload['end_date'])
-        if end_date < start_date or not _eligible(employee, start_date) or (employee.separation_date and end_date >= employee.separation_date):
+        if end_date < start_date:
+            raise ValueError
+        if start_date.year != end_date.year:
+            return JsonResponse({'detail': 'Leave requests cannot cross calendar years; submit separate requests for each year.'}, status=400)
+        if not _eligible(employee, start_date) or (employee.separation_date and end_date >= employee.separation_date):
             raise ValueError
         total_days = Decimal((end_date - start_date).days + 1)
-        balance, _ = EmployeeLeaveBalance.objects.get_or_create(employee=employee, leave_type=leave_type, year=start_date.year, defaults={'credits': leave_type.annual_credits})
-        if balance.remaining < total_days:
-            return JsonResponse({'detail': 'Insufficient leave balance.'}, status=400)
-        application = LeaveApplication.objects.create(employee=employee, leave_type=leave_type, start_date=start_date, end_date=end_date, total_days=total_days, reason=payload.get('reason', ''))
+        with transaction.atomic():
+            balance, _ = EmployeeLeaveBalance.objects.get_or_create(employee=employee, leave_type=leave_type, year=start_date.year, defaults={'credits': leave_type.annual_credits})
+            balance = EmployeeLeaveBalance.objects.select_for_update().get(pk=balance.pk)
+            overlapping = LeaveApplication.objects.filter(
+                employee=employee,
+                status__in=(LeaveApplication.Status.PENDING, LeaveApplication.Status.APPROVED),
+                start_date__lte=end_date,
+                end_date__gte=start_date,
+            ).exists()
+            if overlapping:
+                return JsonResponse({'detail': 'You already have a pending or approved leave request overlapping these dates.'}, status=409)
+            pending_days = sum(
+                LeaveApplication.objects.filter(
+                    employee=employee,
+                    leave_type=leave_type,
+                    start_date__year=start_date.year,
+                    status=LeaveApplication.Status.PENDING,
+                ).values_list('total_days', flat=True),
+                Decimal('0.00'),
+            )
+            if balance.remaining - pending_days < total_days:
+                return JsonResponse({'detail': 'Insufficient leave balance after accounting for pending requests.'}, status=400)
+            application = LeaveApplication.objects.create(employee=employee, leave_type=leave_type, start_date=start_date, end_date=end_date, total_days=total_days, reason=payload.get('reason', ''))
     except (KeyError, TypeError, ValueError, LeaveType.DoesNotExist, AttributeError, Employee.DoesNotExist, json.JSONDecodeError):
         return JsonResponse({'detail': 'Provide a valid leave type, date range, and employee profile.'}, status=400)
     record_audit(organization=employee.organization, actor=request.user, action='leave.submitted', entity=application)

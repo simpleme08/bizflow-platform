@@ -1,10 +1,10 @@
-# HR demo readiness — September 2026
+# HR demo readiness — October 2026
 
 This document is the practical gate for demonstrating BizFlow HRIS to an HR stakeholder. It is intentionally narrower than the production go-live checklist.
 
 ## Demo status
 
-**Current state: DEMO-READY WITH KNOWN GAPS**
+**Current state: DEMO-READY — final Thursday validation gate**
 
 The application has the core HRIS demonstration path: organization/roles, employee records and lifecycle, scheduling/attendance, leave, payroll processing with confidence preflight and maker/checker controls, payslips/reporting, employee self-service, onboarding, talent and HR operations.
 
@@ -25,7 +25,7 @@ The demo seed is designed to start payroll in a **DRAFT/open review state**, so 
 - [x] Recruiting/performance/benefits/offboarding foundations
 - [x] HR Operations: policies, announcements, approvals and timesheets
 - [x] Reports and audit visibility
-- [x] Demo seed command with representative data
+- [x] Demo seed command with representative data, including the SME role
 
 ## Presenter script
 
@@ -37,8 +37,9 @@ The demo seed is designed to start payroll in a **DRAFT/open review state**, so 
 6. Open Payroll: select the demo payroll period; run confidence preflight; process the period; review gross, statutory deductions, tax, net pay and exceptions; explain that processing and approval are intentionally separated; approve using the authorized checker account; mark payment only after the payment step; open a payslip.
 7. Open Reports and show payroll/attendance/leave outputs.
 8. Switch to Employee/ESS and demonstrate that the employee sees only their own information.
-9. Show Onboarding, Talent and HR Operations as the broader HR platform story.
-10. Close with the product boundary: Philippine payroll rules require current effective-date verification and qualified review before real payroll use.
+9. Switch to the SME account and show the role-limited workspace: People, Attendance, Shift Scheduling, and Reports. Confirm payroll and leave approval are not exposed to the SME role.
+10. Show Onboarding, Talent and HR Operations as the broader HR platform story.
+11. Close with the product boundary: Philippine payroll rules require current effective-date verification and qualified review before real payroll use.
 
 ## Do not claim in the demo
 
@@ -60,8 +61,9 @@ These are tracked in docs/master-checklist.md.
 Before the meeting:
 - use a disposable demo/staging organization;
 - seed data only with BIZFLOW_DEMO_PASSWORD supplied outside source control;
-- verify the four demo roles: HR, Manager, Employee and Super User;
+- verify the five core demo roles: HR, SME, Manager, Employee and Super User;
 - verify the HR account can complete the payroll walkthrough;
+- verify the SME account can open People, Attendance, Scheduling and Reports and is denied payroll/leave approval;
 - verify the checker/payment authority is a different user from the payroll processor;
 - verify the employee account cannot see another employee's payroll or profile;
 - run python manage.py check;

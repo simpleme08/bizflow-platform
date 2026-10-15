@@ -136,6 +136,12 @@ class DashboardViewTests(TestCase):
         shift = ShiftTemplate.objects.create(name='Day Shift', start_time=time(8), end_time=time(17))
         self.assignment = EmployeeAssignment.objects.create(employee=employee, shift_template=shift, start_date=date(2026, 1, 1), is_primary=True)
 
+    def photo(self, name='attendance-proof.jpg'):
+        image = Image.new('RGB', (20, 20), 'white')
+        buffer = BytesIO()
+        image.save(buffer, format='JPEG')
+        return SimpleUploadedFile(name, buffer.getvalue(), content_type='image/jpeg')
+
     def test_dashboard_requires_login(self):
         response = self.client.get('/api/dashboard/')
         self.assertEqual(response.status_code, 401)
@@ -156,6 +162,20 @@ class DashboardViewTests(TestCase):
         self.assertFalse(data['is_maintenance_user'])
         self.assertEqual([section['key'] for section in data['sections']], ['employee_directory', 'attendance', 'scheduling', 'leave'])
         self.assertEqual({key: value for key, value in data.items() if key not in ('role', 'role_label', 'is_maintenance_user', 'sections')}, {'date': today.isoformat(), 'active_employee_count': 1, 'today_attendance_count': 1, 'today_present_count': 1, 'today_absent_count': 0, 'records': [{'employee_number': 'EMP-000001', 'employee_name': 'Juan Cruz', 'status': 'PRESENT', 'late_minutes': 12, 'undertime_minutes': 0, 'overtime_minutes': 0}]})
+
+    def test_management_roles_see_modules_they_manage(self):
+        membership = self.user.organization_memberships.get()
+        membership.role = OrganizationMembership.Role.ADMIN
+        membership.save(update_fields=['role'])
+        self.client.login(username='manager', password='test-password')
+
+        response = self.client.get('/api/dashboard/')
+        self.assertEqual(response.status_code, 200)
+        keys = {section['key'] for section in response.json()['sections']}
+        self.assertIn('employee_directory', keys)
+        self.assertIn('attendance', keys)
+        self.assertIn('scheduling', keys)
+        self.assertIn('onboarding', keys)
 
     def test_dashboard_excludes_other_organizations(self):
         other_user = get_user_model().objects.create_user(username='other')
@@ -189,3 +209,39 @@ class DashboardViewTests(TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json()['late_minutes'], 20)
         self.assertEqual(response.json()['overtime_minutes'], 60)
+
+    def test_record_attendance_rejects_invalid_status_without_saving(self):
+        self.client.login(username='manager', password='test-password')
+        response = self.client.post('/api/attendance/', data={'employee_id': str(self.assignment.employee_id), 'attendance_date': '2026-08-10', 'status': 'PAYROLL_APPROVED'}, content_type='application/json')
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()['detail'], 'Invalid attendance status.')
+        self.assertFalse(AttendanceRecord.objects.filter(employee=self.assignment.employee, attendance_date=date(2026, 8, 10)).exists())
+
+    def test_ceo_sme_and_hr_can_view_attendance_logs_and_protected_photos(self):
+        today = timezone.localdate()
+        record = AttendanceRecord.objects.create(
+            employee=self.assignment.employee,
+            assignment=self.assignment,
+            attendance_date=today,
+            time_in=timezone.now(),
+            status=AttendanceRecord.Status.PRESENT,
+        )
+        record.clock_in_photo.save('attendance-proof.jpg', self.photo(), save=True)
+        for role in (OrganizationMembership.Role.CEO, OrganizationMembership.Role.SME, OrganizationMembership.Role.HR, OrganizationMembership.Role.ADMIN):
+            with self.subTest(role=role):
+                user = get_user_model().objects.create_user(username=f'viewer-{role.lower()}', password='test-password')
+                OrganizationMembership.objects.create(
+                    organization=self.assignment.employee.organization,
+                    user=user,
+                    role=role,
+                )
+                client = self.client_class()
+                self.assertTrue(client.login(username=user.username, password='test-password'))
+                response = client.get('/api/attendance/logs/')
+                self.assertEqual(response.status_code, 200)
+                rows = response.json()['records']
+                row = next(item for item in rows if item['id'] == str(record.id))
+                self.assertTrue(row['clock_in_photo_url'])
+                photo_response = client.get(row['clock_in_photo_url'])
+                self.assertEqual(photo_response.status_code, 200)
+                self.assertEqual(photo_response['Cache-Control'], 'private, no-store')

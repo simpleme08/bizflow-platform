@@ -1,3 +1,5 @@
+from datetime import date
+
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -78,6 +80,20 @@ class EmployeeAssignment(BaseModel):
             shift_org_id = self.shift_template.organization_id
             if shift_org_id is not None and shift_org_id != self.employee.organization_id:
                 raise ValidationError('Assignment shift must belong to the employee organization.')
+
+            # Prevent duplicate overlapping assignments for the same employee and shift.
+            # Distinct shift templates can still overlap in date ranges for rotating schedules.
+            overlapping = EmployeeAssignment.objects.filter(
+                employee_id=self.employee_id,
+                shift_template_id=self.shift_template_id,
+                start_date__lte=self.end_date or date.max,
+            ).exclude(end_date__lt=self.start_date)
+            if self.pk:
+                overlapping = overlapping.exclude(pk=self.pk)
+            if overlapping.exists():
+                raise ValidationError({
+                    'shift_template': 'This employee already has an overlapping assignment for this shift.'
+                })
         if self.client_id and self.client.organization_id != self.employee.organization_id:
             raise ValidationError('Assignment client must belong to the employee organization.')
         if self.client_site_id:

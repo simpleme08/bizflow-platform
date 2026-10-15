@@ -9,7 +9,7 @@ from urllib.parse import unquote, urlparse
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 ENVIRONMENT = os.getenv('DJANGO_ENV', 'development').lower()
-DEBUG = os.getenv('DJANGO_DEBUG', 'False').lower() in ('1', 'true', 'yes')
+DEBUG = os.getenv('DJANGO_DEBUG', 'True' if ENVIRONMENT != 'production' else 'False').lower() in ('1', 'true', 'yes')
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', '')
 if not SECRET_KEY:
     if ENVIRONMENT == 'production':
@@ -103,7 +103,7 @@ TIME_ZONE = 'Asia/Manila'
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_URL = '/media/'
@@ -162,19 +162,28 @@ LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/'
 
-EMAIL_BACKEND = os.getenv(
-    'EMAIL_BACKEND',
-    'django.core.mail.backends.console.EmailBackend' if ENVIRONMENT != 'production' else 'django.core.mail.backends.smtp.EmailBackend',
-)
-EMAIL_HOST = os.getenv('EMAIL_HOST', '')
+EMAIL_HOST = os.getenv('EMAIL_HOST', '').strip()
 EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
-EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '').strip()
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
-EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True').lower() in ('1', 'true', 'yes')
 EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'False').lower() in ('1', 'true', 'yes')
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'no-reply@bizflow.local')
-if ENVIRONMENT == 'production' and not all((EMAIL_HOST, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD, DEFAULT_FROM_EMAIL)):
-    raise RuntimeError('Transactional email SMTP settings must be configured in production')
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'False' if EMAIL_USE_SSL else 'True').lower() in ('1', 'true', 'yes')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'no-reply@bizflow.local').strip()
+SMTP_CONFIGURED = all((EMAIL_HOST, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD, DEFAULT_FROM_EMAIL))
+# Missing optional SMTP credentials must not make collectstatic or the entire
+# web service fail to deploy. In that case Django uses the console backend and
+# email delivery is visibly unavailable until SMTP is configured. If SMTP is
+# explicitly selected, fail fast rather than silently pretending to send mail.
+DEFAULT_EMAIL_BACKEND = (
+    'django.core.mail.backends.smtp.EmailBackend'
+    if ENVIRONMENT == 'production' and SMTP_CONFIGURED
+    else 'django.core.mail.backends.console.EmailBackend'
+)
+EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', DEFAULT_EMAIL_BACKEND).strip()
+if EMAIL_BACKEND == 'django.core.mail.backends.smtp.EmailBackend' and not SMTP_CONFIGURED:
+    raise RuntimeError('SMTP email backend selected but EMAIL_HOST, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD, and DEFAULT_FROM_EMAIL must be configured')
+if EMAIL_USE_TLS and EMAIL_USE_SSL:
+    raise RuntimeError('EMAIL_USE_TLS and EMAIL_USE_SSL cannot both be enabled')
 
 LOGGING = {
     'version': 1,

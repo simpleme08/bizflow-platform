@@ -64,7 +64,14 @@ class Command(BaseCommand):
         today = timezone.localdate()
         for person in self.people:
             self.create_person(organization, departments, positions, employment_types, client, site, shifts, leave_types, today, person)
-        PayrollPeriod.objects.get_or_create(organization=organization, name='Demo August 1-15, 2026', start_date=date(2026, 8, 1), end_date=date(2026, 8, 15), defaults={'status': PayrollPeriod.Status.OPEN})
+        # Create the base demo period only when absent. Inspection seeding may already
+        # have marked this historical period PAID; never reopen it during a repeat seed.
+        PayrollPeriod.objects.get_or_create(
+            organization=organization,
+            start_date=date(2026, 8, 1),
+            end_date=date(2026, 8, 15),
+            defaults={'name': 'Demo August 1-15, 2026', 'status': PayrollPeriod.Status.OPEN},
+        )
         self.seed_roles(organization, shifts['Day Shift'], today)
         self.seed_full_demo(organization, departments, today)
         self.stdout.write(self.style.SUCCESS(f'Full demo ready: {len(self.people)} employees, role accounts, payroll, talent, operations, and ESS data.'))
@@ -73,6 +80,7 @@ class Command(BaseCommand):
         accounts = (
             ('demo_superuser', OrganizationMembership.Role.SUPER_USER, 'System', 'Administrator'),
             ('demo_hr', OrganizationMembership.Role.HR, 'Helen', 'Rivera'),
+            ('demo_sme', OrganizationMembership.Role.SME, 'Demo', 'SME'),
             ('demo_manager', OrganizationMembership.Role.MANAGER, 'Miguel', 'Torres'),
             ('demo_employee', OrganizationMembership.Role.EMPLOYEE, 'Emma', 'Reyes'),
         )
@@ -94,11 +102,30 @@ class Command(BaseCommand):
         employees = list(organization.employees.filter(is_active=True).select_related('user'))
         hr_user = get_user_model().objects.get(username='demo_hr')
         manager_user = get_user_model().objects.get(username='demo_manager')
-        period, _ = PayrollPeriod.objects.get_or_create(organization=organization, name='Demo August 1-15, 2026', start_date=date(2026, 8, 1), end_date=date(2026, 8, 15))
+        period, _ = PayrollPeriod.objects.update_or_create(organization=organization, start_date=date(2026, 8, 1), end_date=date(2026, 8, 15), defaults={'name': 'Demo August 1-15, 2026'})
         for employee in employees:
             salary = getattr(employee, 'salary', None)
             basic = salary.basic_salary / Decimal('2') if salary else Decimal('15000.00')
-            PayrollRecord.objects.update_or_create(employee=employee, payroll_period=period, defaults={'basic_pay': basic, 'overtime_pay': Decimal('500.00'), 'gross_pay': basic + Decimal('500.00'), 'late_deduction': Decimal('100.00'), 'undertime_deduction': Decimal('0.00'), 'other_deductions': Decimal('200.00'), 'net_pay': basic + Decimal('200.00'), 'status': PayrollRecord.Status.DRAFT})
+            defaults = {
+                'basic_pay': basic,
+                'overtime_pay': Decimal('500.00'),
+                'gross_pay': basic + Decimal('500.00'),
+                'late_deduction': Decimal('100.00'),
+                'undertime_deduction': Decimal('0.00'),
+                'other_deductions': Decimal('200.00'),
+                'net_pay': basic + Decimal('200.00'),
+                'status': PayrollRecord.Status.DRAFT,
+            }
+            existing_record = PayrollRecord.objects.filter(employee=employee, payroll_period=period).first()
+            if existing_record is None:
+                PayrollRecord.objects.create(employee=employee, payroll_period=period, **defaults)
+            elif existing_record.status in (PayrollRecord.Status.APPROVED, PayrollRecord.Status.PAID):
+                # Approved/paid payroll is immutable. Leave its amounts and lifecycle untouched.
+                continue
+            else:
+                for field, value in defaults.items():
+                    setattr(existing_record, field, value)
+                existing_record.save()
         workflow, _ = OnboardingWorkflow.objects.get_or_create(organization=organization, name='Standard New Hire')
         task_template, _ = OnboardingTaskTemplate.objects.get_or_create(workflow=workflow, title='Read employee handbook', defaults={'order': 1})
         if employees:
