@@ -173,6 +173,60 @@ class ShiftSchedulingTests(TestCase):
         self.assertIn('employeeSelect.value = selectedEmployeeId;', template)
 
 
+    def test_resolved_schedule_uses_effective_employee_assignment(self):
+        from apps.workforce.scheduling import resolve_schedule
+        EmployeeAssignment.objects.create(
+            employee=self.employee,
+            shift_template=self.shift_day,
+            client=self.client_obj,
+            client_site=self.site,
+            start_date=date(2026, 10, 1),
+            end_date=date(2026, 10, 31),
+            is_primary=True,
+        )
+        resolved = resolve_schedule(self.employee, date(2026, 10, 15))
+        self.assertEqual(resolved['kind'], 'SCHEDULED')
+        self.assertEqual(resolved['shift'], self.shift_day)
+        self.assertEqual(resolved['client'], self.client_obj)
+        self.assertEqual(resolved['client_site'], self.site)
+
+    def test_employee_can_view_only_their_own_ess_schedule(self):
+        OrganizationMembership.objects.create(
+            user=self.employee.user,
+            organization=self.organization,
+            role=OrganizationMembership.Role.EMPLOYEE,
+        )
+        EmployeeAssignment.objects.create(
+            employee=self.employee,
+            shift_template=self.shift_day,
+            start_date=date(2026, 10, 1),
+            end_date=date(2026, 10, 31),
+            is_primary=True,
+        )
+        self.client.force_login(self.employee.user)
+        response = self.client.get(
+            '/api/ess/schedule/',
+            {'start_date': '2026-10-15', 'end_date': '2026-10-16'},
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        schedule = response.json()['schedule']
+        self.assertEqual(len(schedule), 2)
+        self.assertEqual(schedule[0]['shift'], 'Day Shift')
+        self.assertEqual(schedule[0]['start_time'], '08:00')
+
+    def test_ess_schedule_rejects_invalid_or_oversized_ranges(self):
+        OrganizationMembership.objects.create(
+            user=self.employee.user,
+            organization=self.organization,
+            role=OrganizationMembership.Role.EMPLOYEE,
+        )
+        self.client.force_login(self.employee.user)
+        invalid = self.client.get('/api/ess/schedule/', {'start_date': '2026-10-20', 'end_date': '2026-10-01'})
+        self.assertEqual(invalid.status_code, 400)
+        oversized = self.client.get('/api/ess/schedule/', {'start_date': '2025-01-01', 'end_date': '2027-01-02'})
+        self.assertEqual(oversized.status_code, 400)
+
+
 class BulkShiftAssignmentImportTests(TestCase):
     def setUp(self):
         from io import BytesIO
