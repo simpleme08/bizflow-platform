@@ -3,6 +3,7 @@ from datetime import date
 from django.db.models import Q
 
 from apps.workforce.models import CoverShift, ScheduleException, ScheduleRule, ShiftTemplate
+from apps.employees.models import EmployeeAssignment
 
 
 def resolve_schedule(employee, work_date):
@@ -60,6 +61,24 @@ def resolve_schedule(employee, work_date):
             'shift': shift,
             'client': None,
             'client_site': None,
+            'cover_shift': None,
+        }
+
+    # Legacy/effective-dated assignments are the base schedule when no recurring
+    # rule or approved date-specific override applies. Keep the same precedence
+    # for every consumer, including ESS and the manager calendar.
+    assignment = EmployeeAssignment.objects.filter(
+        employee=employee,
+        start_date__lte=work_date,
+    ).filter(Q(end_date__isnull=True) | Q(end_date__gte=work_date)).select_related(
+        'shift_template', 'client', 'client_site'
+    ).order_by('-is_primary', '-start_date', '-created_at').first()
+    if assignment:
+        return {
+            'kind': 'SCHEDULED',
+            'shift': assignment.shift_template,
+            'client': assignment.client,
+            'client_site': assignment.client_site,
             'cover_shift': None,
         }
 
