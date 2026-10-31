@@ -4,7 +4,7 @@ from datetime import date
 
 from apps.organization.models import Organization, OrganizationMembership
 from apps.employees.models import Employee, EmployeeAssignment
-from apps.workforce.models import ShiftTemplate, Client, ClientSite
+from apps.workforce.models import ShiftTemplate, Client, ClientSite, ScheduleRule
 
 
 class ShiftSchedulingTests(TestCase):
@@ -189,6 +189,27 @@ class ShiftSchedulingTests(TestCase):
         self.assertEqual(resolved['shift'], self.shift_day)
         self.assertEqual(resolved['client'], self.client_obj)
         self.assertEqual(resolved['client_site'], self.site)
+
+    def test_recurring_rule_rest_day_overrides_legacy_assignment(self):
+        from apps.workforce.scheduling import resolve_schedule
+        EmployeeAssignment.objects.create(
+            employee=self.employee,
+            shift_template=self.shift_day,
+            start_date=date(2026, 10, 1),
+            end_date=date(2026, 10, 31),
+            is_primary=True,
+        )
+        ScheduleRule.objects.create(
+            employee=self.employee,
+            shift_template=self.shift_day,
+            effective_from=date(2026, 10, 1),
+            effective_to=date(2026, 10, 31),
+            weekdays=[0],
+            rest_days=[],
+        )
+        resolved = resolve_schedule(self.employee, date(2026, 10, 13))
+        self.assertEqual(resolved['kind'], 'REST')
+        self.assertIsNone(resolved['shift'])
 
     def test_employee_can_view_only_their_own_ess_schedule(self):
         OrganizationMembership.objects.create(
