@@ -42,6 +42,7 @@ def resolve_schedule(employee, work_date):
         effective_from__lte=work_date,
     ).filter(Q(effective_to__isnull=True) | Q(effective_to__gte=work_date)).select_related('shift_template').order_by('-priority', '-effective_from', '-created_at')
 
+    has_effective_rules = rules.exists()
     weekday = work_date.weekday()
     for rule in rules:
         weekdays = {int(day) for day in rule.weekdays}
@@ -63,6 +64,11 @@ def resolve_schedule(employee, work_date):
             'client_site': None,
             'cover_shift': None,
         }
+
+    # An effective recurring rule also defines its off-days. Do not let a legacy
+    # assignment silently turn an explicit rule rest-day back into a workday.
+    if has_effective_rules:
+        return {'kind': 'REST', 'shift': None, 'client': None, 'client_site': None, 'cover_shift': None}
 
     # Legacy/effective-dated assignments are the base schedule when no recurring
     # rule or approved date-specific override applies. Keep the same precedence
