@@ -227,3 +227,104 @@ table{max-width:100%}
   .schedule-actions,.floot-actions{align-items:stretch}
   .schedule-actions>*{max-width:100%}
 }
+
+
+/* =========================================================
+   BizFlow Glass UI — shared application-wide visual layer
+   Applied to workspace, HR modules, ESS, tables and forms.
+   ========================================================= */
+:root{
+  --biz-glass:rgba(255,255,255,.68);
+  --biz-glass-strong:rgba(255,255,255,.82);
+  --biz-glass-line:rgba(255,255,255,.78);
+  --biz-glass-shadow:0 18px 48px rgba(24,55,104,.10),0 2px 8px rgba(24,55,104,.04);
+  --biz-glass-blur:blur(18px) saturate(145%);
+  --biz-bg:#edf3fb;
+  --biz-radius:20px;
+}
+html{background:#edf3fb}
+body{
+  background:
+    radial-gradient(ellipse at 8% 3%,rgba(97,177,255,.19),transparent 34%),
+    radial-gradient(ellipse at 94% 10%,rgba(145,132,255,.16),transparent 32%),
+    linear-gradient(145deg,#f4f8ff 0%,#edf3fb 48%,#f7f8ff 100%)!important;
+  background-attachment:fixed!important;
+}
+.content-wrapper{background:transparent!important}
+.main-header,.biz-app-header,.topbar{
+  background:rgba(12,27,52,.88)!important;
+  -webkit-backdrop-filter:blur(20px) saturate(145%);
+  backdrop-filter:blur(20px) saturate(145%);
+  border-bottom:1px solid rgba(255,255,255,.13)!important;
+  box-shadow:0 10px 32px rgba(12,29,58,.16)!important;
+}
+.main-sidebar{background:rgba(10,25,48,.94)!important;backdrop-filter:blur(18px)}
+.biz-app-header-inner{min-height:68px}
+.biz-desktop-nav a,.biz-mobile-nav a{transition:background .18s ease,color .18s ease}
+.biz-desktop-nav a.active,.biz-mobile-nav a.active{background:rgba(104,174,255,.19)!important;color:#fff!important}
+.floot-shell,.page-shell,.main,.shell{position:relative}
+.floot-hero,.welcome,.hero{
+  border:1px solid rgba(255,255,255,.72)!important;
+  border-radius:24px!important;
+  padding:24px!important;
+  background:linear-gradient(125deg,rgba(255,255,255,.78),rgba(239,246,255,.58))!important;
+  box-shadow:var(--biz-glass-shadow)!important;
+  -webkit-backdrop-filter:var(--biz-glass-blur);
+  backdrop-filter:var(--biz-glass-blur);
+}
+.card,.panel,.table-wrap,.box,.small-box,.info-box,.module-card,.dashboard-card,.stat-card,
+.metric,.metric-card,.stat,.stat-card,.panel,.att-panel,.schedule-card,.ess-schedule-panel,
+.floot-panel,.floot-stat,.module,.quick,.assignment-card,.ops-card,.hub-card,.lifecycle-card,
+.balance,.notice,.report-card,.payroll-card{
+  background:var(--biz-glass)!important;
+  border:1px solid var(--biz-glass-line)!important;
+  border-radius:18px!important;
+  box-shadow:var(--biz-glass-shadow)!important;
+  -webkit-backdrop-filter:var(--biz-glass-blur);
+  backdrop-filter:var(--biz-glass-blur);
+}
+.card:hover,.module:hover,.quick:hover,.floot-stat:hover{
+  box-shadow:0 22px 55px rgba(29,79,145,.14)!important;
+}
+.card-header,.panel-head,.card-footer,.head,.section-head{
+  background:rgba(255,255,255,.40)!important;
+  border-color:rgba(174,195,222,.38)!important;
+}
+.table,.table-wrap table,.ess-schedule-table{background:rgba(255,255,255,.28)!important}
+.table thead th,.table th,.ess-schedule-table th,th{
+  background:rgba(224,237,253,.72)!important;
+  color:#304766!important;
+}
+.table td,.table th{border-color:rgba(180,199,224,.38)!important}
+.table-hover tbody tr:hover,.table tbody tr:hover{background:rgba(255,255,255,.46)!important}
+.form-control,input,select,textarea,.control{
+  background:rgba(255,255,255,.76)!important;
+  border:1px solid rgba(169,190,219,.66)!important;
+  box-shadow:inset 0 1px 2px rgba(27,58,102,.025);
+}
+.form-control:focus,input:focus,select:focus,textarea:focus,.control:focus{
+  background:rgba(255,255,255,.96)!important;
+  border-color:#72b5f4!important;
+  box-shadow:0 0 0 4px rgba(77,151,235,.13)!important;
+}
+.btn-primary,button.btn-primary,input[type=submit],.btn-primary{
+  background:linear-gradient(125deg,#287fe0,#7168e9)!important;
+  border:1px solid rgba(255,255,255,.42)!important;
+  box-shadow:0 8px 20px rgba(65,112,215,.23)!important;
+}
+.btn-outline-primary,.btn-secondary,.btn-outline-secondary{
+  -webkit-backdrop-filter:blur(10px);
+  backdrop-filter:blur(10px);
+}
+.floot-status,.role,.role-badge,.badge,.ess-shift-state{
+  -webkit-backdrop-filter:blur(10px);
+  backdrop-filter:blur(10px);
+}
+hr,.divider{border-color:rgba(174,195,222,.42)!important}
+a:focus-visible,button:focus-visible{outline:3px solid rgba(65,139,230,.45)!important;outline-offset:2px}
+@media(prefers-reduced-motion:no-preference){
+  .card,.panel,.module,.quick,.btn{transition:box-shadow .18s ease,transform .18s ease,border-color .18s ease}
+}
+@media(max-width:700px){
+  .floot-hero,.welcome,.hero{padding:18px!important;border-radius:18px!important}
+}
