@@ -377,3 +377,114 @@ body.clock-page .field:focus{
     background:rgba(255,255,255,.96)!important;
   }
 }
+
+/* ================================================================
+   MIDNIGHT EMERALD — BizFlow cross-module visual refresh
+   Visual-only layer: intentionally leaves templates, routes, APIs,
+   permissions, forms, and workflow JavaScript untouched.
+   ================================================================ */
+:root{
+  --biz-ink:#142923!important;
+  --biz-ink-2:#29483f!important;
+  --biz-muted:#687d75!important;
+  --biz-night:#101d2b!important;
+  --biz-night-2:#183b3a!important;
+  --biz-accent:#20a68a!important;
+  --biz-accent-strong:#167c68!important;
+  --biz-accent-soft:#e5f5ef!important;
+  --biz-success:#19845f!important;
+  --biz-success-soft:#e8f6ef!important;
+  --biz-warning:#b7791f!important;
+  --biz-warning-soft:#fff6e5!important;
+  --biz-danger:#bd4655!important;
+  --biz-danger-soft:#fff0ef!important;
+  --biz-line:#dce8e1!important;
+  --biz-surface:rgba(255,255,255,.88)!important;
+  --biz-bg:#f3f6f5!important;
+  --biz-radius:16px!important;
+  --biz-shadow:0 14px 42px rgba(16,45,37,.075)!important;
+  --biz-shadow-hover:0 20px 52px rgba(16,45,37,.12)!important;
+  --ink:#142923!important;--muted:#687d75!important;--line:#dce8e1!important;
+  --surface:#fff!important;--soft:#f3f6f5!important;
+  --nav:#101d2b!important;--night:#101d2b!important;--night2:#183b3a!important;
+  --blue:#167c68!important;--cyan:#20a68a!important;--green:#19845f!important;
+  --accent:#20a68a!important;--primary:#167c68!important;
+}
+html body{
+  background-color:#f3f6f5!important;
+  color:#142923!important;
+}
+body{background-image:radial-gradient(ellipse at 12% 0%,rgba(32,166,138,.055),transparent 34%)!important}
+a{color:#167c68}
+a:hover{color:#105c4e}
+h1,h2,h3,h4,h5,h6{color:#142923!important}
+.topbar,.topbar-inner,.main-header,.main-sidebar,header.topbar,.floot-topbar,.biz-app-header{
+  background:linear-gradient(128deg,#101d2b 0%,#183b3a 72%,#20534a 100%)!important;
+}
+.brand .mark,.mark,.floot-brand-mark,.biz-app-brand-mark,.biz-nav-avatar,.ess-avatar,.avatar,.module-icon{
+  background:linear-gradient(135deg,#20a68a,#a4e2c9)!important;
+  color:#102b25!important;
+}
+.biz-desktop-nav a:hover,.biz-desktop-nav a:focus,.biz-desktop-nav a.active,
+.biz-mobile-nav a:hover,.biz-mobile-nav a:focus,.biz-mobile-nav a.active{
+  background:rgba(32,166,138,.19)!important;color:#eafff6!important;
+}
+.biz-desktop-nav a:focus-visible,.biz-mobile-nav a:focus-visible,
+.biz-nav-toggle:focus-visible,.biz-nav-signout button:focus-visible{
+  outline-color:#78d8b8!important;
+}
+.btn-primary,button.btn-primary,input[type="submit"],.button-primary{
+  background:linear-gradient(135deg,#167c68,#20a68a)!important;
+  border-color:#20a68a!important;color:#fff!important;
+  box-shadow:0 8px 20px rgba(22,124,104,.18)!important;
+}
+.btn-outline-primary{border-color:#9bcfbd!important;color:#167c68!important}
+.btn-outline-primary:hover{background:#e5f5ef!important;color:#105c4e!important}
+.form-control:focus,input:focus,select:focus,textarea:focus{
+  border-color:#20a68a!important;box-shadow:0 0 0 .2rem rgba(32,166,138,.15)!important;
+}
+.card,.panel,.table-wrap,.box,.small-box,.info-box,.module-card,.dashboard-card,.stat-card,
+.floot-panel,.floot-stat,.att-panel,.schedule-card{
+  border-color:#dce8e1!important;
+  box-shadow:0 14px 42px rgba(16,45,37,.075)!important;
+  background:rgba(255,255,255,.88)!important;
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+}
+.card-header,.panel-head,.head,.schedule-card .head{
+  background:linear-gradient(135deg,rgba(229,245,239,.8),rgba(255,255,255,.94))!important;
+  border-color:#dce8e1!important;
+}
+.card-footer{background:#f7faf8!important;border-color:#dce8e1!important}
+.table thead th,th{background:#eaf3ee!important;color:#29483f!important;border-color:#dce8e1!important}
+.table td,.table th{border-color:#e3ece6!important}
+.table-hover tbody tr:hover{background:#f1f8f4!important}
+.badge-primary,.bg-primary{background:#20a68a!important}
+.badge-success,.bg-success,.btn-success{background:#19845f!important}
+.badge-warning{background:#f4d28d!important;color:#62450e!important}
+.badge-danger{background:#e88b91!important;color:#64252d!important}
+.alert-info{background:#e5f5ef!important;border-color:#b8e2d1!important;color:#176b59!important}
+.alert-success{background:#e8f6ef!important;border-color:#bfe6d1!important;color:#176b45!important}
+.floot-eyebrow,.section-label,.stat-label,.floot-stat-label{color:#56756a!important}
+.floot-status{background:#e5f5ef!important;color:#167c68!important}
+.floot-status.success{background:#e8f6ef!important;color:#176b45!important}
+.floot-status.warning{background:#fff6e5!important;color:#8b5b13!important}
+.floot-status.danger{background:#fff0ef!important;color:#a33b49!important}
+.module-card:hover,.dashboard-card:hover,.stat-card:hover,.floot-panel:hover,.floot-stat:hover{
+  border-color:#b8dccc!important;box-shadow:0 20px 52px rgba(16,45,37,.12)!important;
+}
+.quick:hover,.module:hover,.floot-list-item:hover,.list-group-item:hover{
+  border-color:#b8dccc!important;background:#f4faf6!important;
+}
+.empty,.floot-empty,.notice{background:#f7faf8!important;border-color:#d5e5dc!important;color:#687d75!important}
+.biz-mobile-nav{background:#142e2b!important}
+.biz-nav-avatar{background:linear-gradient(135deg,#20a68a,#a4e2c9)!important}
+::selection{background:rgba(32,166,138,.22);color:#102b25}
+@media(prefers-reduced-transparency:reduce){
+  .card,.panel,.table-wrap,.box,.small-box,.info-box,.module-card,.dashboard-card,.stat-card,
+  .floot-panel,.floot-stat,.att-panel,.schedule-card{backdrop-filter:none;-webkit-backdrop-filter:none;background:#fff!important}
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
+
