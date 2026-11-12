@@ -40,5 +40,5 @@ async function loadData(){try{const r=await fetch('/api/operations/',{credential
   connectors.innerHTML=rows(d.connectors,x=>`<b>${esc(x.name)}</b><br><small>${esc(x.kind)} · ${x.enabled?'Enabled':'Disabled / not configured'}</small>`);
 }catch(e){alertBox('Could not load HR Operations. Please sign in again.','danger');}}
 loadData();
-</script></body></html>
-</body></html>
+</script></body>
+</html>
