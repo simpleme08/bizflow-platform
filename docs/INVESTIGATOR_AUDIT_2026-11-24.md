@@ -124,18 +124,19 @@ Geofence coordinates and device IDs are supplied by the client. They can be spoo
 
 **Remediation:** describe these controls accurately, use managed-device attestation where supported, apply anomaly detection, preserve correction reasons, and require supervisor review for exceptions. Do not rely on GPS alone for payroll approval.
 
-### 9. Document access policy — HIGH, partially remediated in this PR
-There are two distinct document models and they must not be conflated:
+### 9. Document access policy — HIGH, code remediation added; staging verification outstanding
+There are two distinct document models:
 
-- `apps.employees.EmployeeDocument` is employee-specific and stores its file in a Django `FileField`. The employee profile API exposes metadata only to the employee or users with `manage_employees`. Before this PR, there was no dedicated authenticated download endpoint for these files.
-- `apps.operations.EmployeeDocument` is an organization-wide policy/document record. It stores a plain `file_url`, not a `FileField`. The employee hub returns this URL to active employees in the organization, which is consistent only if these are intentionally organization-wide publications and the URL itself has an appropriate access policy.
+- `apps.employees.EmployeeDocument` is employee-specific. Its download endpoint now scopes the record to the requested employee and active organization, permits only the employee owner or a membership with `manage_employees`, streams through Django's configured storage backend without returning a Supabase URL, forces attachment download, applies private/no-store and nosniff headers, and records a download audit event.
+- `apps.operations.EmployeeDocument` is an organization-wide policy/document record. The original model stored only `file_url`, while its private-media view attempted to access a nonexistent `file` attribute. The employee hub also returned the raw external URL.
 
-The existing `apps.operations.private_media_views.employee_document_file` imports the organization-wide model but attempts to read `document.file`, a field that model does not define. A request for a published file through that route can therefore raise an AttributeError instead of serving a file. Do not rely on this route for policy-document downloads until the model and storage design are reconciled.
+**Remediation added in this PR:** policy documents now have a private Django `FileField` backed by the configured storage provider, a migration, and a separate authenticated download endpoint. Downloads require an employee profile in the same active organization, a published/non-expired document, and an attached private file. Legacy `file_url` values are no longer returned to the employee hub or redirected; affected legacy attachments must be re-uploaded into private storage. HR can upload policy attachments from the HR Operations form.
 
-**Remediation added in this PR:** a separate `apps.employees.private_media_views.employee_document_file` endpoint now scopes the document to the requested employee and active organization, permits only the employee owner or a membership with `manage_employees`, streams through Django's configured storage backend, forces attachment download, sets private/no-store and nosniff headers, and records a download audit event. Regression tests cover owner/HR allow, manager deny, cross-organization deny, archived deny, and unauthenticated deny.
+Both employee-specific and organization-wide policy uploads now validate a 10 MB maximum, allowed PDF/DOCX/JPG/JPEG/PNG extensions, and basic file signatures (DOCX ZIP structure). This is defense in depth, not malware scanning.
 
-**Still outstanding:** decide whether organization-wide policy documents should use private Supabase objects and a similarly authorized proxy endpoint instead of returning `file_url` directly; verify the Supabase bucket is private and that the configured S3-compatible storage backend works end-to-end.
+Regression tests have been added for owner/HR document access, manager and cross-tenant denial, archived/unpublished document denial, unauthenticated access, legacy URL non-disclosure, valid upload, and extension/signature mismatch.
 
+**Still outstanding:** run and pass CI for the latest branch head; verify the live Supabase bucket is private and the Django S3-compatible backend works end-to-end in an isolated staging environment; migrate/re-upload any existing legacy policy attachments after inventory and approval; add malware scanning/quarantine before production employee uploads; and confirm storage backups and restore behavior.
 ### 10. Audit retention and legal hold — HIGH
 The scheduled retention command permanently deletes old audit events and archived documents based on organization-configured retention values. No legal-hold or immutable export mechanism was confirmed. Audit deletion may conflict with an investigation, employment dispute, or statutory retention requirement.
 
