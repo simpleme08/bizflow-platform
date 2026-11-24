@@ -70,9 +70,11 @@ Because auto-deploy is enabled on the production branch, do not merge code/confi
 ### C. Object storage and employee documents
 - Supabase Storage endpoint and bucket are owner-reported as configured. The Django settings support an S3-compatible backend when `DJANGO_STORAGE=s3`, require key/secret/bucket/endpoint in production, enable authenticated query-string URLs, default their expiry to 300 seconds, set `AWS_DEFAULT_ACL=None`, and disable file overwrite. These are source-code defaults/configuration rules, not proof of the live environment values or Supabase bucket policy.
 - Verify Supabase project/bucket ownership, private access policies (no unintended public access), encryption, least-privilege service credentials, lifecycle/versioning/backups where supported, and a restore test.
-- A tenant- and role-scoped download endpoint for employee-specific `EmployeeDocument` files has been added to PR #42. It streams through Django storage without returning a Supabase URL, requires the employee owner or `manage_employees`, and records a download audit event. Its new regression tests are awaiting CI results.
-- A separate organization-wide policy-document model still stores and returns a plain `file_url`; its current private-media view references a `file` attribute that the model does not define. Reconcile that model/route and decide whether policy files should also be served through an authorized proxy rather than direct URLs.
-- Verify signed URL expiry against the live storage backend and ensure downloads are audited for every sensitive document type.
+- Employee-specific document downloads now use a tenant/role-scoped Django storage proxy; access is limited to the employee owner or `manage_employees`, with no Supabase URL returned and a download audit event recorded.
+- Organization-wide policy documents now have a private `FileField`, migration, multipart HR upload path, and an authenticated download proxy requiring an employee profile in the same active organization plus a published/non-expired document. The employee hub no longer receives legacy external `file_url` values; legacy attachments must be re-uploaded into private storage.
+- Both document upload models validate a 10 MB limit, allowed PDF/DOCX/JPG/JPEG/PNG extensions, and basic file signatures. This is not malware scanning; add quarantine/scanning before production employee uploads.
+- Regression tests cover private policy upload/download, tenant boundaries, publication state, legacy URL non-disclosure, and malformed file rejection. CI is running/awaiting confirmation for the latest branch head.
+- Verify signed URL expiry against the live storage backend, bucket privacy, end-to-end S3-compatible upload/download, and storage backup/restore in isolated staging.
 
 ### D. Runtime and release
 - Reconcile the actual service configuration with the reviewed Blueprint: build checks, readiness path, and startup/migration policy.
