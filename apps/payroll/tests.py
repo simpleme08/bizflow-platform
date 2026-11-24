@@ -31,12 +31,30 @@ class PayrollCalculatorTests(TestCase):
     def test_statutory_rules_match_current_schedules(self):
         self.assertEqual(PhilippinePayrollRules.sss(Decimal('20000.00')), (Decimal('1000.00'), Decimal('2030.00')))
         self.assertEqual(PhilippinePayrollRules.philhealth(Decimal('20000.00')), (Decimal('500.00'), Decimal('500.00')))
-        self.assertEqual(PhilippinePayrollRules.pagibig(Decimal('20000.00')), (Decimal('100.00'), Decimal('100.00')))
+        self.assertEqual(PhilippinePayrollRules.pagibig(Decimal('20000.00')), (Decimal('200.00'), Decimal('200.00')))
+
+    def test_sss_monthly_salary_credit_uses_official_compensation_brackets(self):
+        cases = (
+            ('5000.00', '5000.00'),
+            ('5249.99', '5000.00'),
+            ('5250.00', '5500.00'),
+            ('5749.99', '5500.00'),
+            ('5750.00', '6000.00'),
+            ('20249.99', '20000.00'),
+            ('20250.00', '20500.00'),
+            ('100000.00', '35000.00'),
+        )
+        for salary, expected_msc in cases:
+            with self.subTest(salary=salary):
+                self.assertEqual(
+                    PhilippinePayrollRules.monthly_msc(Decimal(salary)),
+                    Decimal(expected_msc),
+                )
 
     def test_statutory_contribution_caps_are_applied(self):
         self.assertEqual(PhilippinePayrollRules.sss(Decimal('100000.00')), (Decimal('1750.00'), Decimal('3530.00')))
         self.assertEqual(PhilippinePayrollRules.philhealth(Decimal('200000.00')), (Decimal('2500.00'), Decimal('2500.00')))
-        self.assertEqual(PhilippinePayrollRules.pagibig(Decimal('100000.00')), (Decimal('100.00'), Decimal('100.00')))
+        self.assertEqual(PhilippinePayrollRules.pagibig(Decimal('100000.00')), (Decimal('200.00'), Decimal('200.00')))
 
     def test_withholding_tax_uses_bir_tables(self):
         self.assertEqual(PhilippineWithholdingTax.calculate(Decimal('10417.00')), Decimal('0.00'))
@@ -55,10 +73,10 @@ class PayrollCalculatorTests(TestCase):
         self.assertEqual(result['sss_employer'], Decimal('1015.00'))
         self.assertEqual(result['philhealth_employee'], Decimal('250.00'))
         self.assertEqual(result['philhealth_employer'], Decimal('250.00'))
-        self.assertEqual(result['pagibig_employee'], Decimal('50.00'))
-        self.assertEqual(result['pagibig_employer'], Decimal('50.00'))
+        self.assertEqual(result['pagibig_employee'], Decimal('100.00'))
+        self.assertEqual(result['pagibig_employer'], Decimal('100.00'))
         self.assertEqual(result['gross_pay'], Decimal('10071.02'))
-        self.assertEqual(result['net_pay'], Decimal('9242.61'))
+        self.assertEqual(result['net_pay'], Decimal('9192.61'))
 
     def test_night_differential_is_based_on_actual_hours_between_10pm_and_6am(self):
         assignment = self.employee.assignments.first()
@@ -106,7 +124,7 @@ class PayrollCalculatorTests(TestCase):
         self.assertEqual(result['sss_employee'], Decimal('1000.00'))
         self.assertEqual(result['sss_employer'], Decimal('2030.00'))
         self.assertEqual(result['philhealth_employee'], Decimal('500.00'))
-        self.assertEqual(result['pagibig_employee'], Decimal('100.00'))
+        self.assertEqual(result['pagibig_employee'], Decimal('200.00'))
         self.assertEqual(result['withholding_tax'], Decimal('0.00'))
 
     def test_thirteenth_month_is_one_twelfth_of_basic_pay_paid(self):
