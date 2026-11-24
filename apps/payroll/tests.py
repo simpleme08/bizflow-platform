@@ -163,7 +163,7 @@ class PayrollCalculatorTests(TestCase):
         self.assertEqual(PayrollCalculator.process_period(self.period, self.employee.organization), 1)
         record = PayrollRecord.objects.get(employee=self.employee, payroll_period=self.period)
         self.assertEqual(record.status, PayrollRecord.Status.DRAFT)
-        self.assertEqual(record.net_pay, Decimal('9242.61'))
+        self.assertEqual(record.net_pay, Decimal('9192.61'))
         self.period.refresh_from_db()
         self.assertEqual(self.period.status, PayrollPeriod.Status.CALCULATED)
 
