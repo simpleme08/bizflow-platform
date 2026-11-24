@@ -73,7 +73,7 @@ Because auto-deploy is enabled on the production branch, do not merge code/confi
 - Employee-specific document downloads now use a tenant/role-scoped Django storage proxy; access is limited to the employee owner or `manage_employees`, with no Supabase URL returned and a download audit event recorded.
 - Organization-wide policy documents now have a private `FileField`, migration, multipart HR upload path, and an authenticated download proxy requiring an employee profile in the same active organization plus a published/non-expired document. The employee hub no longer receives legacy external `file_url` values; legacy attachments must be re-uploaded into private storage.
 - Both document upload models validate a 10 MB limit, allowed PDF/DOCX/JPG/JPEG/PNG extensions, and basic file signatures. This is not malware scanning; add quarantine/scanning before production employee uploads.
-- Regression tests cover private policy upload/download, tenant boundaries, publication state, legacy URL non-disclosure, and malformed file rejection. CI is running/awaiting confirmation for the latest branch head.
+- Regression tests cover private policy upload/download, tenant boundaries, publication state, legacy URL non-disclosure, and malformed file rejection. Latest CI run #128 passed Django checks, migration-drift checks, and all 263 automated tests.
 - Verify signed URL expiry against the live storage backend, bucket privacy, end-to-end S3-compatible upload/download, and storage backup/restore in isolated staging.
 
 ### D. Runtime and release
