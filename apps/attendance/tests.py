@@ -4,7 +4,8 @@ from io import BytesIO
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.test import TestCase, override_settings
+from unittest.mock import patch
 from django.utils import timezone
 
 from PIL import Image
@@ -124,6 +125,30 @@ class AttendanceCalculatorTests(TestCase):
         employee.save(update_fields=('status', 'is_active', 'updated_at'))
         response = self.client.post('/clock/login/', {'username': 'juan', 'password': 'clock-password'})
         self.assertEqual(response.status_code, 403)
+
+
+    @override_settings(ENVIRONMENT='production')
+    def test_clock_login_throttles_repeated_invalid_attempts(self):
+        with patch('apps.attendance.views.cache.get', return_value=5):
+            response = self.client.post('/clock/login/', {'username': 'juan', 'password': 'wrong-password'})
+
+        self.assertEqual(response.status_code, 429)
+
+    @override_settings(ENVIRONMENT='production')
+    def test_clock_login_fails_closed_when_throttle_cache_is_unavailable(self):
+        with patch('apps.attendance.views.cache.get', side_effect=RuntimeError('redis unavailable')):
+            response = self.client.post('/clock/login/', {'username': 'juan', 'password': 'clock-password'})
+
+        self.assertEqual(response.status_code, 503)
+        self.assertFalse(response.wsgi_request.user.is_authenticated)
+
+    @override_settings(ENVIRONMENT='production')
+    def test_clock_login_fails_closed_if_failed_attempt_cannot_be_recorded(self):
+        with patch('apps.attendance.views.cache.get', return_value=0), \
+             patch('apps.attendance.views.cache.set', side_effect=RuntimeError('redis unavailable')):
+            response = self.client.post('/clock/login/', {'username': 'juan', 'password': 'wrong-password'})
+
+        self.assertEqual(response.status_code, 503)
 
 
 class DashboardViewTests(TestCase):
