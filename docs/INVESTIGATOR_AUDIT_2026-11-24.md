@@ -44,9 +44,13 @@ Branch: `audit/leave-authorization-hardening-2026-11-24`
    - Pag-IBIG maximum fund salary was capped at ₱5,000 even though Circular No. 460 increased it to ₱10,000 effective February 2024. The cap and regression expectations are corrected.
    - Regression tests cover SSS bracket boundaries and the Pag-IBIG ceiling.
 
-5. **Automated test workflow**
+5. **SME permission separation**
+   - Added a dedicated `manage_scheduling` permission and moved SME shift-management endpoints to it.
+   - SME can retain attendance viewing without inheriting attendance record edit permissions. Regression tests cover both behaviors.
+
+6. **Automated test workflow**
    - Added a GitHub Actions workflow for Django checks, migration drift detection, and the full test suite.
-   - No workflow result was available when this report was written. The fixes must not be merged until the CI run passes.
+   - The first PR-triggered CI run is still in progress; the final test result is not yet known. The fixes must not be merged until CI passes.
 
 ## Deployment and infrastructure findings
 
@@ -60,7 +64,7 @@ The live Render service is configured with:
 - Auto-deploy: enabled
 - Region: Singapore
 
-The repository's `render.yaml` specifies a different build command, including `manage.py check --deploy` and `makemigrations --check --dry-run`, and a `/ready/` health check. Those checks are not present in the actual Render service configuration. The Blueprint also defines a maintenance cron job, but the Render workspace service listing showed only the web service.
+The repository's `render.yaml` describes a service named `bizflow-hris`, while the live service is named `hris`. It specifies a different build command, including `manage.py check --deploy` and `makemigrations --check --dry-run`, and a `/ready/` health check. Those checks are not present in the actual Render service configuration. The Blueprint also defines a `bizflow-hris-maintenance` cron job on the paid Starter plan, but the Render workspace service listing showed only the web service. The Blueprint's start command optionally provisions production accounts; the live service's configured start command does not.
 
 **Impact:** the production deployment can skip configuration and migration-drift checks; Render is not using the intended readiness endpoint; scheduled retention, document-expiry notification, and notification-delivery jobs are not confirmed deployed.
 
