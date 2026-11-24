@@ -12,6 +12,7 @@ from PIL import Image
 
 from apps.attendance.models import AttendanceRecord
 from apps.attendance.services import AttendanceCalculator
+from apps.attendance.views import _validate_clock_photo
 from apps.employees.models import Employee, EmployeeAssignment
 from apps.organization.models import Organization, OrganizationMembership
 from apps.workforce.models import ShiftTemplate
@@ -280,3 +281,24 @@ class DashboardViewTests(TestCase):
                 photo_response = client.get(row['clock_in_photo_url'])
                 self.assertEqual(photo_response.status_code, 200)
                 self.assertEqual(photo_response['Cache-Control'], 'private, no-store')
+
+
+class ClockPhotoUploadValidationTests(TestCase):
+    def make_png(self, name='clock.png', content_type='image/png'):
+        buffer = BytesIO()
+        Image.new('RGB', (12, 12), color='white').save(buffer, format='PNG')
+        return SimpleUploadedFile(name, buffer.getvalue(), content_type=content_type)
+
+    def test_valid_png_clock_photo_is_accepted(self):
+        uploaded = self.make_png()
+        self.assertIs(_validate_clock_photo(uploaded), uploaded)
+
+    def test_image_extension_must_match_actual_image_format(self):
+        uploaded = self.make_png(name='clock.svg', content_type='image/svg+xml')
+        with self.assertRaisesMessage(ValueError, 'JPEG, PNG, or WebP'):
+            _validate_clock_photo(uploaded)
+
+    def test_image_mime_type_alone_does_not_allow_non_image_content(self):
+        uploaded = SimpleUploadedFile('clock.png', b'<script>alert(1)</script>', content_type='image/png')
+        with self.assertRaisesMessage(ValueError, 'not a valid image'):
+            _validate_clock_photo(uploaded)
