@@ -90,7 +90,9 @@ def employee_hub_api(request):
             work_date = date.fromisoformat(payload['work_date'])
             if hours <= 0 or hours > 24 or work_date > timezone.localdate():
                 raise ValueError
-            item = TimesheetEntry.objects.create(employee=employee, project=project, work_date=work_date, hours=hours, notes=str(payload.get('notes', '')).strip(), status=TimesheetEntry.Status.SUBMITTED)
+            item = TimesheetEntry(employee=employee, project=project, work_date=work_date, hours=hours, notes=str(payload.get('notes', '')).strip(), status=TimesheetEntry.Status.SUBMITTED)
+            item.full_clean()
+            item.save()
         else:
             raise ValueError
     except (KeyError, ValueError, TypeError, InvalidOperation, json.JSONDecodeError, EmployeeDocument.DoesNotExist, Project.DoesNotExist):
