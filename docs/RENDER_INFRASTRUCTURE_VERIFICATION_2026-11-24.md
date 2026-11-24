@@ -5,7 +5,8 @@
 **Repository:** `simpleme08/bizflow-platform`  
 **Production branch:** `release/production-hardening`  
 **Reviewed working branch:** `audit/leave-authorization-hardening-2026-11-24`  
-**Production changes made:** None. No deploy, restart, env-var mutation, database query, migration, or cron run was performed.
+**Production changes made:** None. No deploy, restart, env-var mutation, database query, migration, or cron run was performed.  
+**Owner-reported configuration update:** Supabase database and storage configured; Redis and Django secret configured; email host not configured. See verification limits below.
 
 ## Verified live service facts
 
@@ -25,9 +26,11 @@
 
 ## Important interpretation
 
-The absence of a Render-managed Postgres resource does **not** prove the app has no database. Production settings require PostgreSQL and require `DATABASE_URL` or explicit Postgres settings. An external PostgreSQL provider may be configured. The connected Render tools expose service configuration and resource inventories but do not expose a safe environment-variable-name-only inventory for this service. Secret values were not requested or accessed.
+**Owner-reported configuration (24 November 2026; not independently verified):** The project uses Supabase for its PostgreSQL database and object storage. Redis is configured, the Django secret is configured, and the Supabase storage endpoint and bucket are configured. The email host is not yet configured. These details were supplied by the project owner in conversation; no secret values were requested or accessed, and no live environment values or provider consoles were inspected.
 
-The Redis instance is configured as a free, non-persistent cache. The inspected Django settings use it as the shared Django cache; Django's default session backend remains database-backed unless overridden elsewhere. Cache loss may reset transient throttling state, so this cache must not be used as a durable queue or source of truth. Production connectivity, ACLs, memory pressure, and cache health still require verification.
+The absence of a Render-managed Postgres resource is consistent with the owner-reported external Supabase database. It does not by itself verify the Supabase project, database connection, SSL enforcement, backups, PITR, or restore readiness. Likewise, configured Supabase endpoint/bucket values do not prove that the bucket is private, encrypted, backed up, or correctly permissioned.
+
+The Render Key Value instance remains a free, non-persistent cache. The inspected Django settings use Redis as the shared Django cache; Django's default session backend remains database-backed unless overridden elsewhere. Cache loss may reset transient throttling state, so Redis must not be used as a durable queue or source of truth. The owner reports Redis is configured, but target identity, TLS/authentication, ACLs, memory pressure, and cache health still require verification.
 
 ## Blueprint hardening committed to the audit branch
 
@@ -52,7 +55,7 @@ Because auto-deploy is enabled on the production branch, do not merge code/confi
 ## Release gates — still open
 
 ### A. Database and recovery
-- Identify the external PostgreSQL provider and owner.
+- Supabase is the owner-reported PostgreSQL provider; verify the exact Supabase project/organization and responsible owner.
 - Confirm the database is production PostgreSQL, SSL enforced, and not an expiring/free trial resource.
 - Verify automated backups, retention, point-in-time recovery if available, and an actual restore into an isolated staging database.
 - Record RPO/RTO and a documented rollback procedure.
@@ -65,13 +68,14 @@ Because auto-deploy is enabled on the production branch, do not merge code/confi
 - Confirm readiness checks work against the configured cache.
 
 ### C. Object storage and employee documents
-- Verify S3-compatible bucket ownership, private ACL/block-public-access, encryption, access keys with least privilege, lifecycle rules, versioning/backups, and restore test.
+- Supabase Storage endpoint and bucket are owner-reported as configured; verify project/bucket ownership, private access policies (no unintended public access), encryption, least-privilege service credentials, lifecycle/versioning/backups where supported, and a restore test.
 - Verify employee document access is tenant- and role-scoped before real employee files are uploaded.
 - Verify signed URLs are short-lived and downloads are audited.
 
 ### D. Runtime and release
 - Reconcile the actual service configuration with the reviewed Blueprint: build checks, readiness path, and startup/migration policy.
-- Confirm all required environment variable names are present without exposing values: Django secret, allowed hosts, CSRF origins, database URL, Redis URL, private storage credentials/bucket/endpoint, email settings, and any enabled payment settings.
+- Owner reports the Django secret, Redis, Supabase storage endpoint, and bucket are configured. Verify presence and correctness without exposing values for `DATABASE_URL`, `REDIS_URL`, Supabase storage credentials/endpoint/bucket, `DJANGO_SECRET_KEY`, allowed hosts, CSRF origins, and any enabled payment settings.
+- Configure and test the email host and related SMTP credentials/settings. Until then, email-dependent workflows (notifications, password reset, onboarding/offboarding emails) are not release-ready; verify safe failure/retry behavior.
 - Confirm `/ready/` returns 200 only when database and cache are usable, and 503 otherwise.
 - Add a deployment rollback and incident response runbook.
 - Run browser E2E smoke tests against a staging environment before production.
@@ -89,6 +93,6 @@ Because auto-deploy is enabled on the production branch, do not merge code/confi
 
 - Render service/resource metadata and recent logs were inspected through the connected workspace.
 - Environment variable values were not accessed. A safe variable-name-only inventory was not available from the connected Render tool surface.
-- The external database and object-storage provider could not be identified from service metadata alone.
+- The project owner identified Supabase as the database and object-storage provider and reported the relevant settings as configured; this has not been independently validated against Render or Supabase.
 - No production database query, migration, backup, restore, file access, email send, cron run, or deploy was attempted.
 - This is an infrastructure configuration review, not a penetration test or production certification.
