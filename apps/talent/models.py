@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 
 from apps.core.models import BaseModel
@@ -60,6 +61,11 @@ class JobApplication(BaseModel):
     class Meta:
         constraints = [models.UniqueConstraint(fields=('job', 'candidate'), name='unique_job_candidate_application')]
 
+    def clean(self):
+        super().clean()
+        if self.job_id and self.candidate_id and self.job.organization_id != self.candidate.organization_id:
+            raise ValidationError('The job and candidate must belong to the same organization.')
+
 
 class PerformanceCycle(BaseModel):
     class Status(models.TextChoices):
@@ -92,6 +98,13 @@ class EmployeeGoal(BaseModel):
     progress = models.PositiveSmallIntegerField(default=0)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.NOT_STARTED)
 
+    def clean(self):
+        super().clean()
+        if self.cycle_id and self.employee_id and self.cycle.organization_id != self.employee.organization_id:
+            raise ValidationError('The performance cycle and employee must belong to the same organization.')
+        if self.progress > 100:
+            raise ValidationError({'progress': 'Goal progress cannot exceed 100 percent.'})
+
 
 class PerformanceReview(BaseModel):
     class Status(models.TextChoices):
@@ -110,6 +123,15 @@ class PerformanceReview(BaseModel):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=('cycle', 'employee'), name='unique_cycle_employee_review')]
+
+    def clean(self):
+        super().clean()
+        if self.cycle_id and self.employee_id and self.cycle.organization_id != self.employee.organization_id:
+            raise ValidationError('The performance cycle and employee must belong to the same organization.')
+        if self.reviewer_id:
+            from apps.organization.models import OrganizationMembership
+            if not OrganizationMembership.objects.filter(organization_id=self.employee.organization_id, user_id=self.reviewer_id, is_active=True).exists():
+                raise ValidationError({'reviewer': 'The reviewer must have active membership in the employee organization.'})
 
 
 class BenefitPlan(BaseModel):
@@ -136,6 +158,13 @@ class BenefitEnrollment(BaseModel):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=('employee', 'plan', 'effective_date'), name='unique_benefit_enrollment')]
+
+    def clean(self):
+        super().clean()
+        if self.plan_id and self.employee_id and self.plan.organization_id != self.employee.organization_id:
+            raise ValidationError('The benefit plan and employee must belong to the same organization.')
+        if self.end_date and self.end_date < self.effective_date:
+            raise ValidationError('Benefit enrollment end date cannot be before its effective date.')
 
 
 class OffboardingRecord(BaseModel):
