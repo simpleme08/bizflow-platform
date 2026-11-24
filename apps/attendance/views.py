@@ -1,9 +1,12 @@
 import json
 import math
+import logging
 from datetime import date, datetime, time
 from io import BytesIO
 
 from django.contrib.auth import authenticate, login
+from django.conf import settings
+from django.core.cache import cache
 from django.db import transaction
 from django.db.models import Q
 from django.http import HttpResponse, JsonResponse
@@ -23,6 +26,14 @@ from .services import AttendanceCalculator
 
 TIMEKEEPING_HEADERS = ('Employee Number', 'Attendance Date', 'Time In', 'Time Out', 'Status', 'Remarks')
 MAX_CLOCK_PHOTO_BYTES = 5 * 1024 * 1024
+CLOCK_LOGIN_FAILURE_LIMIT = 5
+CLOCK_LOGIN_FAILURE_WINDOW = 15 * 60
+logger = logging.getLogger(__name__)
+
+
+def _clock_login_throttle_key(request, username):
+    normalized = (username or '').strip().lower()[:150]
+    return f'bizflow:login-failures:{request.META.get("REMOTE_ADDR", "unknown")}:{normalized}'
 
 
 def _can_import_timekeeping(request, membership):
@@ -87,13 +98,44 @@ def _clock_state(employee):
 
 @require_http_methods(['POST'])
 def clock_login(request):
-    user = authenticate(request, username=request.POST.get('username','').strip(), password=request.POST.get('password',''))
-    if user is None or not user.is_active: return JsonResponse({'detail':'Invalid username or password.'},status=401)
-    try: employee=user.employee_profile
-    except Employee.DoesNotExist: return JsonResponse({'detail':'This account is not linked to an employee profile.'},status=403)
-    if not employee.is_active: return JsonResponse({'detail':'This employee profile is inactive.'},status=403)
-    membership=employee.organization.organization_memberships.filter(user=user,is_active=True).first()
-    if membership is None or not employee.organization.is_active: return JsonResponse({'detail':'This employee does not have active organization access.'},status=403)
+    username = request.POST.get('username', '').strip()
+    throttle_key = _clock_login_throttle_key(request, username)
+    try:
+        failures = cache.get(throttle_key, 0)
+    except Exception:
+        logger.exception('Time-clock login throttling cache unavailable')
+        if settings.ENVIRONMENT == 'production':
+            return JsonResponse({'detail': 'Sign-in is temporarily unavailable. Please try again shortly.'}, status=503)
+        failures = 0
+
+    if failures >= CLOCK_LOGIN_FAILURE_LIMIT:
+        return JsonResponse({'detail': 'Too many failed login attempts. Try again later.'}, status=429)
+
+    user = authenticate(request, username=username, password=request.POST.get('password', ''))
+    if user is None or not user.is_active:
+        try:
+            cache.set(throttle_key, failures + 1, CLOCK_LOGIN_FAILURE_WINDOW)
+        except Exception:
+            logger.exception('Unable to record time-clock login failure')
+            if settings.ENVIRONMENT == 'production':
+                return JsonResponse({'detail': 'Sign-in is temporarily unavailable. Please try again shortly.'}, status=503)
+        return JsonResponse({'detail': 'Invalid username or password.'}, status=401)
+
+    try:
+        employee = user.employee_profile
+    except Employee.DoesNotExist:
+        return JsonResponse({'detail': 'This account is not linked to an employee profile.'}, status=403)
+    if not employee.is_active:
+        return JsonResponse({'detail': 'This employee profile is inactive.'}, status=403)
+    membership = employee.organization.organization_memberships.filter(user=user, is_active=True).first()
+    if membership is None or not employee.organization.is_active:
+        return JsonResponse({'detail': 'This employee does not have active organization access.'}, status=403)
+
+    try:
+        cache.delete(throttle_key)
+    except Exception:
+        logger.exception('Unable to clear time-clock login failures after successful authentication')
+
     login(request, user)
     # The time clock has no organization picker: the employee profile is the
     # authoritative organization boundary for clocking attendance.
