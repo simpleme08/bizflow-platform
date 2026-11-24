@@ -400,3 +400,12 @@ class BulkShiftAssignmentImportTests(TestCase):
         self.assertEqual(second.status_code, 409)
         cover.refresh_from_db()
         self.assertEqual(cover.status, CoverShift.Status.APPROVED)
+
+    def test_sme_can_access_shift_scheduling_without_attendance_edit_permission(self):
+        self.membership.role = OrganizationMembership.Role.SME
+        self.membership.save(update_fields=('role', 'updated_at'))
+
+        self.assertTrue(self.membership.has_permission('manage_scheduling'))
+        self.assertFalse(self.membership.has_permission('manage_attendance'))
+        self.assertEqual(self.client.get('/scheduling/').status_code, 200)
+        self.assertEqual(self.client.get('/api/scheduling/shifts/').status_code, 200)
