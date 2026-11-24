@@ -108,35 +108,40 @@ Offboarding completion checks required clearances using booleans supplied in the
 
 **Remediation:** make the effective-dated rule set the actual calculation input, or remove the claim that the rule-set version controls the calculation. Store the exact source circular, effective date, formula version, inputs, outputs, and hashes for each record. Add golden tests against agency/BIR examples and require payroll-professional approval for every ruleset update.
 
-### 6. Payroll absence recalculation needs MWE/tax-classification parity — HIGH
+### 6. Statutory contribution bases are not yet agency-specific — CRITICAL
+The calculator currently passes the same `monthly_basic` value to SSS, PhilHealth, and Pag-IBIG. That is not a safe universal base: SSS uses the employee's actual remuneration subject to its statutory rules, Pag-IBIG Fund Salary includes basic salary and other allowances, while PhilHealth's employee basis is Monthly Basic Salary. The calculator therefore needs separate, component-aware contribution bases rather than a single basic-pay input. The SSS bracket and Pag-IBIG ceiling corrections in this PR do not solve this broader classification issue.
+
+**Remediation:** classify every pay component by agency contribution treatment and effective date; calculate each agency base independently; add golden fixtures for basic pay, COLA, allowances, commissions, absences, and maximum bases; validate with official schedules and a Philippine payroll professional before live use.
+
+### 7. Payroll absence recalculation needs MWE/tax-classification parity — HIGH
 The absence-deduction adjustment path recomputes withholding tax separately from the main calculator and does not visibly reuse the main minimum-wage-earner exemption path. It can produce a different withholding result after an absence adjustment.
 
 **Remediation:** route all recalculations through one shared tax-classification and withholding service; add regression fixtures for minimum-wage earners, non-taxable benefits, 13th-month thresholds, and retroactive adjustments.
 
-### 7. Attendance anti-fraud controls — MEDIUM
+### 8. Attendance anti-fraud controls — MEDIUM
 Geofence coordinates and device IDs are supplied by the client. They can be spoofed by a modified client and should not be treated as strong device/location attestation. Clock photos are useful evidence but do not prove physical presence by themselves.
 
 **Remediation:** describe these controls accurately, use managed-device attestation where supported, apply anomaly detection, preserve correction reasons, and require supervisor review for exceptions. Do not rely on GPS alone for payroll approval.
 
-### 8. Document access policy — HIGH, requires policy confirmation
+### 9. Document access policy — HIGH, requires policy confirmation
 The employee-document file endpoint checks organization membership and PUBLISHED status, but does not check whether the requester owns the employee record or has an HR/document-management permission. This is safe only if PUBLISHED documents are intentionally organization-wide documents. If employee-specific files can reach this state, any member of the tenant could retrieve them.
 
 **Remediation:** distinguish organization policy documents from confidential employee documents; enforce employee-self or HR/document permission for employee-specific files; avoid exposing raw storage URLs; log downloads.
 
-### 9. Audit retention and legal hold — HIGH
+### 10. Audit retention and legal hold — HIGH
 The scheduled retention command permanently deletes old audit events and archived documents based on organization-configured retention values. No legal-hold or immutable export mechanism was confirmed. Audit deletion may conflict with an investigation, employment dispute, or statutory retention requirement.
 
 **Remediation:** add legal holds, retention policy approval, deletion audit events, immutable export/archive, and documented retention schedules. Run the command in dry-run mode before any policy change.
 
-### 10. Notification delivery idempotency — MEDIUM
+### 11. Notification delivery idempotency — MEDIUM
 The notification delivery command selects pending/failed records without row locking or a delivery claim. Concurrent workers or overlapping cron runs could send the same notification more than once.
 
 **Remediation:** claim notifications atomically, use idempotency keys, persist provider message IDs, and retry with bounded exponential backoff.
 
-### 11. Benefit lifecycle — MEDIUM
+### 12. Benefit lifecycle — MEDIUM
 Benefit enrollment creation checks tenant ownership but does not visibly prevent overlapping active enrollments, validate plan eligibility, or reconcile employee deductions against payroll. End-date/status changes and dependent coverage need a complete lifecycle.
 
-### 12. Backups, disaster recovery, and release controls — HIGH
+### 13. Backups, disaster recovery, and release controls — HIGH
 No completed database restore drill, object-storage restore test, incident runbook, or tested rollback procedure was confirmed. The Free web-service plan and external dependency configuration need explicit availability expectations.
 
 ## Required release gates
