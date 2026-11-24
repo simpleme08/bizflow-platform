@@ -11,7 +11,7 @@ from apps.leave.models import LeaveApplication, LeaveType
 from apps.organization.models import Organization, OrganizationMembership
 from apps.workforce.models import ShiftTemplate
 
-from .models import EmployeeSalary, PayrollHoliday, PayrollPeriod, PayrollRecord
+from .models import EmployeeSalary, PayrollHoliday, PayrollPeriod, PayrollRecord, PayrollRuleSet
 from .services import PhilippinePayrollRules, PhilippineWithholdingTax, PayrollCalculator
 
 
@@ -197,3 +197,24 @@ class PayrollCalculatorTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'application/pdf')
         self.assertTrue(response.content.startswith(b'%PDF'))
+
+
+class PayrollTenantRuleSetValidationTests(TestCase):
+    def test_payroll_period_rejects_another_organizations_rule_set(self):
+        organization = Organization.objects.create(name='Payroll One', slug='payroll-one')
+        other_organization = Organization.objects.create(name='Payroll Two', slug='payroll-two')
+        rule_set = PayrollRuleSet.objects.create(
+            organization=other_organization,
+            version='OTHER-2026',
+            effective_from=date(2026, 1, 1),
+            source_name='Other tenant rules',
+        )
+        period = PayrollPeriod(
+            organization=organization,
+            name='November 2026',
+            start_date=date(2026, 11, 1),
+            end_date=date(2026, 11, 15),
+            rule_set=rule_set,
+        )
+        with self.assertRaisesMessage(ValidationError, 'global or belong to this payroll organization'):
+            period.full_clean()
