@@ -4,7 +4,7 @@ from datetime import date
 
 from apps.organization.models import Organization, OrganizationMembership
 from apps.employees.models import Employee, EmployeeAssignment
-from apps.workforce.models import ShiftTemplate, Client, ClientSite, ScheduleRule
+from apps.workforce.models import ShiftTemplate, Client, ClientSite, ScheduleRule, CoverShift, ScheduleException
 
 
 class ShiftSchedulingTests(TestCase):
@@ -341,3 +341,62 @@ class BulkShiftAssignmentImportTests(TestCase):
         })
         self.assertEqual(response.status_code, 403)
         self.assertFalse(EmployeeAssignment.objects.filter(employee=self.employee).exists())
+
+    def test_schedule_exception_decision_rejects_string_boolean(self):
+        exception = ScheduleException.objects.create(
+            employee=self.employee,
+            work_date=date(2026, 11, 24),
+            shift_template=self.shift_day,
+            reason='Test exception',
+        )
+        response = self.client.post(
+            f'/api/scheduling/exceptions/{exception.id}/decision/',
+            data={'approved': 'false'},
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        exception.refresh_from_db()
+        self.assertFalse(exception.approved)
+
+    def test_cover_shift_decision_rejects_string_boolean(self):
+        cover = CoverShift.objects.create(
+            employee=self.employee,
+            work_date=date(2026, 11, 25),
+            shift_template=self.shift_day,
+            requested_by=self.employee.user,
+            reason='Test cover shift',
+        )
+        response = self.client.post(
+            f'/api/scheduling/cover-shifts/{cover.id}/decision/',
+            data={'approved': 'false'},
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        cover.refresh_from_db()
+        self.assertEqual(cover.status, CoverShift.Status.PENDING)
+
+    def test_cover_shift_cannot_be_decided_twice(self):
+        cover = CoverShift.objects.create(
+            employee=self.employee,
+            work_date=date(2026, 11, 26),
+            shift_template=self.shift_day,
+            requested_by=self.employee.user,
+            reason='Test cover shift',
+        )
+        first = self.client.post(
+            f'/api/scheduling/cover-shifts/{cover.id}/decision/',
+            data={'approved': True},
+            content_type='application/json',
+        )
+        second = self.client.post(
+            f'/api/scheduling/cover-shifts/{cover.id}/decision/',
+            data={'approved': False},
+            content_type='application/json',
+        )
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 409)
+        cover.refresh_from_db()
+        self.assertEqual(cover.status, CoverShift.Status.APPROVED)
