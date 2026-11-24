@@ -1,6 +1,7 @@
 import json
 from datetime import date
 
+from django.core.exceptions import ValidationError
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_http_methods
@@ -58,7 +59,8 @@ def recruiting_api(request):
             item = JobApplication.objects.create(job=job, candidate=candidate, stage=payload.get('stage', JobApplication.Stage.APPLIED))
         else:
             raise ValueError
-    except (KeyError, ValueError, json.JSONDecodeError, JobOpening.DoesNotExist, Candidate.DoesNotExist):
+        item.full_clean()
+    except (KeyError, ValueError, ValidationError, json.JSONDecodeError, JobOpening.DoesNotExist, Candidate.DoesNotExist):
         return JsonResponse({'detail': 'Provide valid recruiting data.'}, status=400)
     record_audit(organization=membership.organization, actor=request.user, action=f'recruiting.{kind}.created', entity=item)
     return JsonResponse({'id': str(item.id)}, status=201)
@@ -89,7 +91,8 @@ def performance_api(request):
             item = PerformanceReview.objects.create(cycle=cycle, employee=employee, reviewer=request.user, rating=payload.get('rating'), comments=payload.get('comments', ''), status=payload.get('status', PerformanceReview.Status.DRAFT))
         else:
             raise ValueError
-    except (KeyError, ValueError, TypeError, json.JSONDecodeError, Employee.DoesNotExist, PerformanceCycle.DoesNotExist):
+        item.full_clean()
+    except (KeyError, ValueError, TypeError, ValidationError, json.JSONDecodeError, Employee.DoesNotExist, PerformanceCycle.DoesNotExist):
         return JsonResponse({'detail': 'Provide valid performance data.'}, status=400)
     record_audit(organization=membership.organization, actor=request.user, action=f'performance.{kind}.created', entity=item)
     return JsonResponse({'id': str(item.id)}, status=201)
@@ -114,7 +117,8 @@ def benefits_api(request):
             item = BenefitEnrollment.objects.create(employee=employee, plan=plan, effective_date=date.fromisoformat(payload['effective_date']))
         else:
             raise ValueError
-    except (KeyError, ValueError, json.JSONDecodeError, Employee.DoesNotExist, BenefitPlan.DoesNotExist):
+        item.full_clean()
+    except (KeyError, ValueError, ValidationError, json.JSONDecodeError, Employee.DoesNotExist, BenefitPlan.DoesNotExist):
         return JsonResponse({'detail': 'Provide valid benefit data.'}, status=400)
     record_audit(organization=membership.organization, actor=request.user, action='benefits.created', entity=item)
     return JsonResponse({'id': str(item.id)}, status=201)
@@ -131,8 +135,10 @@ def offboarding_api(request):
     try:
         payload = json.loads(request.body or '{}')
         employee = Employee.objects.get(id=payload['employee_id'], organization=membership.organization)
-        item = OffboardingRecord.objects.create(employee=employee, last_working_day=date.fromisoformat(payload['last_working_day']), reason=payload.get('reason', ''), notes=payload.get('notes', ''))
-    except (KeyError, ValueError, json.JSONDecodeError, Employee.DoesNotExist):
+        item = OffboardingRecord(employee=employee, last_working_day=date.fromisoformat(payload['last_working_day']), reason=payload.get('reason', ''), notes=payload.get('notes', ''))
+        item.full_clean()
+        item.save()
+    except (KeyError, ValueError, ValidationError, json.JSONDecodeError, Employee.DoesNotExist):
         return JsonResponse({'detail': 'Provide a valid employee and last working day.'}, status=400)
     record_audit(organization=membership.organization, actor=request.user, action='offboarding.created', entity=item)
     return JsonResponse({'id': str(item.id)}, status=201)
