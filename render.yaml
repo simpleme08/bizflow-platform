@@ -1,6 +1,7 @@
 services:
   - type: web
-    name: bizflow-hris
+    # Match the existing Render service name to avoid an accidental parallel app.
+    name: hris
     runtime: python
     region: singapore
     plan: free
@@ -58,8 +59,9 @@ services:
         sync: false
       - key: PAYMONGO_PLAN_BUSINESS
         sync: false
+      # Account provisioning is an explicit one-off operator action, never a deploy side effect.
       - key: BIZFLOW_PROVISION_ACCOUNTS
-        value: "true"
+        value: "false"
       - key: BIZFLOW_PROVISION_ON_WSGI
         value: "false"
       - key: BIZFLOW_PROVISION_RESET_PASSWORDS
@@ -99,38 +101,7 @@ services:
       - key: BIZFLOW_PRODUCTION_SUPER_USER_LAST_NAME
         sync: false
 
-
-  - type: cron
-    name: bizflow-hris-maintenance
-    schedule: "0 1 * * *"
-    runtime: python
-    plan: starter
-    buildCommand: pip install -r requirements.txt
-    startCommand: python manage.py apply_retention_policy && python manage.py notify_document_expiry --days 30 && python manage.py deliver_notifications --limit 200
-    envVars:
-      - key: DJANGO_ENV
-        value: production
-      - key: DJANGO_DEBUG
-        value: "False"
-      - key: DJANGO_SECRET_KEY
-        sync: false
-      - key: DATABASE_URL
-        sync: false
-      - key: POSTGRES_SSLMODE
-        value: require
-      - key: EMAIL_BACKEND
-        value: django.core.mail.backends.smtp.EmailBackend
-      - key: EMAIL_HOST
-        sync: false
-      - key: EMAIL_PORT
-        value: "587"
-      - key: EMAIL_HOST_USER
-        sync: false
-      - key: EMAIL_HOST_PASSWORD
-        sync: false
-      - key: EMAIL_USE_TLS
-        value: "True"
-      - key: EMAIL_USE_SSL
-        value: "False"
-      - key: DEFAULT_FROM_EMAIL
-        sync: false
+# Scheduled tasks are intentionally not provisioned here. Render Cron is paid,
+# and the existing retention command can permanently delete audit evidence.
+# Add a separately reviewed, idempotent worker/cron only after budget approval,
+# legal-hold/retention safeguards, SMTP verification, and dry-run acceptance.
