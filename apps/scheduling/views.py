@@ -294,11 +294,14 @@ def schedule_exception_decision(request, exception_id):
         return JsonResponse({'detail': 'Access denied.'}, status=403)
     try:
         data = json.loads(request.body)
-        exception = ScheduleException.objects.get(id=exception_id, employee__organization=membership.organization)
-        approved = bool(data.get('approved'))
-        exception.approved = approved
-        exception.approved_by = request.user if approved else None
-        exception.save(update_fields=('approved', 'approved_by', 'updated_at'))
+        approved = data.get('approved')
+        if not isinstance(approved, bool):
+            return JsonResponse({'detail': 'approved must be a boolean.'}, status=400)
+        with transaction.atomic():
+            exception = ScheduleException.objects.select_for_update().get(id=exception_id, employee__organization=membership.organization)
+            exception.approved = approved
+            exception.approved_by = request.user if approved else None
+            exception.save(update_fields=('approved', 'approved_by', 'updated_at'))
     except (json.JSONDecodeError, ScheduleException.DoesNotExist):
         return JsonResponse({'detail': 'Schedule exception not found or invalid JSON.'}, status=400)
     record_audit(organization=membership.organization, actor=request.user, action='scheduling.exception_decision', entity=exception, details={'approved': approved})
@@ -344,14 +347,19 @@ def cover_shift_decision(request, cover_shift_id):
         return JsonResponse({'detail': 'Access denied.'}, status=403)
     try:
         data = json.loads(request.body)
-        cover = CoverShift.objects.select_for_update().get(id=cover_shift_id, employee__organization=membership.organization)
-        if cover.requested_by_id == request.user.id:
-            return JsonResponse({'detail': 'The requester cannot approve their own cover shift.'}, status=409)
-        approved = bool(data.get('approved'))
-        cover.status = CoverShift.Status.APPROVED if approved else CoverShift.Status.REJECTED
-        cover.approved_by = request.user if approved else None
-        cover.approved_at = timezone.now() if approved else None
-        cover.save(update_fields=('status', 'approved_by', 'approved_at', 'updated_at'))
+        approved = data.get('approved')
+        if not isinstance(approved, bool):
+            return JsonResponse({'detail': 'approved must be a boolean.'}, status=400)
+        with transaction.atomic():
+            cover = CoverShift.objects.select_for_update().get(id=cover_shift_id, employee__organization=membership.organization)
+            if cover.requested_by_id == request.user.id:
+                return JsonResponse({'detail': 'The requester cannot approve their own cover shift.'}, status=409)
+            if cover.status != CoverShift.Status.PENDING:
+                return JsonResponse({'detail': 'Only pending cover shifts can be decided.'}, status=409)
+            cover.status = CoverShift.Status.APPROVED if approved else CoverShift.Status.REJECTED
+            cover.approved_by = request.user if approved else None
+            cover.approved_at = timezone.now() if approved else None
+            cover.save(update_fields=('status', 'approved_by', 'approved_at', 'updated_at'))
     except (json.JSONDecodeError, CoverShift.DoesNotExist):
         return JsonResponse({'detail': 'Cover shift not found or invalid JSON.'}, status=400)
     record_audit(organization=membership.organization, actor=request.user, action='scheduling.cover_shift_decision', entity=cover, details={'approved': approved})
