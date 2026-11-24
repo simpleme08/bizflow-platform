@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
 from unittest.mock import patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from apps.employees.models import Employee
 from apps.organization.models import Organization
@@ -79,3 +79,20 @@ class EmployeeLoginTests(TestCase):
         response = self.client.post('/login/', {'username': 'admin-only', 'password': 'password'})
 
         self.assertEqual(response.status_code, 401)
+
+    @override_settings(ENVIRONMENT='production')
+    def test_login_fails_closed_when_production_throttle_cache_is_unavailable(self):
+        with patch('apps.accounts.views.cache.get', side_effect=RuntimeError('redis unavailable')):
+            response = self.client.post('/login/', {'username': 'employee', 'password': 'password'})
+
+        self.assertEqual(response.status_code, 503)
+        self.assertFalse(response.wsgi_request.user.is_authenticated)
+
+    @override_settings(ENVIRONMENT='production')
+    def test_failed_login_returns_service_unavailable_if_throttle_write_fails(self):
+        with patch('apps.accounts.views.cache.get', return_value=0), \
+             patch('apps.accounts.views.cache.set', side_effect=RuntimeError('redis unavailable')):
+            response = self.client.post('/login/', {'username': 'employee', 'password': 'incorrect-password'})
+
+        self.assertEqual(response.status_code, 503)
+        self.assertFalse(response.wsgi_request.user.is_authenticated)
