@@ -118,6 +118,17 @@ class AttendanceCalculatorTests(TestCase):
         response = self.client.post('/api/attendance/', data={}, content_type='application/json')
         self.assertEqual(response.status_code, 403)
 
+    def test_sme_can_view_attendance_but_cannot_edit_attendance_records(self):
+        membership = self.assignment.employee.organization.organization_memberships.get(user=self.assignment.employee.user)
+        membership.role = OrganizationMembership.Role.SME
+        membership.save(update_fields=('role', 'updated_at'))
+
+        view_response = self.client.get('/api/attendance/')
+        edit_response = self.client.post('/api/attendance/', data={}, content_type='application/json')
+
+        self.assertEqual(view_response.status_code, 200)
+        self.assertEqual(edit_response.status_code, 403)
+
     def test_suspended_employee_cannot_clock_in(self):
         employee = self.assignment.employee
         employee.status = Employee.Status.SUSPENDED
