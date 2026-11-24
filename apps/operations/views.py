@@ -2,6 +2,7 @@ import json
 from datetime import date
 from decimal import Decimal, InvalidOperation
 
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.http import JsonResponse
@@ -147,7 +148,7 @@ def operations_api(request):
             raise ValueError
         if not getattr(item, 'title', getattr(item, 'name', '')).strip():
             raise ValueError
-    except (KeyError, ValueError, TypeError, IntegrityError, json.JSONDecodeError):
+    except (KeyError, ValueError, TypeError, IntegrityError, ValidationError, json.JSONDecodeError):
         return JsonResponse({'detail': 'Provide valid operations data. Project codes must be unique.'}, status=400)
     record_audit(organization=org, actor=request.user, action=f'operations.{kind}.created', entity=item)
     return JsonResponse({'id': str(item.id)}, status=201)
