@@ -170,6 +170,8 @@ class PayrollPeriod(BaseModel):
             overlap = type(self).objects.filter(organization_id=self.organization_id, start_date__lte=self.end_date, end_date__gte=self.start_date).exclude(pk=self.pk)
             if overlap.exists():
                 raise ValidationError('Payroll period overlaps an existing period for this organization.')
+        if self.rule_set_id and self.organization_id and self.rule_set.organization_id not in (None, self.organization_id):
+            raise ValidationError({'rule_set': 'The payroll rule set must be global or belong to this payroll organization.'})
 
     def __str__(self):
         return self.name
