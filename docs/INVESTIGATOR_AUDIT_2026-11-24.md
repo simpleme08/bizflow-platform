@@ -124,10 +124,17 @@ Geofence coordinates and device IDs are supplied by the client. They can be spoo
 
 **Remediation:** describe these controls accurately, use managed-device attestation where supported, apply anomaly detection, preserve correction reasons, and require supervisor review for exceptions. Do not rely on GPS alone for payroll approval.
 
-### 9. Document access policy — HIGH, requires policy confirmation
-The employee-document file endpoint checks organization membership and PUBLISHED status, but does not check whether the requester owns the employee record or has an HR/document-management permission. This is safe only if PUBLISHED documents are intentionally organization-wide documents. If employee-specific files can reach this state, any member of the tenant could retrieve them.
+### 9. Document access policy — HIGH, partially remediated in this PR
+There are two distinct document models and they must not be conflated:
 
-**Remediation:** distinguish organization policy documents from confidential employee documents; enforce employee-self or HR/document permission for employee-specific files; avoid exposing raw storage URLs; log downloads.
+- `apps.employees.EmployeeDocument` is employee-specific and stores its file in a Django `FileField`. The employee profile API exposes metadata only to the employee or users with `manage_employees`. Before this PR, there was no dedicated authenticated download endpoint for these files.
+- `apps.operations.EmployeeDocument` is an organization-wide policy/document record. It stores a plain `file_url`, not a `FileField`. The employee hub returns this URL to active employees in the organization, which is consistent only if these are intentionally organization-wide publications and the URL itself has an appropriate access policy.
+
+The existing `apps.operations.private_media_views.employee_document_file` imports the organization-wide model but attempts to read `document.file`, a field that model does not define. A request for a published file through that route can therefore raise an AttributeError instead of serving a file. Do not rely on this route for policy-document downloads until the model and storage design are reconciled.
+
+**Remediation added in this PR:** a separate `apps.employees.private_media_views.employee_document_file` endpoint now scopes the document to the requested employee and active organization, permits only the employee owner or a membership with `manage_employees`, streams through Django's configured storage backend, forces attachment download, sets private/no-store and nosniff headers, and records a download audit event. Regression tests cover owner/HR allow, manager deny, cross-organization deny, archived deny, and unauthenticated deny.
+
+**Still outstanding:** decide whether organization-wide policy documents should use private Supabase objects and a similarly authorized proxy endpoint instead of returning `file_url` directly; verify the Supabase bucket is private and that the configured S3-compatible storage backend works end-to-end.
 
 ### 10. Audit retention and legal hold — HIGH
 The scheduled retention command permanently deletes old audit events and archived documents based on organization-configured retention values. No legal-hold or immutable export mechanism was confirmed. Audit deletion may conflict with an investigation, employment dispute, or statutory retention requirement.
