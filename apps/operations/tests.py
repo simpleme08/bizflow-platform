@@ -1,11 +1,13 @@
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 
 from apps.employees.models import Employee
+from apps.talent.models import OffboardingRecord
 from apps.organization.models import Organization, OrganizationMembership
 
-from .models import EmployeeDocument
+from .models import ApprovalRequest, CompensationChange, DocumentAcknowledgement, EmployeeDocument, OffboardingTask, Project, TimesheetEntry
 
 
 class PrivatePolicyDocumentTests(TestCase):
@@ -121,3 +123,71 @@ class PrivatePolicyDocumentTests(TestCase):
     def test_unauthenticated_user_cannot_download_policy_file(self):
         response = self.client.get(self.file_url())
         self.assertEqual(response.status_code, 401)
+
+
+class OperationsTenantRelationshipValidationTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username='tenant-owner')
+        self.other_user = User.objects.create_user(username='tenant-outsider')
+        self.organization = Organization.objects.create(name='Tenant One', slug='tenant-one')
+        self.other_organization = Organization.objects.create(name='Tenant Two', slug='tenant-two')
+        OrganizationMembership.objects.create(organization=self.organization, user=self.user, role='HR')
+        OrganizationMembership.objects.create(organization=self.other_organization, user=self.other_user, role='HR')
+        self.employee = Employee.objects.create(
+            employee_number='TEN-001', user=self.user, organization=self.organization,
+            first_name='Tenant', last_name='One',
+        )
+        self.other_employee = Employee.objects.create(
+            employee_number='TEN-002', user=self.other_user, organization=self.other_organization,
+            first_name='Tenant', last_name='Two',
+        )
+        self.document = EmployeeDocument.objects.create(
+            organization=self.organization, title='Policy', status=EmployeeDocument.Status.PUBLISHED,
+        )
+        self.other_project = Project.objects.create(
+            organization=self.other_organization, code='OTHER', name='Other tenant project',
+        )
+
+    def test_document_acknowledgement_cannot_cross_organizations(self):
+        acknowledgement = DocumentAcknowledgement(document=self.document, employee=self.other_employee)
+        with self.assertRaisesMessage(ValidationError, 'same organization'):
+            acknowledgement.full_clean()
+
+    def test_timesheet_cannot_reference_another_organizations_project(self):
+        entry = TimesheetEntry(
+            employee=self.employee, project=self.other_project,
+            work_date='2026-11-24', hours='8.00',
+        )
+        with self.assertRaisesMessage(ValidationError, 'same organization'):
+            entry.full_clean()
+
+    def test_compensation_change_cannot_use_another_organizations_approval(self):
+        approval = ApprovalRequest.objects.create(
+            organization=self.other_organization,
+            requester=self.other_user,
+            category='Compensation',
+            title='Other tenant approval',
+        )
+        change = CompensationChange(
+            employee=self.employee,
+            effective_date='2026-11-24',
+            proposed_salary='50000.00',
+            reason='Annual adjustment',
+            approval=approval,
+        )
+        with self.assertRaisesMessage(ValidationError, 'employee organization'):
+            change.full_clean()
+
+    def test_offboarding_task_assignee_must_belong_to_employee_organization(self):
+        offboarding = OffboardingRecord.objects.create(
+            employee=self.employee,
+            last_working_day='2026-11-30',
+        )
+        task = OffboardingTask(
+            offboarding=offboarding,
+            title='Recover company equipment',
+            assigned_to=self.other_user,
+        )
+        with self.assertRaisesMessage(ValidationError, 'active membership'):
+            task.full_clean()
