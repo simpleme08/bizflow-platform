@@ -51,7 +51,7 @@ Branch: `audit/leave-authorization-hardening-2026-11-24`
 6. **Automated test workflow**
    - Added a GitHub Actions workflow for Django checks, migration drift detection, and the full test suite.
    - The first CI run passed Django checks and migration-drift detection but failed 5 tests and raised 4 test-fixture errors. Those issues were traced to the new scheduling test class placement, the clock-login test client retaining its pre-existing session, the attendance read endpoint path, and stale SME/Pag-IBIG/net-pay expectations. Corrections were committed.
-   - A second CI run is in progress. Its Django checks and migration-drift detection have passed; the full test suite is still running. Do not merge until it passes.
+   - A second CI run passed: Django system checks passed, migration-drift detection passed, and all 237 automated tests passed. The passing run covered source commit `8bbeb23`; the only later commit updates this audit document. Do not merge until the remaining production-specific release gates are satisfied.
 
 ## Deployment and infrastructure findings
 
