@@ -3,6 +3,8 @@ import math
 import logging
 from datetime import date, datetime, time
 from io import BytesIO
+from pathlib import Path
+from zipfile import BadZipFile, ZipFile
 
 from django.contrib.auth import authenticate, login
 from django.conf import settings
@@ -42,10 +44,23 @@ def _can_import_timekeeping(request, membership):
 
 def _validate_clock_photo(uploaded):
     if uploaded is None: raise ValueError('A camera photo is required before clocking.')
-    if uploaded.size > MAX_CLOCK_PHOTO_BYTES: raise ValueError('The clock photo must be 5 MB or smaller.')
+    if uploaded.size <= 0 or uploaded.size > MAX_CLOCK_PHOTO_BYTES: raise ValueError('The clock photo must be non-empty and 5 MB or smaller.')
     if not getattr(uploaded, 'content_type', '').startswith('image/'): raise ValueError('The clock photo must be an image.')
-    try: uploaded.seek(0); image = Image.open(uploaded); image.verify(); uploaded.seek(0)
-    except (UnidentifiedImageError, OSError, ValueError): raise ValueError('The clock photo is not a valid image.')
+    allowed_extensions = {'JPEG': {'.jpg', '.jpeg'}, 'PNG': {'.png'}, 'WEBP': {'.webp'}}
+    try:
+        uploaded.seek(0)
+        image = Image.open(uploaded)
+        image_format = image.format
+        width, height = image.size
+        if image_format not in allowed_extensions or Path(uploaded.name).suffix.lower() not in allowed_extensions[image_format]:
+            raise ValueError('Upload a JPEG, PNG, or WebP image with a matching file extension.')
+        if width <= 0 or height <= 0 or width > 8000 or height > 8000 or width * height > 40000000:
+            raise ValueError('The clock photo dimensions are too large.')
+        image.verify()
+        uploaded.seek(0)
+    except (UnidentifiedImageError, OSError, ValueError) as error:
+        if isinstance(error, ValueError) and str(error): raise
+        raise ValueError('The clock photo is not a valid image.')
     return uploaded
 
 
@@ -267,10 +282,20 @@ def import_timekeeping(request):
     if uploaded is None or not uploaded.name.lower().endswith('.xlsx'): return JsonResponse({'detail':'Upload a .xlsx timekeeping file.'},status=400)
     if uploaded.size>5*1024*1024: return JsonResponse({'detail':'The workbook must be 5 MB or smaller.'},status=400)
     try:
+        uploaded.seek(0)
+        with ZipFile(uploaded) as archive:
+            entries = archive.infolist()
+            if len(entries) > 200 or sum(entry.file_size for entry in entries) > 30 * 1024 * 1024:
+                return JsonResponse({'detail':'The workbook contains too much uncompressed data.'},status=400)
+            if any(entry.file_size > 10 * 1024 * 1024 for entry in entries):
+                return JsonResponse({'detail':'The workbook contains an oversized component.'},status=400)
+        uploaded.seek(0)
         from openpyxl import load_workbook
         workbook=load_workbook(uploaded,read_only=True,data_only=True); sheet=workbook.active; headers=tuple(cell.value.strip() if isinstance(cell.value,str) else cell.value for cell in next(sheet.iter_rows(min_row=1,max_row=1)))
-        if headers!=TIMEKEEPING_HEADERS: return JsonResponse({'detail':f'Headers must be exactly: {", ".join(TIMEKEEPING_HEADERS)}.'},status=400)
-    except Exception: return JsonResponse({'detail':'The workbook could not be read. Use the supplied template.'},status=400)
+        if headers!=TIMEKEEPING_HEADERS:
+            workbook.close()
+            return JsonResponse({'detail':f'Headers must be exactly: {", ".join(TIMEKEEPING_HEADERS)}.'},status=400)
+    except (BadZipFile, OSError, ValueError, StopIteration): return JsonResponse({'detail':'The workbook could not be read. Use the supplied template.'},status=400)
     errors,prepared=[],[]; status_values={choice.value for choice in AttendanceRecord.Status}
     for row_number,row in enumerate(sheet.iter_rows(min_row=2,values_only=True),start=2):
         if not any(value not in (None,'') for value in row): continue
