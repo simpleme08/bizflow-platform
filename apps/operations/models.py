@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 
 from apps.core.models import BaseModel
@@ -49,6 +50,11 @@ class DocumentAcknowledgement(BaseModel):
     class Meta:
         constraints = [models.UniqueConstraint(fields=('document', 'employee'), name='unique_document_acknowledgement')]
 
+    def clean(self):
+        super().clean()
+        if self.document_id and self.employee_id and self.document.organization_id != self.employee.organization_id:
+            raise ValidationError({'employee': 'The employee and policy document must belong to the same organization.'})
+
 
 class Announcement(BaseModel):
     organization = models.ForeignKey('organization.Organization', on_delete=models.PROTECT, related_name='announcements')
@@ -80,6 +86,11 @@ class CompensationChange(BaseModel):
     reason = models.CharField(max_length=180)
     approval = models.OneToOneField(ApprovalRequest, null=True, blank=True, on_delete=models.SET_NULL, related_name='compensation_change')
 
+    def clean(self):
+        super().clean()
+        if self.approval_id and self.employee_id and self.approval.organization_id != self.employee.organization_id:
+            raise ValidationError({'approval': 'The approval request must belong to the employee organization.'})
+
 
 class Project(BaseModel):
     organization = models.ForeignKey('organization.Organization', on_delete=models.PROTECT, related_name='projects')
@@ -107,6 +118,13 @@ class TimesheetEntry(BaseModel):
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.DRAFT)
     approver = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
 
+    def clean(self):
+        super().clean()
+        if self.project_id and self.employee_id and self.project.organization_id != self.employee.organization_id:
+            raise ValidationError({'project': 'The project and employee must belong to the same organization.'})
+        if self.hours is not None and (self.hours <= 0 or self.hours > 24):
+            raise ValidationError({'hours': 'Timesheet hours must be greater than zero and no more than 24.'})
+
 
 class OffboardingTask(BaseModel):
     offboarding = models.ForeignKey('talent.OffboardingRecord', on_delete=models.CASCADE, related_name='tasks')
@@ -114,6 +132,14 @@ class OffboardingTask(BaseModel):
     assigned_to = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
     due_date = models.DateField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
+
+    def clean(self):
+        super().clean()
+        if self.offboarding_id and self.assigned_to_id:
+            from apps.organization.models import OrganizationMembership
+            organization_id = self.offboarding.employee.organization_id
+            if not OrganizationMembership.objects.filter(organization_id=organization_id, user_id=self.assigned_to_id, is_active=True).exists():
+                raise ValidationError({'assigned_to': 'The assignee must have active membership in the employee organization.'})
 
 
 class ExternalConnector(BaseModel):
