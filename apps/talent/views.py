@@ -50,16 +50,17 @@ def recruiting_api(request):
         payload = json.loads(request.body or '{}')
         kind = payload['kind']
         if kind == 'job':
-            item = JobOpening.objects.create(organization=membership.organization, title=payload['title'], description=payload.get('description', ''), location=payload.get('location', ''), status=payload.get('status', JobOpening.Status.DRAFT))
+            item = JobOpening(organization=membership.organization, title=payload['title'], description=payload.get('description', ''), location=payload.get('location', ''), status=payload.get('status', JobOpening.Status.DRAFT))
         elif kind == 'candidate':
-            item = Candidate.objects.create(organization=membership.organization, first_name=payload['first_name'], last_name=payload['last_name'], email=payload['email'], phone=payload.get('phone', ''), source=payload.get('source', ''))
+            item = Candidate(organization=membership.organization, first_name=payload['first_name'], last_name=payload['last_name'], email=payload['email'], phone=payload.get('phone', ''), source=payload.get('source', ''))
         elif kind == 'application':
             job = JobOpening.objects.get(id=payload['job_id'], organization=membership.organization)
             candidate = Candidate.objects.get(id=payload['candidate_id'], organization=membership.organization)
-            item = JobApplication.objects.create(job=job, candidate=candidate, stage=payload.get('stage', JobApplication.Stage.APPLIED))
+            item = JobApplication(job=job, candidate=candidate, stage=payload.get('stage', JobApplication.Stage.APPLIED))
         else:
             raise ValueError
         item.full_clean()
+        item.save()
     except (KeyError, ValueError, ValidationError, json.JSONDecodeError, JobOpening.DoesNotExist, Candidate.DoesNotExist):
         return JsonResponse({'detail': 'Provide valid recruiting data.'}, status=400)
     record_audit(organization=membership.organization, actor=request.user, action=f'recruiting.{kind}.created', entity=item)
@@ -80,18 +81,19 @@ def performance_api(request):
         payload = json.loads(request.body or '{}')
         kind = payload['kind']
         if kind == 'cycle':
-            item = PerformanceCycle.objects.create(organization=membership.organization, name=payload['name'], start_date=date.fromisoformat(payload['start_date']), end_date=date.fromisoformat(payload['end_date']), status=payload.get('status', PerformanceCycle.Status.DRAFT))
+            item = PerformanceCycle(organization=membership.organization, name=payload['name'], start_date=date.fromisoformat(payload['start_date']), end_date=date.fromisoformat(payload['end_date']), status=payload.get('status', PerformanceCycle.Status.DRAFT))
         elif kind == 'goal':
             employee = Employee.objects.get(id=payload['employee_id'], organization=membership.organization)
             cycle = PerformanceCycle.objects.get(id=payload['cycle_id'], organization=membership.organization) if payload.get('cycle_id') else None
-            item = EmployeeGoal.objects.create(employee=employee, cycle=cycle, title=payload['title'], description=payload.get('description', ''), progress=int(payload.get('progress', 0)), status=payload.get('status', EmployeeGoal.Status.NOT_STARTED))
+            item = EmployeeGoal(employee=employee, cycle=cycle, title=payload['title'], description=payload.get('description', ''), progress=int(payload.get('progress', 0)), status=payload.get('status', EmployeeGoal.Status.NOT_STARTED))
         elif kind == 'review':
             employee = Employee.objects.get(id=payload['employee_id'], organization=membership.organization)
             cycle = PerformanceCycle.objects.get(id=payload['cycle_id'], organization=membership.organization)
-            item = PerformanceReview.objects.create(cycle=cycle, employee=employee, reviewer=request.user, rating=payload.get('rating'), comments=payload.get('comments', ''), status=payload.get('status', PerformanceReview.Status.DRAFT))
+            item = PerformanceReview(cycle=cycle, employee=employee, reviewer=request.user, rating=payload.get('rating'), comments=payload.get('comments', ''), status=payload.get('status', PerformanceReview.Status.DRAFT))
         else:
             raise ValueError
         item.full_clean()
+        item.save()
     except (KeyError, ValueError, TypeError, ValidationError, json.JSONDecodeError, Employee.DoesNotExist, PerformanceCycle.DoesNotExist):
         return JsonResponse({'detail': 'Provide valid performance data.'}, status=400)
     record_audit(organization=membership.organization, actor=request.user, action=f'performance.{kind}.created', entity=item)
@@ -110,14 +112,15 @@ def benefits_api(request):
     try:
         payload = json.loads(request.body or '{}')
         if payload['kind'] == 'plan':
-            item = BenefitPlan.objects.create(organization=membership.organization, name=payload['name'], provider=payload.get('provider', ''), description=payload.get('description', ''), employee_cost=payload.get('employee_cost', 0), employer_cost=payload.get('employer_cost', 0))
+            item = BenefitPlan(organization=membership.organization, name=payload['name'], provider=payload.get('provider', ''), description=payload.get('description', ''), employee_cost=payload.get('employee_cost', 0), employer_cost=payload.get('employer_cost', 0))
         elif payload['kind'] == 'enrollment':
             employee = Employee.objects.get(id=payload['employee_id'], organization=membership.organization)
             plan = BenefitPlan.objects.get(id=payload['plan_id'], organization=membership.organization, is_active=True)
-            item = BenefitEnrollment.objects.create(employee=employee, plan=plan, effective_date=date.fromisoformat(payload['effective_date']))
+            item = BenefitEnrollment(employee=employee, plan=plan, effective_date=date.fromisoformat(payload['effective_date']))
         else:
             raise ValueError
         item.full_clean()
+        item.save()
     except (KeyError, ValueError, ValidationError, json.JSONDecodeError, Employee.DoesNotExist, BenefitPlan.DoesNotExist):
         return JsonResponse({'detail': 'Provide valid benefit data.'}, status=400)
     record_audit(organization=membership.organization, actor=request.user, action='benefits.created', entity=item)
