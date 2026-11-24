@@ -106,15 +106,28 @@ def operations_api(request):
     org = membership.organization
     if request.method == 'GET':
         approvers = OrganizationMembership.objects.filter(organization=org, is_active=True).select_related('user')
-        return JsonResponse({'approvals': [{'id': str(a.id), 'title': a.title, 'category': a.category, 'status': a.status, 'requester': a.requester.get_username(), 'approver': a.approver.get_username() if a.approver else '', 'decision_note': a.decision_note} for a in ApprovalRequest.objects.filter(organization=org).select_related('requester', 'approver').order_by('-created_at')[:50]], 'documents': [{'id': str(d.id), 'title': d.title, 'category': d.category, 'status': d.status, 'required': d.requires_acknowledgement} for d in EmployeeDocument.objects.filter(organization=org).order_by('-created_at')], 'announcements': [{'id': str(a.id), 'title': a.title, 'is_published': a.is_published} for a in Announcement.objects.filter(organization=org).order_by('-created_at')], 'projects': [{'id': str(p.id), 'code': p.code, 'name': p.name, 'billable': p.is_billable} for p in Project.objects.filter(organization=org).order_by('code')], 'connectors': [{'id': str(c.id), 'name': c.name, 'kind': c.kind, 'enabled': c.is_enabled} for c in ExternalConnector.objects.filter(organization=org).order_by('name')], 'profile_requests': [{'id': str(r.id), 'employee': str(r.employee), 'changes': r.requested_changes, 'status': r.status, 'remarks': r.remarks} for r in ProfileChangeRequest.objects.filter(employee__organization=org).select_related('employee').order_by('-created_at')[:50]], 'timesheets': [{'id': str(t.id), 'employee': str(t.employee), 'project': t.project.name, 'date': t.work_date.isoformat(), 'hours': str(t.hours), 'status': t.status} for t in TimesheetEntry.objects.filter(employee__organization=org).select_related('employee', 'project').order_by('-work_date')[:50]], 'approvers': [{'id': str(m.user_id), 'name': m.user.get_username(), 'role': m.role} for m in approvers if m.has_permission('manage_employees')]})
+        return JsonResponse({'approvals': [{'id': str(a.id), 'title': a.title, 'category': a.category, 'status': a.status, 'requester': a.requester.get_username(), 'approver': a.approver.get_username() if a.approver else '', 'decision_note': a.decision_note} for a in ApprovalRequest.objects.filter(organization=org).select_related('requester', 'approver').order_by('-created_at')[:50]], 'documents': [{'id': str(d.id), 'title': d.title, 'category': d.category, 'status': d.status, 'required': d.requires_acknowledgement, 'has_file': bool(d.file), 'legacy_attachment_needs_reupload': bool(d.file_url and not d.file)} for d in EmployeeDocument.objects.filter(organization=org).order_by('-created_at')], 'announcements': [{'id': str(a.id), 'title': a.title, 'is_published': a.is_published} for a in Announcement.objects.filter(organization=org).order_by('-created_at')], 'projects': [{'id': str(p.id), 'code': p.code, 'name': p.name, 'billable': p.is_billable} for p in Project.objects.filter(organization=org).order_by('code')], 'connectors': [{'id': str(c.id), 'name': c.name, 'kind': c.kind, 'enabled': c.is_enabled} for c in ExternalConnector.objects.filter(organization=org).order_by('name')], 'profile_requests': [{'id': str(r.id), 'employee': str(r.employee), 'changes': r.requested_changes, 'status': r.status, 'remarks': r.remarks} for r in ProfileChangeRequest.objects.filter(employee__organization=org).select_related('employee').order_by('-created_at')[:50]], 'timesheets': [{'id': str(t.id), 'employee': str(t.employee), 'project': t.project.name, 'date': t.work_date.isoformat(), 'hours': str(t.hours), 'status': t.status} for t in TimesheetEntry.objects.filter(employee__organization=org).select_related('employee', 'project').order_by('-work_date')[:50]], 'approvers': [{'id': str(m.user_id), 'name': m.user.get_username(), 'role': m.role} for m in approvers if m.has_permission('manage_employees')]})
     try:
-        payload = _json(request)
+        payload = request.POST if request.content_type and request.content_type.startswith('multipart/form-data') else _json(request)
         kind = payload['kind']
         if kind == 'document':
             status = payload.get('status', EmployeeDocument.Status.DRAFT)
             if status not in EmployeeDocument.Status.values:
                 raise ValueError
-            item = EmployeeDocument.objects.create(organization=org, title=str(payload['title']).strip(), category=str(payload.get('category', 'Policy')).strip(), body=str(payload.get('body', '')).strip(), requires_acknowledgement=bool(payload.get('requires_acknowledgement', False)), status=status)
+            acknowledgement = str(payload.get('requires_acknowledgement', '')).lower() in ('1', 'true', 'on', 'yes')
+            item = EmployeeDocument(
+                organization=org,
+                title=str(payload['title']).strip(),
+                category=str(payload.get('category', 'Policy')).strip() or 'Policy',
+                body=str(payload.get('body', '')).strip(),
+                requires_acknowledgement=acknowledgement,
+                status=status,
+            )
+            uploaded_file = request.FILES.get('file')
+            if uploaded_file:
+                item.file = uploaded_file
+            item.full_clean()
+            item.save()
         elif kind == 'announcement':
             published = bool(payload.get('is_published', True))
             item = Announcement.objects.create(organization=org, title=str(payload['title']).strip(), message=str(payload['message']).strip(), is_published=published, published_at=timezone.now() if published else None)
