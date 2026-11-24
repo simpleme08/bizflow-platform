@@ -182,23 +182,61 @@ def leave_decision(request, application_id):
     membership = _membership(request)
     if membership is None or not membership.has_permission('approve_leave'):
         return JsonResponse({'detail': 'Leave approval permission is required.'}, status=403)
+
     try:
-        application = LeaveApplication.objects.get(id=application_id, employee__organization=membership.organization)
-        payload = json.loads(request.body)
-        if payload.get('decision') == 'approve':
-            if not _eligible(application.employee, application.start_date) or (application.employee.separation_date and application.end_date >= application.employee.separation_date):
-                return JsonResponse({'detail': 'Leave cannot be approved outside the employee active employment period.'}, status=409)
-            application.approve(request.user)
-            record_audit(organization=membership.organization, actor=request.user, action='leave.approved', entity=application)
-            queue_notification(organization=membership.organization, recipient=application.employee.user, event='leave.approved', subject='Leave request approved', body=f'Your {application.leave_type.name} leave from {application.start_date} to {application.end_date} was approved.')
-        elif payload.get('decision') == 'reject':
-            application.reject(request.user, payload.get('remarks', ''))
-            record_audit(organization=membership.organization, actor=request.user, action='leave.rejected', entity=application)
-            queue_notification(organization=membership.organization, recipient=application.employee.user, event='leave.rejected', subject='Leave request update', body=f'Your {application.leave_type.name} leave request was rejected. {application.remarks}')
-        else:
-            return JsonResponse({'detail': 'Decision must be approve or reject.'}, status=400)
-    except (LeaveApplication.DoesNotExist, json.JSONDecodeError):
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'detail': 'Invalid JSON.'}, status=400)
+
+    decision = payload.get('decision')
+    if decision not in {'approve', 'reject'}:
+        return JsonResponse({'detail': 'Decision must be approve or reject.'}, status=400)
+
+    # Managers and team leaders may act only on their own direct reports.
+    # HR, administrators and executive/owner roles retain organization-wide
+    # authority. No approver may approve or reject their own employee request.
+    organization_wide_roles = {
+        membership.Role.OWNER,
+        membership.Role.SUPER_USER,
+        membership.Role.CEO,
+        membership.Role.HR,
+        membership.Role.ADMIN,
+    }
+
+    try:
+        with transaction.atomic():
+            application = (
+                LeaveApplication.objects.select_for_update()
+                .select_related('employee', 'employee__manager', 'leave_type')
+                .get(id=application_id, employee__organization=membership.organization)
+            )
+
+            if application.employee.user_id == request.user.id:
+                return JsonResponse({'detail': 'You cannot approve or reject your own leave request.'}, status=403)
+
+            if membership.role not in organization_wide_roles:
+                if membership.role not in {membership.Role.MANAGER, membership.Role.TEAM_LEADER}:
+                    return JsonResponse({'detail': 'This role cannot approve leave requests.'}, status=403)
+                try:
+                    approver_employee = request.user.employee_profile
+                except Employee.DoesNotExist:
+                    return JsonResponse({'detail': 'A linked manager employee profile is required to approve direct reports.'}, status=403)
+                if application.employee.manager_id != approver_employee.id:
+                    return JsonResponse({'detail': 'Managers and team leaders may only decide leave requests for their direct reports.'}, status=403)
+
+            if decision == 'approve':
+                if not _eligible(application.employee, application.start_date) or (application.employee.separation_date and application.end_date >= application.employee.separation_date):
+                    return JsonResponse({'detail': 'Leave cannot be approved outside the employee active employment period.'}, status=409)
+                application.approve(request.user)
+                record_audit(organization=membership.organization, actor=request.user, action='leave.approved', entity=application)
+                queue_notification(organization=membership.organization, recipient=application.employee.user, event='leave.approved', subject='Leave request approved', body=f'Your {application.leave_type.name} leave from {application.start_date} to {application.end_date} was approved.')
+            else:
+                application.reject(request.user, payload.get('remarks', ''))
+                record_audit(organization=membership.organization, actor=request.user, action='leave.rejected', entity=application)
+                queue_notification(organization=membership.organization, recipient=application.employee.user, event='leave.rejected', subject='Leave request update', body=f'Your {application.leave_type.name} leave request was rejected. {application.remarks}')
+    except LeaveApplication.DoesNotExist:
         return JsonResponse({'detail': 'Leave application was not found.'}, status=404)
     except ValidationError as error:
         return JsonResponse({'detail': error.messages[0]}, status=400)
+
     return JsonResponse({'id': str(application.id), 'status': application.status})
