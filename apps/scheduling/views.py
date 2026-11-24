@@ -32,7 +32,7 @@ def scheduling_page(request):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
     membership = _membership_for(request)
-    if membership is None or not membership.has_permission('manage_attendance'):
+    if membership is None or not membership.has_permission('manage_scheduling'):
         return JsonResponse({'detail': 'Access denied. Requires scheduling permissions.'}, status=403)
     from django.shortcuts import render
     from apps.accounts.views import workspace_url_for_user
@@ -48,7 +48,7 @@ def get_shifts(request):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
     membership = _membership_for(request)
-    if membership is None or not membership.has_permission('manage_attendance'):
+    if membership is None or not membership.has_permission('manage_scheduling'):
         return JsonResponse({'detail': 'Access denied.'}, status=403)
     shifts = _tenant_shift_queryset(membership.organization).order_by('name')
     return JsonResponse({'shifts': [{'id': str(shift.id), 'name': shift.name, 'start_time': shift.start_time.strftime('%H:%M'), 'end_time': shift.end_time.strftime('%H:%M')} for shift in shifts]})
@@ -59,7 +59,7 @@ def get_clients(request):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
     membership = _membership_for(request)
-    if membership is None or not membership.has_permission('manage_attendance'):
+    if membership is None or not membership.has_permission('manage_scheduling'):
         return JsonResponse({'detail': 'Access denied.'}, status=403)
     clients = Client.objects.filter(organization=membership.organization, is_active=True).prefetch_related('sites').order_by('name')
     return JsonResponse({'clients': [{'id': str(client.id), 'name': client.name, 'code': client.code, 'sites': [{'id': str(site.id), 'name': site.name} for site in client.sites.filter(is_active=True).order_by('name')]} for client in clients]})
@@ -70,7 +70,7 @@ def get_assignable_employees(request):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
     membership = _membership_for(request)
-    if membership is None or not membership.has_permission('manage_attendance'):
+    if membership is None or not membership.has_permission('manage_scheduling'):
         return JsonResponse({'detail': 'Access denied.'}, status=403)
     employees = Employee.objects.filter(organization=membership.organization, is_active=True).exclude(status__in=INELIGIBLE_ASSIGNMENT_STATUSES).select_related('department', 'position', 'employment_type').order_by('last_name', 'first_name')
     return JsonResponse({'employees': [{'id': str(employee.id), 'employee_number': employee.employee_number, 'name': f'{employee.first_name} {employee.last_name}', 'department': employee.department.name if employee.department else None, 'position': employee.position.title if employee.position else None} for employee in employees]})
@@ -81,7 +81,7 @@ def get_employee_schedule(request):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
     membership = _membership_for(request)
-    if membership is None or not membership.has_permission('manage_attendance'):
+    if membership is None or not membership.has_permission('manage_scheduling'):
         return JsonResponse({'detail': 'Access denied.'}, status=403)
     employee_id = request.GET.get('employee_id')
     start_date = request.GET.get('start_date')
@@ -103,7 +103,7 @@ def assign_shift(request):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
     membership = _membership_for(request)
-    if membership is None or not membership.has_permission('manage_attendance'):
+    if membership is None or not membership.has_permission('manage_scheduling'):
         return JsonResponse({'detail': 'Access denied.'}, status=403)
     try:
         data = json.loads(request.body)
@@ -175,7 +175,7 @@ def delete_assignment(request):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
     membership = _membership_for(request)
-    if membership is None or not membership.has_permission('manage_attendance'):
+    if membership is None or not membership.has_permission('manage_scheduling'):
         return JsonResponse({'detail': 'Access denied.'}, status=403)
     try:
         data = json.loads(request.body)
@@ -199,7 +199,7 @@ def get_schedule_calendar(request):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
     membership = _membership_for(request)
-    if membership is None or not membership.has_permission('manage_attendance'):
+    if membership is None or not membership.has_permission('manage_scheduling'):
         return JsonResponse({'detail': 'Access denied.'}, status=403)
     employee_id, start_raw, end_raw = request.GET.get('employee_id'), request.GET.get('start_date'), request.GET.get('end_date')
     if not all((employee_id, start_raw, end_raw)):
@@ -232,7 +232,7 @@ def schedule_rule_api(request):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
     membership = _membership_for(request)
-    if membership is None or not membership.has_permission('manage_attendance'):
+    if membership is None or not membership.has_permission('manage_scheduling'):
         return JsonResponse({'detail': 'Access denied.'}, status=403)
     try:
         data = json.loads(request.body)
@@ -263,7 +263,7 @@ def schedule_exception_api(request):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
     membership = _membership_for(request)
-    if membership is None or not membership.has_permission('manage_attendance'):
+    if membership is None or not membership.has_permission('manage_scheduling'):
         return JsonResponse({'detail': 'Access denied.'}, status=403)
     try:
         data = json.loads(request.body)
@@ -290,7 +290,7 @@ def schedule_exception_decision(request, exception_id):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
     membership = _membership_for(request)
-    if membership is None or not membership.has_permission('manage_attendance'):
+    if membership is None or not membership.has_permission('manage_scheduling'):
         return JsonResponse({'detail': 'Access denied.'}, status=403)
     try:
         data = json.loads(request.body)
@@ -313,7 +313,7 @@ def cover_shift_api(request):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
     membership = _membership_for(request)
-    if membership is None or not membership.has_permission('manage_attendance'):
+    if membership is None or not membership.has_permission('manage_scheduling'):
         return JsonResponse({'detail': 'Access denied.'}, status=403)
     try:
         data = json.loads(request.body)
@@ -343,7 +343,7 @@ def cover_shift_decision(request, cover_shift_id):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
     membership = _membership_for(request)
-    if membership is None or not membership.has_permission('manage_attendance'):
+    if membership is None or not membership.has_permission('manage_scheduling'):
         return JsonResponse({'detail': 'Access denied.'}, status=403)
     try:
         data = json.loads(request.body)
@@ -372,7 +372,7 @@ SHIFT_ASSIGNMENT_HEADERS = ('Employee Number', 'Shift Name', 'Start Date', 'End 
 
 
 def _can_bulk_assign_shifts(membership):
-    return membership and membership.has_permission('manage_attendance') and membership.role in (
+    return membership and membership.has_permission('manage_scheduling') and membership.role in (
         OrganizationMembership.Role.HR,
         OrganizationMembership.Role.SME,
         OrganizationMembership.Role.ADMIN,
