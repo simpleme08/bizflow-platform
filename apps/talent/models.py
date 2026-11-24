@@ -128,7 +128,7 @@ class PerformanceReview(BaseModel):
         super().clean()
         if self.cycle_id and self.employee_id and self.cycle.organization_id != self.employee.organization_id:
             raise ValidationError('The performance cycle and employee must belong to the same organization.')
-        if self.reviewer_id:
+        if self.reviewer_id and self.employee_id:
             from apps.organization.models import OrganizationMembership
             if not OrganizationMembership.objects.filter(organization_id=self.employee.organization_id, user_id=self.reviewer_id, is_active=True).exists():
                 raise ValidationError({'reviewer': 'The reviewer must have active membership in the employee organization.'})
