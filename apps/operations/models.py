@@ -2,6 +2,7 @@ from django.conf import settings
 from django.db import models
 
 from apps.core.models import BaseModel
+from apps.core.upload_validation import validate_private_document
 
 
 class ApprovalRequest(BaseModel):
@@ -32,7 +33,9 @@ class EmployeeDocument(BaseModel):
     title = models.CharField(max_length=180)
     category = models.CharField(max_length=80, default='Policy')
     body = models.TextField(blank=True)
+    # Legacy external URLs are retained for migration compatibility but must never be exposed to employees.
     file_url = models.URLField(blank=True)
+    file = models.FileField(upload_to='organization-documents/%Y/%m/', blank=True, validators=[validate_private_document])
     requires_acknowledgement = models.BooleanField(default=False)
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.DRAFT)
     expires_on = models.DateField(null=True, blank=True)
