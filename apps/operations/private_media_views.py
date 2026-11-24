@@ -27,7 +27,7 @@ def employee_document_file(request, document_id):
 
     try:
         employee = request.user.employee_profile
-    except (AttributeError, request.user.__class__.DoesNotExist):
+    except AttributeError:
         return JsonResponse({'detail': 'An employee profile is required to access policy documents.'}, status=403)
 
     if employee.organization_id != membership.organization_id or not employee.organization.is_active:
