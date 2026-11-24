@@ -137,6 +137,9 @@ Both employee-specific and organization-wide policy uploads now validate a 10 MB
 Regression tests have been added for owner/HR document access, manager and cross-tenant denial, archived/unpublished document denial, unauthenticated access, legacy URL non-disclosure, valid upload, and extension/signature mismatch.
 
 **Still outstanding:** run and pass CI for the latest branch head; verify the live Supabase bucket is private and the Django S3-compatible backend works end-to-end in an isolated staging environment; migrate/re-upload any existing legacy policy attachments after inventory and approval; add malware scanning/quarantine before production employee uploads; and confirm storage backups and restore behavior.
+### 9A. Other upload surfaces — MEDIUM/HIGH, validation hardened in this PR
+Attendance clock photos are now checked against actual decoded image format (JPEG, PNG, or WebP), matching extension, a 5 MB size ceiling, and maximum dimensions/pixel count before being saved. The timekeeping XLSX importer now rejects archives with excessive entry counts or uncompressed size before parsing. Regression tests cover valid image acceptance, extension mismatch, and MIME-spoofed non-image content. These controls do not replace malware scanning, and client-provided GPS/device evidence remains spoofable.
+
 ### 10. Audit retention and legal hold — HIGH
 The scheduled retention command permanently deletes old audit events and archived documents based on organization-configured retention values. No legal-hold or immutable export mechanism was confirmed. Audit deletion may conflict with an investigation, employment dispute, or statutory retention requirement.
 
