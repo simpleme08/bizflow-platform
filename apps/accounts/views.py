@@ -1,4 +1,5 @@
 from django.contrib.auth import authenticate, login, get_user_model
+from django.conf import settings
 import logging
 
 from django.core.cache import cache
@@ -48,11 +49,17 @@ def login_page(request):
         try:
             failure_count = cache.get(throttle_key, 0)
         except Exception:
-            # Authentication must not become a 500 just because the shared
-            # throttling cache is temporarily unavailable. Readiness still
-            # reports cache health so the infrastructure can replace/recover
-            # an unhealthy instance.
             logger.exception('Login throttling cache unavailable during sign-in')
+            # In production, never bypass the brute-force control when the
+            # shared cache is unavailable. Development may continue using its
+            # local fallback cache so local work is not blocked.
+            if settings.ENVIRONMENT == 'production':
+                return render(
+                    request,
+                    'registration/login.html',
+                    {'error': 'Sign-in is temporarily unavailable. Please try again shortly.', 'next': next_url},
+                    status=503,
+                )
             failure_count = 0
         if failure_count >= LOGIN_FAILURE_LIMIT:
             return render(
@@ -88,6 +95,13 @@ def login_page(request):
             cache.set(throttle_key, failures, LOGIN_FAILURE_WINDOW)
         except Exception:
             logger.exception('Login throttling cache unavailable while recording failed sign-in')
+            if settings.ENVIRONMENT == 'production':
+                return render(
+                    request,
+                    'registration/login.html',
+                    {'error': 'Sign-in is temporarily unavailable. Please try again shortly.', 'next': next_url},
+                    status=503,
+                )
         return render(request, 'registration/login.html', {'error': 'Invalid username or password.', 'next': next_url}, status=401)
     return render(request, 'registration/login.html', {'next': next_url})
 
