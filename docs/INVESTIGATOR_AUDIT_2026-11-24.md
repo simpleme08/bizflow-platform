@@ -83,10 +83,10 @@ A live deploy status alone does not prove end-to-end application readiness.
 
 ## Remaining security and business-logic findings
 
-### 1. SME/manager permission granularity — HIGH
-The role matrix gives SME, MANAGER, and TEAM_LEADER `manage_attendance`. Scheduling endpoints use the same permission, but the attendance management API also uses it to create/correct attendance records. This couples shift assignment with attendance editing and gives those roles broader powers than the requested SME job scope.
+### 1. SME/manager permission granularity — PARTIALLY FIXED IN THIS PR
+The role matrix previously gave SME `manage_attendance`, which also authorized attendance record creation/correction because scheduling and attendance editing shared one permission. PR #42 introduces a separate `manage_scheduling` permission, grants it to SME, and removes `manage_attendance` from SME. Scheduling endpoints and dashboard visibility now use the dedicated permission. Regression tests verify SME can access scheduling and view attendance while attendance record writes remain forbidden.
 
-**Remediation:** introduce a distinct `manage_scheduling` permission, grant it to SME and scheduling managers, retain `view_attendance`, and keep attendance corrections under HR/authorized attendance administrators. Add direct-report or assigned-team scoping for managers and team leaders.
+**Still outstanding:** MANAGER and TEAM_LEADER scheduling operations remain organization-wide rather than restricted to their assigned teams/direct reports. Attendance corrections for those roles also need an explicit policy decision.
 
 ### 2. Schedule-exception state model — HIGH
 `ScheduleException` stores only an `approved` boolean. A rejected exception is indistinguishable from a pending exception, and the decision endpoint can toggle the boolean repeatedly. It needs explicit PENDING/APPROVED/REJECTED states, an approver, decision timestamp, reason, and transition checks.
