@@ -1,5 +1,5 @@
 from datetime import datetime, time, timedelta
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_FLOOR, ROUND_HALF_UP
 
 from django.db import transaction
 from django.utils import timezone
@@ -28,7 +28,7 @@ class PhilippinePayrollRules:
     PAGIBIG_EMPLOYEE_RATE_LOW = Decimal('0.01')
     PAGIBIG_EMPLOYEE_RATE_HIGH = Decimal('0.02')
     PAGIBIG_EMPLOYER_RATE = Decimal('0.02')
-    PAGIBIG_MAX_BASE = Decimal('5000.00')
+    PAGIBIG_MAX_BASE = Decimal('10000.00')
     THIRTEENTH_MONTH_EXEMPTION = Decimal('90000.00')
     NIGHT_SHIFT_START = time(22, 0)
     NIGHT_SHIFT_END = time(6, 0)
@@ -40,10 +40,17 @@ class PhilippinePayrollRules:
 
     @classmethod
     def monthly_msc(cls, monthly_basic):
-        if monthly_basic <= cls.SSS_MIN_MSC:
-            return cls.SSS_MIN_MSC
-        msc = (monthly_basic / cls.SSS_MSC_STEP).to_integral_value(rounding='ROUND_CEILING') * cls.SSS_MSC_STEP
-        return min(msc, cls.SSS_MAX_MSC)
+        # SSS compensation brackets use half-step boundaries: below ₱5,250
+        # maps to a ₱5,000 MSC; ₱5,250–₱5,749.99 maps to ₱5,500, etc.
+        # Rounding the raw salary up to the next ₱500 overstates the MSC for
+        # employees in the lower half of each bracket.
+        monthly_basic = max(Decimal(monthly_basic), ZERO)
+        bracketed_msc = (
+            ((monthly_basic + cls.SSS_MSC_STEP / Decimal('2')) / cls.SSS_MSC_STEP)
+            .to_integral_value(rounding=ROUND_FLOOR)
+            * cls.SSS_MSC_STEP
+        )
+        return min(max(bracketed_msc, cls.SSS_MIN_MSC), cls.SSS_MAX_MSC)
 
     @classmethod
     def sss(cls, monthly_basic):
