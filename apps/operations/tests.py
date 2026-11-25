@@ -191,3 +191,57 @@ class OperationsTenantRelationshipValidationTests(TestCase):
         )
         with self.assertRaisesMessage(ValidationError, 'active membership'):
             task.full_clean()
+
+class TimesheetApprovalScopeTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.org = Organization.objects.create(name='Timesheet Scope', slug='timesheet-scope')
+        self.other_org = Organization.objects.create(name='Other Scope', slug='other-scope')
+        self.manager_user = User.objects.create_user(username='scope-manager', password='password')
+        self.hr_user = User.objects.create_user(username='scope-hr', password='password')
+        self.employee_user = User.objects.create_user(username='scope-employee', password='password')
+        self.peer_user = User.objects.create_user(username='scope-peer', password='password')
+        self.outsider_user = User.objects.create_user(username='scope-outsider', password='password')
+        OrganizationMembership.objects.create(organization=self.org, user=self.manager_user, role='MANAGER')
+        OrganizationMembership.objects.create(organization=self.org, user=self.hr_user, role='HR')
+        OrganizationMembership.objects.create(organization=self.org, user=self.employee_user, role='EMPLOYEE')
+        OrganizationMembership.objects.create(organization=self.org, user=self.peer_user, role='EMPLOYEE')
+        OrganizationMembership.objects.create(organization=self.other_org, user=self.outsider_user, role='HR')
+        self.manager = Employee.objects.create(employee_number='TS-MGR', user=self.manager_user, organization=self.org, first_name='Team', last_name='Manager')
+        self.employee = Employee.objects.create(employee_number='TS-EMP', user=self.employee_user, organization=self.org, manager=self.manager, first_name='Direct', last_name='Report')
+        self.peer = Employee.objects.create(employee_number='TS-PEER', user=self.peer_user, organization=self.org, first_name='Peer', last_name='Worker')
+        self.project = Project.objects.create(organization=self.org, code='TS', name='Timesheet project')
+
+    def make_entry(self, employee):
+        return TimesheetEntry.objects.create(employee=employee, project=self.project, work_date='2026-11-24', hours='8.00', status=TimesheetEntry.Status.SUBMITTED)
+
+    def decide(self, user, entry):
+        self.client.login(username=user, password='password')
+        return self.client.post(f'/api/operations/timesheets/{entry.id}/decision/', data='{"decision":"approve"}', content_type='application/json')
+
+    def test_manager_can_approve_direct_report(self):
+        entry = self.make_entry(self.employee)
+        response = self.decide('scope-manager', entry)
+        self.assertEqual(response.status_code, 200)
+
+    def test_manager_cannot_approve_peer(self):
+        entry = self.make_entry(self.peer)
+        response = self.decide('scope-manager', entry)
+        self.assertEqual(response.status_code, 403)
+        entry.refresh_from_db()
+        self.assertEqual(entry.status, TimesheetEntry.Status.SUBMITTED)
+
+    def test_hr_can_approve_organization_wide(self):
+        entry = self.make_entry(self.peer)
+        response = self.decide('scope-hr', entry)
+        self.assertEqual(response.status_code, 200)
+
+    def test_employee_cannot_approve_timesheets(self):
+        entry = self.make_entry(self.peer)
+        response = self.decide('scope-employee', entry)
+        self.assertEqual(response.status_code, 403)
+
+    def test_manager_cannot_approve_own_timesheet(self):
+        entry = self.make_entry(self.manager)
+        response = self.decide('scope-manager', entry)
+        self.assertEqual(response.status_code, 403)
