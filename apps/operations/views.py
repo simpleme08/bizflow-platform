@@ -34,8 +34,26 @@ def _json(request):
     return json.loads(request.body or '{}')
 
 
-def _can_approve_timesheets(membership):
-    return membership.has_permission('manage_employees') or membership.has_permission('manage_attendance')
+def _can_approve_timesheets(membership, employee=None):
+    """Organization-wide approvers are explicit; managers only approve direct reports."""
+    if not membership.is_active or not membership.organization.is_active:
+        return False
+    if membership.role in {
+        OrganizationMembership.Role.OWNER,
+        OrganizationMembership.Role.SUPER_USER,
+        OrganizationMembership.Role.ADMIN,
+        OrganizationMembership.Role.HR,
+    }:
+        return True
+    if membership.role in {OrganizationMembership.Role.MANAGER, OrganizationMembership.Role.TEAM_LEADER}:
+        if employee is None:
+            return True
+        try:
+            approver_profile = membership.user.employee_profile
+        except Exception:
+            return False
+        return employee.manager_id == approver_profile.id
+    return False
 
 
 def operations_page(request):
@@ -220,17 +238,24 @@ def timesheet_decision(request, entry_id):
     if not _can_approve_timesheets(membership):
         return JsonResponse({'detail': 'You do not have permission to approve timesheets.'}, status=403)
     try:
-        item = TimesheetEntry.objects.get(id=entry_id, employee__organization=membership.organization, status=TimesheetEntry.Status.SUBMITTED)
-        if item.employee_id == getattr(getattr(request.user, 'employee_profile', None), 'id', None):
-            return JsonResponse({'detail': 'Employees cannot approve their own timesheets.'}, status=403)
         payload = _json(request)
         decision = payload['decision']
         if decision not in ('approve', 'reject'):
             raise ValueError
-        item.status = TimesheetEntry.Status.APPROVED if decision == 'approve' else TimesheetEntry.Status.REJECTED
-        item.approver = request.user
-        item.save()
+        with transaction.atomic():
+            item = TimesheetEntry.objects.select_for_update().select_related('employee').get(
+                id=entry_id,
+                employee__organization=membership.organization,
+                status=TimesheetEntry.Status.SUBMITTED,
+            )
+            if item.employee_id == getattr(getattr(request.user, 'employee_profile', None), 'id', None):
+                return JsonResponse({'detail': 'Employees cannot approve their own timesheets.'}, status=403)
+            if not _can_approve_timesheets(membership, item.employee):
+                return JsonResponse({'detail': 'You may only approve timesheets for your direct reports.'}, status=403)
+            item.status = TimesheetEntry.Status.APPROVED if decision == 'approve' else TimesheetEntry.Status.REJECTED
+            item.approver = request.user
+            item.save(update_fields=('status', 'approver', 'updated_at'))
+            record_audit(organization=membership.organization, actor=request.user, action=f'timesheet.{decision}d', entity=item)
     except (TimesheetEntry.DoesNotExist, KeyError, ValueError, json.JSONDecodeError):
         return JsonResponse({'detail': 'A valid submitted timesheet and decision are required.'}, status=400)
-    record_audit(organization=membership.organization, actor=request.user, action=f'timesheet.{decision}d', entity=item)
     return JsonResponse({'id': str(item.id), 'status': item.status})
