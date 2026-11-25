@@ -182,6 +182,22 @@ class PayrollCalculatorTests(TestCase):
         with self.assertRaises(Exception):
             PayrollCalculator.process_period(other_period, self.employee.organization)
 
+    def test_employee_cannot_download_payslip_after_membership_is_deactivated(self):
+        membership, _ = OrganizationMembership.objects.update_or_create(
+            organization=self.employee.organization,
+            user=self.employee.user,
+            defaults={'role': OrganizationMembership.Role.EMPLOYEE, 'is_active': True},
+        )
+        PayrollCalculator.process_period(self.period, self.employee.organization)
+        record = PayrollRecord.objects.get(employee=self.employee, payroll_period=self.period)
+        record.status = PayrollRecord.Status.APPROVED
+        record.save(update_fields=('status', 'updated_at'))
+        membership.is_active = False
+        membership.save(update_fields=('is_active', 'updated_at'))
+        self.client.login(username='payroll-employee', password='password')
+        response = self.client.get(f'/api/payroll/{record.id}/payslip/')
+        self.assertEqual(response.status_code, 403)
+
     def test_employee_can_download_only_approved_payslip(self):
         membership, _ = OrganizationMembership.objects.update_or_create(
             organization=self.employee.organization,
