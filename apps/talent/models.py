@@ -180,3 +180,36 @@ class OffboardingRecord(BaseModel):
     notes = models.TextField(blank=True)
     required_document_types = models.JSONField(default=list, blank=True)
     required_clearances = models.JSONField(default=list, blank=True)
+
+
+
+class OffboardingClearanceEvidence(BaseModel):
+    """Auditable, tenant-bound verification for one required offboarding clearance."""
+
+    offboarding = models.ForeignKey(OffboardingRecord, on_delete=models.CASCADE, related_name='clearance_evidence')
+    clearance_key = models.CharField(max_length=100)
+    verified_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='verified_offboarding_clearances')
+    verified_at = models.DateTimeField()
+    notes = models.TextField()
+    evidence_reference = models.CharField(max_length=255, blank=True, help_text='Private evidence identifier only; never store a public URL or secret.')
+    
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=('offboarding', 'clearance_key'), name='unique_offboarding_clearance_evidence'),
+        ]
+        ordering = ('clearance_key',)
+
+    def clean(self):
+        super().clean()
+        if self.offboarding_id and self.clearance_key not in (self.offboarding.required_clearances or []):
+            raise ValidationError({'clearance_key': 'This clearance is not required for the offboarding record.'})
+        if self.offboarding_id and self.verified_by_id:
+            from apps.organization.models import OrganizationMembership
+            if not OrganizationMembership.objects.filter(
+                organization_id=self.offboarding.employee.organization_id,
+                user_id=self.verified_by_id,
+                is_active=True,
+            ).exists():
+                raise ValidationError({'verified_by': 'The verifier must have active membership in the employee organization.'})
+        if not self.notes.strip():
+            raise ValidationError({'notes': 'Verification notes are required.'})
