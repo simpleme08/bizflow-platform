@@ -136,8 +136,25 @@ def offboarding_api(request):
     if error:
         return error
     if request.method == 'GET':
-        records = OffboardingRecord.objects.filter(employee__organization=membership.organization).select_related('employee')
-        return JsonResponse({'records': [{'id': str(r.id), 'employee': str(r.employee), 'last_working_day': r.last_working_day.isoformat(), 'reason': r.reason, 'status': r.status} for r in records]})
+        records = OffboardingRecord.objects.filter(
+            employee__organization=membership.organization,
+        ).select_related('employee').prefetch_related('clearance_evidence')
+        return JsonResponse({'records': [{
+            'id': str(r.id),
+            'employee': str(r.employee),
+            'last_working_day': r.last_working_day.isoformat(),
+            'reason': r.reason,
+            'status': r.status,
+            'required_document_types': r.required_document_types or [],
+            'required_clearances': r.required_clearances or [],
+            'verified_clearances': [{
+                'clearance_key': evidence.clearance_key,
+                'verified_by': evidence.verified_by.get_username(),
+                'verified_at': evidence.verified_at.isoformat(),
+                'notes': evidence.notes,
+                'evidence_reference': evidence.evidence_reference,
+            } for evidence in r.clearance_evidence.all()],
+        } for r in records]})
     try:
         payload = json.loads(request.body or '{}')
         employee = Employee.objects.get(id=payload['employee_id'], organization=membership.organization)
