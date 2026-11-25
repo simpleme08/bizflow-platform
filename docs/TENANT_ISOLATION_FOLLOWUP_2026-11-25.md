@@ -66,3 +66,19 @@ The PR separates SME scheduling permission from attendance-record editing. Keep 
 - No production deploy or infrastructure change is authorized by this review.
 - Offboarding evidence and timesheet approval scope remain release blockers.
 - Supabase staging verification, private-bucket ACL/restore checks, database backup/restore drill, SMTP configuration, malware scanning/quarantine, payroll statutory validation, and browser E2E / IDOR testing remain outstanding.
+
+
+## Implementation update — 25 Nov 2026
+
+The two workflow authorization gaps identified above have now been addressed on this audit branch:
+
+- Added persistent `OffboardingClearanceEvidence` records with a unique record/clearance key, active same-organization verifier validation, server-generated verification timestamps, required notes, and an optional private evidence identifier (public URLs are rejected).
+- Added a tenant-scoped clearance verification endpoint and exposed verification status to authorized HR users.
+- Offboarding completion no longer trusts request-body clearance booleans. It requires stored evidence for every configured clearance and retains the employee separation-date and required-document checks.
+- Added a locked forward-only transition graph: PLANNED → IN_PROGRESS → COMPLETED. Completed records cannot be reopened through the normal API.
+- Timesheet decisions now permit organization-wide approval only for OWNER, SUPER_USER, ADMIN, and HR. MANAGER and TEAM_LEADER are restricted to direct reports. SME and employee roles cannot approve timesheets. Decisions use row locking and audit within the transaction.
+- Added regression tests for the clearance bypass, persisted clearance evidence, invalid transitions, direct-report and peer decisions, HR organization-wide approval, self-approval, and employee denial.
+
+**Verification:** GitHub Actions run #152 passed Django system checks, migration drift detection, and the full automated test suite for the implementation including the offboarding GET response. A follow-up run #154 is checking the final model validation that rejects public URLs in evidence references; its automated test step is still running at the time of this update.
+
+These application-level fixes do not complete the external production release gates: Supabase staging and restore verification, SMTP setup, malware scanning, payroll statutory validation, browser E2E/IDOR coverage, and production change approval remain outstanding.
