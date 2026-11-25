@@ -1,6 +1,9 @@
 import json
 from datetime import date
 
+from django.db import IntegrityError, transaction
+from django.utils import timezone
+
 from django.core.exceptions import ValidationError
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
@@ -11,7 +14,7 @@ from apps.employees.models import Employee
 from apps.organization.context import current_membership
 from apps.organization.models import OrganizationMembership
 
-from .models import BenefitEnrollment, BenefitPlan, Candidate, EmployeeGoal, JobApplication, JobOpening, OffboardingRecord, PerformanceCycle, PerformanceReview
+from .models import BenefitEnrollment, BenefitPlan, Candidate, EmployeeGoal, JobApplication, JobOpening, OffboardingClearanceEvidence, OffboardingRecord, PerformanceCycle, PerformanceReview
 
 
 def _membership(request):
@@ -138,7 +141,13 @@ def offboarding_api(request):
     try:
         payload = json.loads(request.body or '{}')
         employee = Employee.objects.get(id=payload['employee_id'], organization=membership.organization)
-        item = OffboardingRecord(employee=employee, last_working_day=date.fromisoformat(payload['last_working_day']), reason=payload.get('reason', ''), notes=payload.get('notes', ''))
+        required_documents = payload.get('required_document_types', [])
+        required_clearances = payload.get('required_clearances', [])
+        if not isinstance(required_documents, list) or not all(isinstance(value, str) and value.strip() for value in required_documents):
+            raise ValueError
+        if not isinstance(required_clearances, list) or not all(isinstance(value, str) and value.strip() for value in required_clearances):
+            raise ValueError
+        item = OffboardingRecord(employee=employee, last_working_day=date.fromisoformat(payload['last_working_day']), reason=payload.get('reason', ''), notes=payload.get('notes', ''), required_document_types=required_documents, required_clearances=required_clearances)
         item.full_clean()
         item.save()
     except (KeyError, ValueError, ValidationError, json.JSONDecodeError, Employee.DoesNotExist):
@@ -147,30 +156,103 @@ def offboarding_api(request):
     return JsonResponse({'id': str(item.id)}, status=201)
 
 
+@require_http_methods(['POST'])
+def offboarding_clearance_evidence(request, record_id):
+    membership, error = _require(request, 'manage_offboarding')
+    if error:
+        return error
+    try:
+        payload = json.loads(request.body or '{}')
+        clearance_key = payload.get('clearance_key')
+        notes = payload.get('notes')
+        evidence_reference = payload.get('evidence_reference', '')
+        if not isinstance(clearance_key, str) or not clearance_key.strip():
+            raise ValueError
+        if not isinstance(notes, str) or not notes.strip():
+            raise ValueError
+        if not isinstance(evidence_reference, str) or len(evidence_reference) > 255:
+            raise ValueError
+        with transaction.atomic():
+            item = OffboardingRecord.objects.select_for_update().get(
+                id=record_id, employee__organization=membership.organization,
+            )
+            if item.status == OffboardingRecord.Status.COMPLETED:
+                return JsonResponse({'detail': 'Completed offboarding records are immutable.'}, status=409)
+            evidence = OffboardingClearanceEvidence(
+                offboarding=item,
+                clearance_key=clearance_key.strip(),
+                verified_by=request.user,
+                verified_at=timezone.now(),
+                notes=notes.strip(),
+                evidence_reference=evidence_reference.strip(),
+            )
+            evidence.full_clean()
+            evidence.save()
+            record_audit(
+                organization=membership.organization,
+                actor=request.user,
+                action='offboarding.clearance_verified',
+                entity=evidence,
+                details={'clearance_key': evidence.clearance_key, 'offboarding_id': str(item.id)},
+            )
+        return JsonResponse({'id': str(evidence.id), 'clearance_key': evidence.clearance_key, 'verified_at': evidence.verified_at.isoformat()}, status=201)
+    except OffboardingRecord.DoesNotExist:
+        return JsonResponse({'detail': 'Offboarding record not found.'}, status=404)
+    except (KeyError, ValueError, ValidationError, IntegrityError, json.JSONDecodeError):
+        return JsonResponse({'detail': 'Provide valid evidence for a required clearance.'}, status=400)
+
+
 @require_http_methods(['PATCH'])
 def offboarding_status(request, record_id):
     membership, error = _require(request, 'manage_offboarding')
     if error:
         return error
     try:
-        item = OffboardingRecord.objects.get(id=record_id, employee__organization=membership.organization)
         payload = json.loads(request.body or '{}')
         target = payload.get('status')
         if target not in OffboardingRecord.Status.values:
             return JsonResponse({'detail': 'Invalid offboarding status.'}, status=400)
-        if target == OffboardingRecord.Status.COMPLETED:
-            missing_documents = []
-            for document_type in item.required_document_types:
-                if not item.employee.documents.filter(document_type=document_type, status='ACTIVE').exists():
-                    missing_documents.append(document_type)
-            missing_clearances = [name for name in item.required_clearances if not payload.get('clearances', {}).get(name)]
-            if missing_documents or missing_clearances:
-                return JsonResponse({'detail': 'Offboarding completion is blocked.', 'missing_document_types': missing_documents, 'missing_clearances': missing_clearances}, status=409)
-            if not item.employee.separation_date or item.employee.separation_date > item.last_working_day:
-                return JsonResponse({'detail': 'Employee separation date must be set on or before the last working day.'}, status=409)
-        item.status = target
-        item.save(update_fields=('status', 'updated_at'))
-        record_audit(organization=membership.organization, actor=request.user, action='offboarding.status_changed', entity=item, details={'status': target})
+        with transaction.atomic():
+            item = OffboardingRecord.objects.select_for_update().get(
+                id=record_id, employee__organization=membership.organization,
+            )
+            allowed_transitions = {
+                OffboardingRecord.Status.PLANNED: {OffboardingRecord.Status.IN_PROGRESS},
+                OffboardingRecord.Status.IN_PROGRESS: {OffboardingRecord.Status.COMPLETED},
+                OffboardingRecord.Status.COMPLETED: set(),
+            }
+            if target != item.status and target not in allowed_transitions[item.status]:
+                return JsonResponse({'detail': 'Invalid offboarding status transition.'}, status=409)
+            if target == OffboardingRecord.Status.COMPLETED:
+                missing_documents = [
+                    document_type for document_type in (item.required_document_types or [])
+                    if not item.employee.documents.filter(document_type=document_type, status='ACTIVE').exists()
+                ]
+                verified_clearances = set(
+                    item.clearance_evidence.values_list('clearance_key', flat=True)
+                )
+                missing_clearances = [
+                    name for name in (item.required_clearances or [])
+                    if name not in verified_clearances
+                ]
+                if missing_documents or missing_clearances:
+                    return JsonResponse({
+                        'detail': 'Offboarding completion is blocked.',
+                        'missing_document_types': missing_documents,
+                        'missing_clearances': missing_clearances,
+                    }, status=409)
+                if not item.employee.separation_date or item.employee.separation_date > item.last_working_day:
+                    return JsonResponse({'detail': 'Employee separation date must be set on or before the last working day.'}, status=409)
+            if target != item.status:
+                item.status = target
+                item.save(update_fields=('status', 'updated_at'))
+                record_audit(
+                    organization=membership.organization,
+                    actor=request.user,
+                    action='offboarding.status_changed',
+                    entity=item,
+                    details={'status': target},
+                )
         return JsonResponse({'id': str(item.id), 'status': item.status})
     except OffboardingRecord.DoesNotExist:
         return JsonResponse({'detail': 'Offboarding record not found.'}, status=404)
