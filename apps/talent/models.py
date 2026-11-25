@@ -211,5 +211,7 @@ class OffboardingClearanceEvidence(BaseModel):
                 is_active=True,
             ).exists():
                 raise ValidationError({'verified_by': 'The verifier must have active membership in the employee organization.'})
-        if not self.notes.strip():
+        if not isinstance(self.notes, str) or not self.notes.strip():
             raise ValidationError({'notes': 'Verification notes are required.'})
+        if self.evidence_reference and self.evidence_reference.strip().lower().startswith(('http://', 'https://')):
+            raise ValidationError({'evidence_reference': 'Store a private evidence identifier, not a public URL.'})
