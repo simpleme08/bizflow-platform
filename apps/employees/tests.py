@@ -105,3 +105,95 @@ class EmployeeLifecycleTests(TestCase):
         self.client.login(username='hr', password='password')
         response = self.client.get(f'/api/employees/{other_employee.id}/')
         self.assertEqual(response.status_code, 404)
+
+
+class EmployeeDocumentDownloadTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.employee_user = User.objects.create_user(username='document-owner', password='password')
+        self.manager_user = User.objects.create_user(username='document-manager', password='password')
+        self.hr_user = User.objects.create_user(username='document-hr', password='password')
+        self.organization = Organization.objects.create(name='Document Org', slug='document-org')
+        OrganizationMembership.objects.create(
+            organization=self.organization, user=self.employee_user, role='EMPLOYEE'
+        )
+        OrganizationMembership.objects.create(
+            organization=self.organization, user=self.manager_user, role='MANAGER'
+        )
+        OrganizationMembership.objects.create(
+            organization=self.organization, user=self.hr_user, role='HR'
+        )
+        self.employee = Employee.objects.create(
+            employee_number='DOC-001',
+            user=self.employee_user,
+            organization=self.organization,
+            first_name='Alex',
+            last_name='Employee',
+        )
+        self.document = EmployeeDocument.objects.create(
+            employee=self.employee,
+            document_type='Government ID',
+            name='Identity document',
+        )
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.document.file.save(
+            'identity.txt',
+            SimpleUploadedFile('identity.txt', b'private employee document'),
+            save=True,
+        )
+        self.addCleanup(self.document.file.delete)
+
+    def document_url(self, document=None, employee=None):
+        document = document or self.document
+        employee = employee or self.employee
+        return f'/api/employees/{employee.id}/documents/{document.id}/file/'
+
+    def test_employee_can_download_own_document_without_exposing_storage_url(self):
+        self.client.login(username='document-owner', password='password')
+        response = self.client.get(self.document_url())
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Cache-Control'], 'private, no-store')
+        self.assertEqual(response['X-Content-Type-Options'], 'nosniff')
+        self.assertIn('attachment', response['Content-Disposition'])
+        self.assertNotIn('supabase', response.get('Location', '').lower())
+        self.assertEqual(b''.join(response.streaming_content), b'private employee document')
+
+    def test_hr_can_download_employee_document(self):
+        self.client.login(username='document-hr', password='password')
+        response = self.client.get(self.document_url())
+        self.assertEqual(response.status_code, 200)
+
+    def test_manager_cannot_download_employee_document(self):
+        self.client.login(username='document-manager', password='password')
+        response = self.client.get(self.document_url())
+        self.assertEqual(response.status_code, 403)
+
+    def test_document_from_another_organization_is_not_found(self):
+        other_org = Organization.objects.create(name='Other Document Org', slug='other-document-org')
+        other_user = get_user_model().objects.create_user(username='other-document-owner')
+        other_employee = Employee.objects.create(
+            employee_number='DOC-002',
+            user=other_user,
+            organization=other_org,
+            first_name='Other',
+            last_name='Employee',
+        )
+        other_document = EmployeeDocument.objects.create(
+            employee=other_employee,
+            document_type='Government ID',
+            name='Other identity document',
+        )
+        self.client.login(username='document-manager', password='password')
+        response = self.client.get(self.document_url(other_document, other_employee))
+        self.assertEqual(response.status_code, 404)
+
+    def test_inactive_document_cannot_be_downloaded(self):
+        self.document.status = 'ARCHIVED'
+        self.document.save(update_fields=('status', 'updated_at'))
+        self.client.login(username='document-owner', password='password')
+        response = self.client.get(self.document_url())
+        self.assertEqual(response.status_code, 404)
+
+    def test_unauthenticated_user_cannot_download_document(self):
+        response = self.client.get(self.document_url())
+        self.assertEqual(response.status_code, 401)

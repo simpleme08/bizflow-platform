@@ -1,6 +1,10 @@
 import json
 from datetime import date
 
+from django.db import IntegrityError, transaction
+from django.utils import timezone
+
+from django.core.exceptions import ValidationError
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_http_methods
@@ -10,7 +14,7 @@ from apps.employees.models import Employee
 from apps.organization.context import current_membership
 from apps.organization.models import OrganizationMembership
 
-from .models import BenefitEnrollment, BenefitPlan, Candidate, EmployeeGoal, JobApplication, JobOpening, OffboardingRecord, PerformanceCycle, PerformanceReview
+from .models import BenefitEnrollment, BenefitPlan, Candidate, EmployeeGoal, JobApplication, JobOpening, OffboardingClearanceEvidence, OffboardingRecord, PerformanceCycle, PerformanceReview
 
 
 def _membership(request):
@@ -49,16 +53,18 @@ def recruiting_api(request):
         payload = json.loads(request.body or '{}')
         kind = payload['kind']
         if kind == 'job':
-            item = JobOpening.objects.create(organization=membership.organization, title=payload['title'], description=payload.get('description', ''), location=payload.get('location', ''), status=payload.get('status', JobOpening.Status.DRAFT))
+            item = JobOpening(organization=membership.organization, title=payload['title'], description=payload.get('description', ''), location=payload.get('location', ''), status=payload.get('status', JobOpening.Status.DRAFT))
         elif kind == 'candidate':
-            item = Candidate.objects.create(organization=membership.organization, first_name=payload['first_name'], last_name=payload['last_name'], email=payload['email'], phone=payload.get('phone', ''), source=payload.get('source', ''))
+            item = Candidate(organization=membership.organization, first_name=payload['first_name'], last_name=payload['last_name'], email=payload['email'], phone=payload.get('phone', ''), source=payload.get('source', ''))
         elif kind == 'application':
             job = JobOpening.objects.get(id=payload['job_id'], organization=membership.organization)
             candidate = Candidate.objects.get(id=payload['candidate_id'], organization=membership.organization)
-            item = JobApplication.objects.create(job=job, candidate=candidate, stage=payload.get('stage', JobApplication.Stage.APPLIED))
+            item = JobApplication(job=job, candidate=candidate, stage=payload.get('stage', JobApplication.Stage.APPLIED))
         else:
             raise ValueError
-    except (KeyError, ValueError, json.JSONDecodeError, JobOpening.DoesNotExist, Candidate.DoesNotExist):
+        item.full_clean()
+        item.save()
+    except (KeyError, ValueError, ValidationError, json.JSONDecodeError, JobOpening.DoesNotExist, Candidate.DoesNotExist):
         return JsonResponse({'detail': 'Provide valid recruiting data.'}, status=400)
     record_audit(organization=membership.organization, actor=request.user, action=f'recruiting.{kind}.created', entity=item)
     return JsonResponse({'id': str(item.id)}, status=201)
@@ -78,18 +84,20 @@ def performance_api(request):
         payload = json.loads(request.body or '{}')
         kind = payload['kind']
         if kind == 'cycle':
-            item = PerformanceCycle.objects.create(organization=membership.organization, name=payload['name'], start_date=date.fromisoformat(payload['start_date']), end_date=date.fromisoformat(payload['end_date']), status=payload.get('status', PerformanceCycle.Status.DRAFT))
+            item = PerformanceCycle(organization=membership.organization, name=payload['name'], start_date=date.fromisoformat(payload['start_date']), end_date=date.fromisoformat(payload['end_date']), status=payload.get('status', PerformanceCycle.Status.DRAFT))
         elif kind == 'goal':
             employee = Employee.objects.get(id=payload['employee_id'], organization=membership.organization)
             cycle = PerformanceCycle.objects.get(id=payload['cycle_id'], organization=membership.organization) if payload.get('cycle_id') else None
-            item = EmployeeGoal.objects.create(employee=employee, cycle=cycle, title=payload['title'], description=payload.get('description', ''), progress=int(payload.get('progress', 0)), status=payload.get('status', EmployeeGoal.Status.NOT_STARTED))
+            item = EmployeeGoal(employee=employee, cycle=cycle, title=payload['title'], description=payload.get('description', ''), progress=int(payload.get('progress', 0)), status=payload.get('status', EmployeeGoal.Status.NOT_STARTED))
         elif kind == 'review':
             employee = Employee.objects.get(id=payload['employee_id'], organization=membership.organization)
             cycle = PerformanceCycle.objects.get(id=payload['cycle_id'], organization=membership.organization)
-            item = PerformanceReview.objects.create(cycle=cycle, employee=employee, reviewer=request.user, rating=payload.get('rating'), comments=payload.get('comments', ''), status=payload.get('status', PerformanceReview.Status.DRAFT))
+            item = PerformanceReview(cycle=cycle, employee=employee, reviewer=request.user, rating=payload.get('rating'), comments=payload.get('comments', ''), status=payload.get('status', PerformanceReview.Status.DRAFT))
         else:
             raise ValueError
-    except (KeyError, ValueError, TypeError, json.JSONDecodeError, Employee.DoesNotExist, PerformanceCycle.DoesNotExist):
+        item.full_clean()
+        item.save()
+    except (KeyError, ValueError, TypeError, ValidationError, json.JSONDecodeError, Employee.DoesNotExist, PerformanceCycle.DoesNotExist):
         return JsonResponse({'detail': 'Provide valid performance data.'}, status=400)
     record_audit(organization=membership.organization, actor=request.user, action=f'performance.{kind}.created', entity=item)
     return JsonResponse({'id': str(item.id)}, status=201)
@@ -107,14 +115,16 @@ def benefits_api(request):
     try:
         payload = json.loads(request.body or '{}')
         if payload['kind'] == 'plan':
-            item = BenefitPlan.objects.create(organization=membership.organization, name=payload['name'], provider=payload.get('provider', ''), description=payload.get('description', ''), employee_cost=payload.get('employee_cost', 0), employer_cost=payload.get('employer_cost', 0))
+            item = BenefitPlan(organization=membership.organization, name=payload['name'], provider=payload.get('provider', ''), description=payload.get('description', ''), employee_cost=payload.get('employee_cost', 0), employer_cost=payload.get('employer_cost', 0))
         elif payload['kind'] == 'enrollment':
             employee = Employee.objects.get(id=payload['employee_id'], organization=membership.organization)
             plan = BenefitPlan.objects.get(id=payload['plan_id'], organization=membership.organization, is_active=True)
-            item = BenefitEnrollment.objects.create(employee=employee, plan=plan, effective_date=date.fromisoformat(payload['effective_date']))
+            item = BenefitEnrollment(employee=employee, plan=plan, effective_date=date.fromisoformat(payload['effective_date']))
         else:
             raise ValueError
-    except (KeyError, ValueError, json.JSONDecodeError, Employee.DoesNotExist, BenefitPlan.DoesNotExist):
+        item.full_clean()
+        item.save()
+    except (KeyError, ValueError, ValidationError, json.JSONDecodeError, Employee.DoesNotExist, BenefitPlan.DoesNotExist):
         return JsonResponse({'detail': 'Provide valid benefit data.'}, status=400)
     record_audit(organization=membership.organization, actor=request.user, action='benefits.created', entity=item)
     return JsonResponse({'id': str(item.id)}, status=201)
@@ -126,16 +136,87 @@ def offboarding_api(request):
     if error:
         return error
     if request.method == 'GET':
-        records = OffboardingRecord.objects.filter(employee__organization=membership.organization).select_related('employee')
-        return JsonResponse({'records': [{'id': str(r.id), 'employee': str(r.employee), 'last_working_day': r.last_working_day.isoformat(), 'reason': r.reason, 'status': r.status} for r in records]})
+        records = OffboardingRecord.objects.filter(
+            employee__organization=membership.organization,
+        ).select_related('employee').prefetch_related('clearance_evidence')
+        return JsonResponse({'records': [{
+            'id': str(r.id),
+            'employee': str(r.employee),
+            'last_working_day': r.last_working_day.isoformat(),
+            'reason': r.reason,
+            'status': r.status,
+            'required_document_types': r.required_document_types or [],
+            'required_clearances': r.required_clearances or [],
+            'verified_clearances': [{
+                'clearance_key': evidence.clearance_key,
+                'verified_by': evidence.verified_by.get_username(),
+                'verified_at': evidence.verified_at.isoformat(),
+                'notes': evidence.notes,
+                'evidence_reference': evidence.evidence_reference,
+            } for evidence in r.clearance_evidence.all()],
+        } for r in records]})
     try:
         payload = json.loads(request.body or '{}')
         employee = Employee.objects.get(id=payload['employee_id'], organization=membership.organization)
-        item = OffboardingRecord.objects.create(employee=employee, last_working_day=date.fromisoformat(payload['last_working_day']), reason=payload.get('reason', ''), notes=payload.get('notes', ''))
-    except (KeyError, ValueError, json.JSONDecodeError, Employee.DoesNotExist):
+        required_documents = payload.get('required_document_types', [])
+        required_clearances = payload.get('required_clearances', [])
+        if not isinstance(required_documents, list) or not all(isinstance(value, str) and value.strip() for value in required_documents):
+            raise ValueError
+        if not isinstance(required_clearances, list) or not all(isinstance(value, str) and value.strip() for value in required_clearances):
+            raise ValueError
+        item = OffboardingRecord(employee=employee, last_working_day=date.fromisoformat(payload['last_working_day']), reason=payload.get('reason', ''), notes=payload.get('notes', ''), required_document_types=required_documents, required_clearances=required_clearances)
+        item.full_clean()
+        item.save()
+    except (KeyError, ValueError, ValidationError, json.JSONDecodeError, Employee.DoesNotExist):
         return JsonResponse({'detail': 'Provide a valid employee and last working day.'}, status=400)
     record_audit(organization=membership.organization, actor=request.user, action='offboarding.created', entity=item)
     return JsonResponse({'id': str(item.id)}, status=201)
+
+
+@require_http_methods(['POST'])
+def offboarding_clearance_evidence(request, record_id):
+    membership, error = _require(request, 'manage_offboarding')
+    if error:
+        return error
+    try:
+        payload = json.loads(request.body or '{}')
+        clearance_key = payload.get('clearance_key')
+        notes = payload.get('notes')
+        evidence_reference = payload.get('evidence_reference', '')
+        if not isinstance(clearance_key, str) or not clearance_key.strip():
+            raise ValueError
+        if not isinstance(notes, str) or not notes.strip():
+            raise ValueError
+        if not isinstance(evidence_reference, str) or len(evidence_reference) > 255:
+            raise ValueError
+        with transaction.atomic():
+            item = OffboardingRecord.objects.select_for_update().get(
+                id=record_id, employee__organization=membership.organization,
+            )
+            if item.status == OffboardingRecord.Status.COMPLETED:
+                return JsonResponse({'detail': 'Completed offboarding records are immutable.'}, status=409)
+            evidence = OffboardingClearanceEvidence(
+                offboarding=item,
+                clearance_key=clearance_key.strip(),
+                verified_by=request.user,
+                verified_at=timezone.now(),
+                notes=notes.strip(),
+                evidence_reference=evidence_reference.strip(),
+            )
+            evidence.full_clean()
+            evidence.save()
+            record_audit(
+                organization=membership.organization,
+                actor=request.user,
+                action='offboarding.clearance_verified',
+                entity=evidence,
+                details={'clearance_key': evidence.clearance_key, 'offboarding_id': str(item.id)},
+            )
+        return JsonResponse({'id': str(evidence.id), 'clearance_key': evidence.clearance_key, 'verified_at': evidence.verified_at.isoformat()}, status=201)
+    except OffboardingRecord.DoesNotExist:
+        return JsonResponse({'detail': 'Offboarding record not found.'}, status=404)
+    except (KeyError, ValueError, ValidationError, IntegrityError, json.JSONDecodeError):
+        return JsonResponse({'detail': 'Provide valid evidence for a required clearance.'}, status=400)
 
 
 @require_http_methods(['PATCH'])
@@ -144,24 +225,51 @@ def offboarding_status(request, record_id):
     if error:
         return error
     try:
-        item = OffboardingRecord.objects.get(id=record_id, employee__organization=membership.organization)
         payload = json.loads(request.body or '{}')
         target = payload.get('status')
         if target not in OffboardingRecord.Status.values:
             return JsonResponse({'detail': 'Invalid offboarding status.'}, status=400)
-        if target == OffboardingRecord.Status.COMPLETED:
-            missing_documents = []
-            for document_type in item.required_document_types:
-                if not item.employee.documents.filter(document_type=document_type, status='ACTIVE').exists():
-                    missing_documents.append(document_type)
-            missing_clearances = [name for name in item.required_clearances if not payload.get('clearances', {}).get(name)]
-            if missing_documents or missing_clearances:
-                return JsonResponse({'detail': 'Offboarding completion is blocked.', 'missing_document_types': missing_documents, 'missing_clearances': missing_clearances}, status=409)
-            if not item.employee.separation_date or item.employee.separation_date > item.last_working_day:
-                return JsonResponse({'detail': 'Employee separation date must be set on or before the last working day.'}, status=409)
-        item.status = target
-        item.save(update_fields=('status', 'updated_at'))
-        record_audit(organization=membership.organization, actor=request.user, action='offboarding.status_changed', entity=item, details={'status': target})
+        with transaction.atomic():
+            item = OffboardingRecord.objects.select_for_update().get(
+                id=record_id, employee__organization=membership.organization,
+            )
+            allowed_transitions = {
+                OffboardingRecord.Status.PLANNED: {OffboardingRecord.Status.IN_PROGRESS},
+                OffboardingRecord.Status.IN_PROGRESS: {OffboardingRecord.Status.COMPLETED},
+                OffboardingRecord.Status.COMPLETED: set(),
+            }
+            if target != item.status and target not in allowed_transitions[item.status]:
+                return JsonResponse({'detail': 'Invalid offboarding status transition.'}, status=409)
+            if target == OffboardingRecord.Status.COMPLETED:
+                missing_documents = [
+                    document_type for document_type in (item.required_document_types or [])
+                    if not item.employee.documents.filter(document_type=document_type, status='ACTIVE').exists()
+                ]
+                verified_clearances = set(
+                    item.clearance_evidence.values_list('clearance_key', flat=True)
+                )
+                missing_clearances = [
+                    name for name in (item.required_clearances or [])
+                    if name not in verified_clearances
+                ]
+                if missing_documents or missing_clearances:
+                    return JsonResponse({
+                        'detail': 'Offboarding completion is blocked.',
+                        'missing_document_types': missing_documents,
+                        'missing_clearances': missing_clearances,
+                    }, status=409)
+                if not item.employee.separation_date or item.employee.separation_date > item.last_working_day:
+                    return JsonResponse({'detail': 'Employee separation date must be set on or before the last working day.'}, status=409)
+            if target != item.status:
+                item.status = target
+                item.save(update_fields=('status', 'updated_at'))
+                record_audit(
+                    organization=membership.organization,
+                    actor=request.user,
+                    action='offboarding.status_changed',
+                    entity=item,
+                    details={'status': target},
+                )
         return JsonResponse({'id': str(item.id), 'status': item.status})
     except OffboardingRecord.DoesNotExist:
         return JsonResponse({'detail': 'Offboarding record not found.'}, status=404)

@@ -1,9 +1,14 @@
 import json
 import math
+import logging
 from datetime import date, datetime, time
 from io import BytesIO
+from pathlib import Path
+from zipfile import BadZipFile, ZipFile
 
 from django.contrib.auth import authenticate, login
+from django.conf import settings
+from django.core.cache import cache
 from django.db import transaction
 from django.db.models import Q
 from django.http import HttpResponse, JsonResponse
@@ -23,6 +28,14 @@ from .services import AttendanceCalculator
 
 TIMEKEEPING_HEADERS = ('Employee Number', 'Attendance Date', 'Time In', 'Time Out', 'Status', 'Remarks')
 MAX_CLOCK_PHOTO_BYTES = 5 * 1024 * 1024
+CLOCK_LOGIN_FAILURE_LIMIT = 5
+CLOCK_LOGIN_FAILURE_WINDOW = 15 * 60
+logger = logging.getLogger(__name__)
+
+
+def _clock_login_throttle_key(request, username):
+    normalized = (username or '').strip().lower()[:150]
+    return f'bizflow:login-failures:{request.META.get("REMOTE_ADDR", "unknown")}:{normalized}'
 
 
 def _can_import_timekeeping(request, membership):
@@ -31,10 +44,23 @@ def _can_import_timekeeping(request, membership):
 
 def _validate_clock_photo(uploaded):
     if uploaded is None: raise ValueError('A camera photo is required before clocking.')
-    if uploaded.size > MAX_CLOCK_PHOTO_BYTES: raise ValueError('The clock photo must be 5 MB or smaller.')
+    if uploaded.size <= 0 or uploaded.size > MAX_CLOCK_PHOTO_BYTES: raise ValueError('The clock photo must be non-empty and 5 MB or smaller.')
     if not getattr(uploaded, 'content_type', '').startswith('image/'): raise ValueError('The clock photo must be an image.')
-    try: uploaded.seek(0); image = Image.open(uploaded); image.verify(); uploaded.seek(0)
-    except (UnidentifiedImageError, OSError, ValueError): raise ValueError('The clock photo is not a valid image.')
+    allowed_extensions = {'JPEG': {'.jpg', '.jpeg'}, 'PNG': {'.png'}, 'WEBP': {'.webp'}}
+    try:
+        uploaded.seek(0)
+        image = Image.open(uploaded)
+        image_format = image.format
+        width, height = image.size
+        if image_format not in allowed_extensions or Path(uploaded.name).suffix.lower() not in allowed_extensions[image_format]:
+            raise ValueError('Upload a JPEG, PNG, or WebP image with a matching file extension.')
+        if width <= 0 or height <= 0 or width > 8000 or height > 8000 or width * height > 40000000:
+            raise ValueError('The clock photo dimensions are too large.')
+        image.verify()
+        uploaded.seek(0)
+    except (UnidentifiedImageError, OSError, ValueError) as error:
+        if isinstance(error, ValueError) and str(error): raise
+        raise ValueError('The clock photo is not a valid image.')
     return uploaded
 
 
@@ -50,7 +76,7 @@ def _cell_datetime(attendance_date, value):
 
 
 def _dashboard_sections(membership):
-    sections = [('employee_directory','Employee Directory','View people, assignments, and organization structure.','view_employees'),('attendance','Attendance','Review and manage daily attendance records.','view_attendance'),('scheduling','Shift Scheduling','Create and assign shift schedules to employees.','manage_attendance'),('leave','Leave Approvals','Review and approve employee leave requests.','approve_leave'),('payroll','Payroll','Review payroll data and compensation operations.','view_payroll'),('reports','Reports','Open workforce and operational reports.','view_reports'),('onboarding','Onboarding','Track new-hire onboarding steps and completion status.','manage_employees'),('talent','Talent Lifecycle','Manage recruiting, performance, benefits, and offboarding.','manage_employees'),('operations','HR Operations','Manage documents, announcements, workflows, projects, and external connectors.','manage_employees'),('ess','Employee Self-Service','View your own profile, attendance, leave, and approved payroll.','view_self')]
+    sections = [('employee_directory','Employee Directory','View people, assignments, and organization structure.','view_employees'),('attendance','Attendance','Review and manage daily attendance records.','view_attendance'),('scheduling','Shift Scheduling','Create and assign shift schedules to employees.','manage_scheduling'),('leave','Leave Approvals','Review and approve employee leave requests.','approve_leave'),('payroll','Payroll','Review payroll data and compensation operations.','view_payroll'),('reports','Reports','Open workforce and operational reports.','view_reports'),('onboarding','Onboarding','Track new-hire onboarding steps and completion status.','manage_employees'),('talent','Talent Lifecycle','Manage recruiting, performance, benefits, and offboarding.','manage_employees'),('operations','HR Operations','Manage documents, announcements, workflows, projects, and external connectors.','manage_employees'),('ess','Employee Self-Service','View your own profile, attendance, leave, and approved payroll.','view_self')]
     return [{'key': k, 'name': n, 'description': d} for k,n,d,p in sections if membership.has_permission(p) or (p == 'view_employees' and membership.has_permission('manage_employees')) or (p == 'view_attendance' and membership.has_permission('manage_attendance'))]
 
 
@@ -87,13 +113,44 @@ def _clock_state(employee):
 
 @require_http_methods(['POST'])
 def clock_login(request):
-    user = authenticate(request, username=request.POST.get('username','').strip(), password=request.POST.get('password',''))
-    if user is None or not user.is_active: return JsonResponse({'detail':'Invalid username or password.'},status=401)
-    try: employee=user.employee_profile
-    except Employee.DoesNotExist: return JsonResponse({'detail':'This account is not linked to an employee profile.'},status=403)
-    if not employee.is_active: return JsonResponse({'detail':'This employee profile is inactive.'},status=403)
-    membership=employee.organization.organization_memberships.filter(user=user,is_active=True).first()
-    if membership is None or not employee.organization.is_active: return JsonResponse({'detail':'This employee does not have active organization access.'},status=403)
+    username = request.POST.get('username', '').strip()
+    throttle_key = _clock_login_throttle_key(request, username)
+    try:
+        failures = cache.get(throttle_key, 0)
+    except Exception:
+        logger.exception('Time-clock login throttling cache unavailable')
+        if settings.ENVIRONMENT == 'production':
+            return JsonResponse({'detail': 'Sign-in is temporarily unavailable. Please try again shortly.'}, status=503)
+        failures = 0
+
+    if failures >= CLOCK_LOGIN_FAILURE_LIMIT:
+        return JsonResponse({'detail': 'Too many failed login attempts. Try again later.'}, status=429)
+
+    user = authenticate(request, username=username, password=request.POST.get('password', ''))
+    if user is None or not user.is_active:
+        try:
+            cache.set(throttle_key, failures + 1, CLOCK_LOGIN_FAILURE_WINDOW)
+        except Exception:
+            logger.exception('Unable to record time-clock login failure')
+            if settings.ENVIRONMENT == 'production':
+                return JsonResponse({'detail': 'Sign-in is temporarily unavailable. Please try again shortly.'}, status=503)
+        return JsonResponse({'detail': 'Invalid username or password.'}, status=401)
+
+    try:
+        employee = user.employee_profile
+    except Employee.DoesNotExist:
+        return JsonResponse({'detail': 'This account is not linked to an employee profile.'}, status=403)
+    if not employee.is_active:
+        return JsonResponse({'detail': 'This employee profile is inactive.'}, status=403)
+    membership = employee.organization.organization_memberships.filter(user=user, is_active=True).first()
+    if membership is None or not employee.organization.is_active:
+        return JsonResponse({'detail': 'This employee does not have active organization access.'}, status=403)
+
+    try:
+        cache.delete(throttle_key)
+    except Exception:
+        logger.exception('Unable to clear time-clock login failures after successful authentication')
+
     login(request, user)
     # The time clock has no organization picker: the employee profile is the
     # authoritative organization boundary for clocking attendance.
@@ -225,10 +282,20 @@ def import_timekeeping(request):
     if uploaded is None or not uploaded.name.lower().endswith('.xlsx'): return JsonResponse({'detail':'Upload a .xlsx timekeeping file.'},status=400)
     if uploaded.size>5*1024*1024: return JsonResponse({'detail':'The workbook must be 5 MB or smaller.'},status=400)
     try:
+        uploaded.seek(0)
+        with ZipFile(uploaded) as archive:
+            entries = archive.infolist()
+            if len(entries) > 200 or sum(entry.file_size for entry in entries) > 30 * 1024 * 1024:
+                return JsonResponse({'detail':'The workbook contains too much uncompressed data.'},status=400)
+            if any(entry.file_size > 10 * 1024 * 1024 for entry in entries):
+                return JsonResponse({'detail':'The workbook contains an oversized component.'},status=400)
+        uploaded.seek(0)
         from openpyxl import load_workbook
         workbook=load_workbook(uploaded,read_only=True,data_only=True); sheet=workbook.active; headers=tuple(cell.value.strip() if isinstance(cell.value,str) else cell.value for cell in next(sheet.iter_rows(min_row=1,max_row=1)))
-        if headers!=TIMEKEEPING_HEADERS: return JsonResponse({'detail':f'Headers must be exactly: {", ".join(TIMEKEEPING_HEADERS)}.'},status=400)
-    except Exception: return JsonResponse({'detail':'The workbook could not be read. Use the supplied template.'},status=400)
+        if headers!=TIMEKEEPING_HEADERS:
+            workbook.close()
+            return JsonResponse({'detail':f'Headers must be exactly: {", ".join(TIMEKEEPING_HEADERS)}.'},status=400)
+    except (BadZipFile, OSError, ValueError, StopIteration): return JsonResponse({'detail':'The workbook could not be read. Use the supplied template.'},status=400)
     errors,prepared=[],[]; status_values={choice.value for choice in AttendanceRecord.Status}
     for row_number,row in enumerate(sheet.iter_rows(min_row=2,values_only=True),start=2):
         if not any(value not in (None,'') for value in row): continue

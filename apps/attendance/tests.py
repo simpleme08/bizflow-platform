@@ -4,13 +4,15 @@ from io import BytesIO
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.test import TestCase, override_settings
+from unittest.mock import patch
 from django.utils import timezone
 
 from PIL import Image
 
 from apps.attendance.models import AttendanceRecord
 from apps.attendance.services import AttendanceCalculator
+from apps.attendance.views import _validate_clock_photo
 from apps.employees.models import Employee, EmployeeAssignment
 from apps.organization.models import Organization, OrganizationMembership
 from apps.workforce.models import ShiftTemplate
@@ -117,6 +119,17 @@ class AttendanceCalculatorTests(TestCase):
         response = self.client.post('/api/attendance/', data={}, content_type='application/json')
         self.assertEqual(response.status_code, 403)
 
+    def test_sme_can_view_attendance_but_cannot_edit_attendance_records(self):
+        membership = self.assignment.employee.organization.organization_memberships.get(user=self.assignment.employee.user)
+        membership.role = OrganizationMembership.Role.SME
+        membership.save(update_fields=('role', 'updated_at'))
+
+        view_response = self.client.get('/api/attendance/logs/')
+        edit_response = self.client.post('/api/attendance/', data={}, content_type='application/json')
+
+        self.assertEqual(view_response.status_code, 200)
+        self.assertEqual(edit_response.status_code, 403)
+
     def test_suspended_employee_cannot_clock_in(self):
         employee = self.assignment.employee
         employee.status = Employee.Status.SUSPENDED
@@ -124,6 +137,29 @@ class AttendanceCalculatorTests(TestCase):
         employee.save(update_fields=('status', 'is_active', 'updated_at'))
         response = self.client.post('/clock/login/', {'username': 'juan', 'password': 'clock-password'})
         self.assertEqual(response.status_code, 403)
+
+
+    @override_settings(ENVIRONMENT='production')
+    def test_clock_login_throttles_repeated_invalid_attempts(self):
+        with patch('apps.attendance.views.cache.get', return_value=5):
+            response = self.client.post('/clock/login/', {'username': 'juan', 'password': 'wrong-password'})
+
+        self.assertEqual(response.status_code, 429)
+
+    @override_settings(ENVIRONMENT='production')
+    def test_clock_login_fails_closed_when_throttle_cache_is_unavailable(self):
+        with patch('apps.attendance.views.cache.get', side_effect=RuntimeError('redis unavailable')):
+            response = self.client.post('/clock/login/', {'username': 'juan', 'password': 'clock-password'})
+
+        self.assertEqual(response.status_code, 503)
+
+    @override_settings(ENVIRONMENT='production')
+    def test_clock_login_fails_closed_if_failed_attempt_cannot_be_recorded(self):
+        with patch('apps.attendance.views.cache.get', return_value=0), \
+             patch('apps.attendance.views.cache.set', side_effect=RuntimeError('redis unavailable')):
+            response = self.client.post('/clock/login/', {'username': 'juan', 'password': 'wrong-password'})
+
+        self.assertEqual(response.status_code, 503)
 
 
 class DashboardViewTests(TestCase):
@@ -245,3 +281,24 @@ class DashboardViewTests(TestCase):
                 photo_response = client.get(row['clock_in_photo_url'])
                 self.assertEqual(photo_response.status_code, 200)
                 self.assertEqual(photo_response['Cache-Control'], 'private, no-store')
+
+
+class ClockPhotoUploadValidationTests(TestCase):
+    def make_png(self, name='clock.png', content_type='image/png'):
+        buffer = BytesIO()
+        Image.new('RGB', (12, 12), color='white').save(buffer, format='PNG')
+        return SimpleUploadedFile(name, buffer.getvalue(), content_type=content_type)
+
+    def test_valid_png_clock_photo_is_accepted(self):
+        uploaded = self.make_png()
+        self.assertIs(_validate_clock_photo(uploaded), uploaded)
+
+    def test_image_extension_must_match_actual_image_format(self):
+        uploaded = self.make_png(name='clock.svg', content_type='image/svg+xml')
+        with self.assertRaisesMessage(ValueError, 'JPEG, PNG, or WebP'):
+            _validate_clock_photo(uploaded)
+
+    def test_image_mime_type_alone_does_not_allow_non_image_content(self):
+        uploaded = SimpleUploadedFile('clock.png', b'<script>alert(1)</script>', content_type='image/png')
+        with self.assertRaisesMessage(ValueError, 'not a valid image'):
+            _validate_clock_photo(uploaded)

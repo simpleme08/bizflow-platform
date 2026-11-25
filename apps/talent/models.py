@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 
 from apps.core.models import BaseModel
@@ -60,6 +61,11 @@ class JobApplication(BaseModel):
     class Meta:
         constraints = [models.UniqueConstraint(fields=('job', 'candidate'), name='unique_job_candidate_application')]
 
+    def clean(self):
+        super().clean()
+        if self.job_id and self.candidate_id and self.job.organization_id != self.candidate.organization_id:
+            raise ValidationError('The job and candidate must belong to the same organization.')
+
 
 class PerformanceCycle(BaseModel):
     class Status(models.TextChoices):
@@ -92,6 +98,13 @@ class EmployeeGoal(BaseModel):
     progress = models.PositiveSmallIntegerField(default=0)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.NOT_STARTED)
 
+    def clean(self):
+        super().clean()
+        if self.cycle_id and self.employee_id and self.cycle.organization_id != self.employee.organization_id:
+            raise ValidationError('The performance cycle and employee must belong to the same organization.')
+        if self.progress > 100:
+            raise ValidationError({'progress': 'Goal progress cannot exceed 100 percent.'})
+
 
 class PerformanceReview(BaseModel):
     class Status(models.TextChoices):
@@ -110,6 +123,15 @@ class PerformanceReview(BaseModel):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=('cycle', 'employee'), name='unique_cycle_employee_review')]
+
+    def clean(self):
+        super().clean()
+        if self.cycle_id and self.employee_id and self.cycle.organization_id != self.employee.organization_id:
+            raise ValidationError('The performance cycle and employee must belong to the same organization.')
+        if self.reviewer_id and self.employee_id:
+            from apps.organization.models import OrganizationMembership
+            if not OrganizationMembership.objects.filter(organization_id=self.employee.organization_id, user_id=self.reviewer_id, is_active=True).exists():
+                raise ValidationError({'reviewer': 'The reviewer must have active membership in the employee organization.'})
 
 
 class BenefitPlan(BaseModel):
@@ -137,6 +159,13 @@ class BenefitEnrollment(BaseModel):
     class Meta:
         constraints = [models.UniqueConstraint(fields=('employee', 'plan', 'effective_date'), name='unique_benefit_enrollment')]
 
+    def clean(self):
+        super().clean()
+        if self.plan_id and self.employee_id and self.plan.organization_id != self.employee.organization_id:
+            raise ValidationError('The benefit plan and employee must belong to the same organization.')
+        if self.end_date and self.end_date < self.effective_date:
+            raise ValidationError('Benefit enrollment end date cannot be before its effective date.')
+
 
 class OffboardingRecord(BaseModel):
     class Status(models.TextChoices):
@@ -151,3 +180,38 @@ class OffboardingRecord(BaseModel):
     notes = models.TextField(blank=True)
     required_document_types = models.JSONField(default=list, blank=True)
     required_clearances = models.JSONField(default=list, blank=True)
+
+
+
+class OffboardingClearanceEvidence(BaseModel):
+    """Auditable, tenant-bound verification for one required offboarding clearance."""
+
+    offboarding = models.ForeignKey(OffboardingRecord, on_delete=models.CASCADE, related_name='clearance_evidence')
+    clearance_key = models.CharField(max_length=100)
+    verified_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='verified_offboarding_clearances')
+    verified_at = models.DateTimeField()
+    notes = models.TextField()
+    evidence_reference = models.CharField(max_length=255, blank=True, help_text='Private evidence identifier only; never store a public URL or secret.')
+    
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=('offboarding', 'clearance_key'), name='unique_offboarding_clearance_evidence'),
+        ]
+        ordering = ('clearance_key',)
+
+    def clean(self):
+        super().clean()
+        if self.offboarding_id and self.clearance_key not in (self.offboarding.required_clearances or []):
+            raise ValidationError({'clearance_key': 'This clearance is not required for the offboarding record.'})
+        if self.offboarding_id and self.verified_by_id:
+            from apps.organization.models import OrganizationMembership
+            if not OrganizationMembership.objects.filter(
+                organization_id=self.offboarding.employee.organization_id,
+                user_id=self.verified_by_id,
+                is_active=True,
+            ).exists():
+                raise ValidationError({'verified_by': 'The verifier must have active membership in the employee organization.'})
+        if not isinstance(self.notes, str) or not self.notes.strip():
+            raise ValidationError({'notes': 'Verification notes are required.'})
+        if self.evidence_reference and self.evidence_reference.strip().lower().startswith(('http://', 'https://')):
+            raise ValidationError({'evidence_reference': 'Store a private evidence identifier, not a public URL.'})

@@ -5,6 +5,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 
 from apps.core.models import BaseModel
+from apps.core.upload_validation import validate_private_document
 
 
 class Employee(BaseModel):
@@ -147,7 +148,7 @@ class EmployeeDocument(BaseModel):
     employee = models.ForeignKey(Employee, on_delete=models.PROTECT, related_name='documents')
     document_type = models.CharField(max_length=80)
     name = models.CharField(max_length=160)
-    file = models.FileField(upload_to='employee-documents/%Y/%m/', blank=True)
+    file = models.FileField(upload_to='employee-documents/%Y/%m/', blank=True, validators=[validate_private_document])
     issued_date = models.DateField(null=True, blank=True)
     expiry_date = models.DateField(null=True, blank=True)
     is_required = models.BooleanField(default=False)

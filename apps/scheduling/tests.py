@@ -4,7 +4,7 @@ from datetime import date
 
 from apps.organization.models import Organization, OrganizationMembership
 from apps.employees.models import Employee, EmployeeAssignment
-from apps.workforce.models import ShiftTemplate, Client, ClientSite, ScheduleRule
+from apps.workforce.models import ShiftTemplate, Client, ClientSite, ScheduleRule, CoverShift, ScheduleException
 
 
 class ShiftSchedulingTests(TestCase):
@@ -341,3 +341,111 @@ class BulkShiftAssignmentImportTests(TestCase):
         })
         self.assertEqual(response.status_code, 403)
         self.assertFalse(EmployeeAssignment.objects.filter(employee=self.employee).exists())
+
+class SchedulingDecisionHardeningTests(TestCase):
+    def setUp(self):
+        self.client = TestClient()
+        self.organization = Organization.objects.create(slug='decision-org', name='Decision Organization')
+        self.manager_user = User.objects.create_user(username='decision-manager', password='TestPass123!')
+        self.membership = OrganizationMembership.objects.create(
+            user=self.manager_user,
+            organization=self.organization,
+            role=OrganizationMembership.Role.MANAGER,
+        )
+        self.client.login(username='decision-manager', password='TestPass123!')
+        self.shift_day = ShiftTemplate.objects.create(
+            organization=self.organization,
+            name='Decision Day Shift',
+            start_time='08:00',
+            end_time='17:00',
+        )
+        self.employee_user = User.objects.create_user(username='decision-employee', password='EmpPass123!')
+        self.employee = Employee.objects.create(
+            employee_number='EMP-DECISION',
+            user=self.employee_user,
+            organization=self.organization,
+            first_name='Decision',
+            last_name='Employee',
+            is_active=True,
+            status=Employee.Status.REGULAR,
+        )
+
+    def test_schedule_exception_decision_rejects_string_boolean(self):
+        exception = ScheduleException.objects.create(
+            employee=self.employee,
+            work_date=date(2026, 11, 24),
+            shift_template=self.shift_day,
+            reason='Test exception',
+        )
+        response = self.client.post(
+            f'/api/scheduling/exceptions/{exception.id}/decision/',
+            data={'approved': 'false'},
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        exception.refresh_from_db()
+        self.assertFalse(exception.approved)
+
+    def test_cover_shift_decision_rejects_string_boolean(self):
+        cover = CoverShift.objects.create(
+            employee=self.employee,
+            work_date=date(2026, 11, 25),
+            shift_template=self.shift_day,
+            requested_by=self.employee_user,
+            reason='Test cover shift',
+        )
+        response = self.client.post(
+            f'/api/scheduling/cover-shifts/{cover.id}/decision/',
+            data={'approved': 'false'},
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        cover.refresh_from_db()
+        self.assertEqual(cover.status, CoverShift.Status.PENDING)
+
+    def test_cover_shift_cannot_be_decided_twice(self):
+        cover = CoverShift.objects.create(
+            employee=self.employee,
+            work_date=date(2026, 11, 26),
+            shift_template=self.shift_day,
+            requested_by=self.employee_user,
+            reason='Test cover shift',
+        )
+        first = self.client.post(
+            f'/api/scheduling/cover-shifts/{cover.id}/decision/',
+            data={'approved': True},
+            content_type='application/json',
+        )
+        second = self.client.post(
+            f'/api/scheduling/cover-shifts/{cover.id}/decision/',
+            data={'approved': False},
+            content_type='application/json',
+        )
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 409)
+        cover.refresh_from_db()
+        self.assertEqual(cover.status, CoverShift.Status.APPROVED)
+
+    def test_sme_can_access_and_use_shift_scheduling_without_attendance_edit_permission(self):
+        self.membership.role = OrganizationMembership.Role.SME
+        self.membership.save(update_fields=('role', 'updated_at'))
+
+        self.assertTrue(self.membership.has_permission('manage_scheduling'))
+        self.assertFalse(self.membership.has_permission('manage_attendance'))
+        self.assertEqual(self.client.get('/scheduling/').status_code, 200)
+        self.assertEqual(self.client.get('/api/scheduling/shifts/').status_code, 200)
+
+        response = self.client.post(
+            '/api/scheduling/assign/',
+            data={
+                'employee_id': str(self.employee.id),
+                'shift_id': str(self.shift_day.id),
+                'start_date': '2026-11-27',
+            },
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(EmployeeAssignment.objects.filter(employee=self.employee, shift_template=self.shift_day).exists())

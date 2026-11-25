@@ -9,6 +9,7 @@ from reportlab.pdfgen import canvas
 
 from apps.attendance.models import AttendanceRecord
 from apps.core.services import record_audit
+from apps.organization.context import current_membership
 from .models import PayrollAdjustment, PayrollRecord
 
 
@@ -44,15 +45,25 @@ def _amount_column(pdf, x, y, width, title, rows):
 def payslip(request, record_id):
     if not request.user.is_authenticated:
         return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
+
+    # A linked employee profile alone is not sufficient authorization. Require an
+    # active membership in the employee's active organization on every payslip read.
+    membership = current_membership(request)
+    if membership is None:
+        return JsonResponse({'detail': 'Active organization membership is required.'}, status=403)
+
     try:
         employee = request.user.employee_profile
+        if employee.organization_id != membership.organization_id or not employee.organization.is_active:
+            return JsonResponse({'detail': 'Employee organization access is not available.'}, status=403)
         record = PayrollRecord.objects.select_related(
             'employee', 'employee__position', 'employee__employment_type', 'employee__department',
             'payroll_period', 'payroll_period__organization',
         ).get(
             id=record_id,
             employee=employee,
-            payroll_period__organization=employee.organization,
+            employee__organization=membership.organization,
+            payroll_period__organization=membership.organization,
             status__in=(PayrollRecord.Status.APPROVED, PayrollRecord.Status.PAID),
         )
     except (AttributeError, PayrollRecord.DoesNotExist):
@@ -90,6 +101,9 @@ def payslip(request, record_id):
 
     response = HttpResponse(content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="Payslip-{employee.employee_number}-{record.payroll_period.name}.pdf"'
+    response['Cache-Control'] = 'private, no-store'
+    response['Pragma'] = 'no-cache'
+    response['X-Content-Type-Options'] = 'nosniff'
     pdf = canvas.Canvas(response, pagesize=A4)
     pdf.setTitle(f'Payslip {employee.employee_number}')
     page_width, page_height = A4

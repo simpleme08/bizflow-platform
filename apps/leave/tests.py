@@ -117,3 +117,116 @@ class LeaveLifecycleIntegrationTests(TestCase):
             application.approve(self.user)
         balance = EmployeeLeaveBalance.objects.get(employee=self.employee, leave_type=self.leave_type, year=2026)
         self.assertEqual(balance.used, 2)
+
+class LeaveDecisionAuthorizationTests(TestCase):
+    def setUp(self):
+        self.organization = Organization.objects.create(slug='leave-scope-org', name='Leave Scope Org')
+        self.manager_user = User.objects.create_user(username='manager-scope', password='Pass12345!')
+        OrganizationMembership.objects.create(
+            user=self.manager_user,
+            organization=self.organization,
+            role=OrganizationMembership.Role.MANAGER,
+        )
+        self.manager_employee = Employee.objects.create(
+            employee_number='EMP-MANAGER-SCOPE',
+            user=self.manager_user,
+            organization=self.organization,
+            first_name='Mara',
+            last_name='Manager',
+            status=Employee.Status.REGULAR,
+            is_active=True,
+        )
+        self.leave_type = LeaveType.objects.create(code='VL-SCOPE', name='Vacation Leave Scope', annual_credits=10)
+
+        self.report_user = User.objects.create_user(username='direct-report', password='Pass12345!')
+        OrganizationMembership.objects.create(
+            user=self.report_user,
+            organization=self.organization,
+            role=OrganizationMembership.Role.EMPLOYEE,
+        )
+        self.report = Employee.objects.create(
+            employee_number='EMP-DIRECT-REPORT',
+            user=self.report_user,
+            organization=self.organization,
+            manager=self.manager_employee,
+            first_name='Dina',
+            last_name='Report',
+            status=Employee.Status.REGULAR,
+            is_active=True,
+        )
+
+        self.other_user = User.objects.create_user(username='other-employee', password='Pass12345!')
+        OrganizationMembership.objects.create(
+            user=self.other_user,
+            organization=self.organization,
+            role=OrganizationMembership.Role.EMPLOYEE,
+        )
+        self.other_employee = Employee.objects.create(
+            employee_number='EMP-OTHER-EMPLOYEE',
+            user=self.other_user,
+            organization=self.organization,
+            first_name='Omar',
+            last_name='Other',
+            status=Employee.Status.REGULAR,
+            is_active=True,
+        )
+
+    def _application(self, employee, suffix):
+        EmployeeLeaveBalance.objects.get_or_create(
+            employee=employee,
+            leave_type=self.leave_type,
+            year=2026,
+            defaults={'credits': 10},
+        )
+        return LeaveApplication.objects.create(
+            employee=employee,
+            leave_type=self.leave_type,
+            start_date='2026-12-10',
+            end_date='2026-12-11',
+            total_days=2,
+            reason=f'Authorization test {suffix}',
+        )
+
+    def _decide(self, application, decision='approve'):
+        self.client.force_login(self.manager_user)
+        return self.client.post(
+            f'/api/leave/{application.id}/decision/',
+            data={'decision': decision},
+            content_type='application/json',
+        )
+
+    def test_manager_can_approve_direct_report_leave(self):
+        application = self._application(self.report, 'direct-report')
+        response = self._decide(application, 'approve')
+
+        self.assertEqual(response.status_code, 200)
+        application.refresh_from_db()
+        self.assertEqual(application.status, LeaveApplication.Status.APPROVED)
+        balance = EmployeeLeaveBalance.objects.get(employee=self.report, leave_type=self.leave_type, year=2026)
+        self.assertEqual(balance.used, 2)
+
+    def test_manager_cannot_approve_unrelated_employee_leave(self):
+        application = self._application(self.other_employee, 'unrelated')
+        response = self._decide(application, 'approve')
+
+        self.assertEqual(response.status_code, 403)
+        application.refresh_from_db()
+        self.assertEqual(application.status, LeaveApplication.Status.PENDING)
+        balance = EmployeeLeaveBalance.objects.get(employee=self.other_employee, leave_type=self.leave_type, year=2026)
+        self.assertEqual(balance.used, 0)
+
+    def test_manager_cannot_reject_unrelated_employee_leave(self):
+        application = self._application(self.other_employee, 'unrelated-rejection')
+        response = self._decide(application, 'reject')
+
+        self.assertEqual(response.status_code, 403)
+        application.refresh_from_db()
+        self.assertEqual(application.status, LeaveApplication.Status.PENDING)
+
+    def test_manager_cannot_approve_own_leave(self):
+        application = self._application(self.manager_employee, 'self-approval')
+        response = self._decide(application, 'approve')
+
+        self.assertEqual(response.status_code, 403)
+        application.refresh_from_db()
+        self.assertEqual(application.status, LeaveApplication.Status.PENDING)

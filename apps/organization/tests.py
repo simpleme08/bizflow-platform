@@ -47,7 +47,8 @@ class OrganizationMembershipTests(TestCase):
 
 		self.assertTrue(membership.has_permission('view_employees'))
 		self.assertTrue(membership.has_permission('view_attendance'))
-		self.assertTrue(membership.has_permission('manage_attendance'))
+		self.assertTrue(membership.has_permission('manage_scheduling'))
+		self.assertFalse(membership.has_permission('manage_attendance'))
 		self.assertTrue(membership.has_permission('view_reports'))
 		self.assertFalse(membership.has_permission('approve_leave'))
 		self.assertFalse(membership.has_permission('view_payroll'))
